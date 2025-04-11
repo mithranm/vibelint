@@ -40,10 +40,10 @@ jobs:
         python -m pip install flake8 black isort
     - name: Lint with flake8
       run: |
-        flake8 vibelint tests
+        flake8 src tests
     - name: Check formatting with black
       run: |
-        black --check vibelint tests
+        black --check src tests
     - name: Check imports with isort
       run: |
-        isort --check-only --profile black vibelint tests
+        isort --check-only --profile black src tests

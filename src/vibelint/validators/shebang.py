@@ -25,7 +25,9 @@ class ValidationResult:
         return len(self.errors) > 0 or len(self.warnings) > 0
 
 
-def validate_shebang(content: str, is_script: bool, allowed_shebangs: List[str]) -> ValidationResult:
+def validate_shebang(
+    content: str, is_script: bool, allowed_shebangs: List[str]
+) -> ValidationResult:
     """
     Validate the shebang in a Python file.
 
@@ -33,14 +35,14 @@ def validate_shebang(content: str, is_script: bool, allowed_shebangs: List[str])
     """
     result = ValidationResult()
     lines = content.splitlines()
-    
+
     # Check if there's a shebang line
     has_shebang = len(lines) > 0 and lines[0].startswith("#!")
-    
+
     if has_shebang:
         result.line_number = 0
         shebang_line = lines[0]
-        
+
         # Check if script has __main__ block
         if not is_script:
             result.errors.append(
@@ -63,11 +65,13 @@ def validate_shebang(content: str, is_script: bool, allowed_shebangs: List[str])
             )
             result.needs_fix = True
             result.line_number = 0  # Insert at the beginning
-    
+
     return result
 
 
-def fix_shebang(content: str, result: ValidationResult, is_script: bool, preferred_shebang: str) -> str:
+def fix_shebang(
+    content: str, result: ValidationResult, is_script: bool, preferred_shebang: str
+) -> str:
     """
     Fix shebang issues in a Python file.
 
@@ -75,9 +79,9 @@ def fix_shebang(content: str, result: ValidationResult, is_script: bool, preferr
     """
     if not result.needs_fix:
         return content
-        
+
     lines = content.splitlines()
-    
+
     # If there's already a shebang line
     if result.line_number == 0 and len(lines) > 0 and lines[0].startswith("#!"):
         # Remove it if the file is not a script
@@ -89,5 +93,5 @@ def fix_shebang(content: str, result: ValidationResult, is_script: bool, preferr
     # Add a shebang if the file is a script and doesn't have one
     elif is_script and (len(lines) == 0 or not lines[0].startswith("#!")):
         lines.insert(0, preferred_shebang)
-    
+
     return "\n".join(lines) + ("\n" if content.endswith("\n") else "")

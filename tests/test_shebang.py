@@ -15,7 +15,9 @@ class ShebangValidatorTests(unittest.TestCase):
 
     def test_valid_shebang_in_script(self):
         """Test validation of a valid shebang in a script."""
-        content = "#!/usr/bin/env python3\n\nif __name__ == '__main__':\n    print('Hello')"
+        content = (
+            "#!/usr/bin/env python3\n\nif __name__ == '__main__':\n    print('Hello')"
+        )
         result = validate_shebang(content, True, ["#!/usr/bin/env python3"])
         self.assertFalse(result.has_issues())
 
@@ -45,14 +47,20 @@ class ShebangValidatorTests(unittest.TestCase):
         content = "#!/usr/bin/python\n\nif __name__ == '__main__':\n    print('Hello')"
         result = validate_shebang(content, True, ["#!/usr/bin/env python3"])
         fixed = fix_shebang(content, result, True, "#!/usr/bin/env python3")
-        self.assertEqual(fixed, "#!/usr/bin/env python3\n\nif __name__ == '__main__':\n    print('Hello')")
+        self.assertEqual(
+            fixed,
+            "#!/usr/bin/env python3\n\nif __name__ == '__main__':\n    print('Hello')",
+        )
 
     def test_fix_missing_shebang_in_script(self):
         """Test fixing a missing shebang in a script."""
         content = "if __name__ == '__main__':\n    print('Hello')"
         result = validate_shebang(content, True, ["#!/usr/bin/env python3"])
         fixed = fix_shebang(content, result, True, "#!/usr/bin/env python3")
-        self.assertEqual(fixed, "#!/usr/bin/env python3\nif __name__ == '__main__':\n    print('Hello')")
+        self.assertEqual(
+            fixed,
+            "#!/usr/bin/env python3\nif __name__ == '__main__':\n    print('Hello')",
+        )
 
     def test_fix_remove_shebang_in_non_script(self):
         """Test removing a shebang from a non-script file."""

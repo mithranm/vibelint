@@ -8,7 +8,10 @@ tests/test_docstring.py
 
 import unittest
 import re
-from vibelint.validators.docstring import validate_module_docstring, fix_module_docstring
+from vibelint.validators.docstring import (
+    validate_module_docstring,
+    fix_module_docstring,
+)
 
 
 class DocstringValidatorTests(unittest.TestCase):
@@ -79,8 +82,10 @@ class DocstringValidatorTests(unittest.TestCase):
         lines = fixed.split("\n")
         # In multi-line docstrings, the first line is just the opening quotes,
         # and the actual content starts on the second line
-        content_line = lines[1] if lines[0].strip() == '"""' else lines[0].replace('"""', '', 1)
-        self.assertTrue(re.match(r'^[A-Z].+\.$', content_line.strip()))
+        content_line = (
+            lines[1] if lines[0].strip() == '"""' else lines[0].replace('"""', "", 1)
+        )
+        self.assertTrue(re.match(r"^[A-Z].+\.$", content_line.strip()))
 
     def test_fix_docstring_add_path(self):
         """Test fixing a docstring by adding the module path."""

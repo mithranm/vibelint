@@ -21,7 +21,12 @@ DEFAULT_CONFIG = {
     "allowed_shebangs": ["#!/usr/bin/env python3"],
     "docstring_regex": r"^[A-Z].+\.$",
     "include_globs": ["**/*.py"],
-    "exclude_globs": ["**/tests/**", "**/migrations/**", "**/site-packages/**", "**/dist-packages/**"],
+    "exclude_globs": [
+        "**/tests/**",
+        "**/migrations/**",
+        "**/site-packages/**",
+        "**/dist-packages/**",
+    ],
     "large_dir_threshold": 500,
 }
 

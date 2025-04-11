@@ -43,14 +43,19 @@ class EncodingCookieValidatorTests(unittest.TestCase):
         content = "# -*- coding: latin-1 -*-\n\ndef hello():\n    print('Hello')"
         result = validate_encoding_cookie(content)
         fixed = fix_encoding_cookie(content, result)
-        self.assertEqual(fixed, "# -*- coding: utf-8 -*-\n\ndef hello():\n    print('Hello')")
+        self.assertEqual(
+            fixed, "# -*- coding: utf-8 -*-\n\ndef hello():\n    print('Hello')"
+        )
 
     def test_fix_invalid_encoding_cookie_after_shebang(self):
         """Test fixing an invalid encoding cookie after a shebang."""
         content = "#!/usr/bin/env python3\n# -*- coding: latin-1 -*-\n\ndef hello():\n    print('Hello')"
         result = validate_encoding_cookie(content)
         fixed = fix_encoding_cookie(content, result)
-        self.assertEqual(fixed, "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\ndef hello():\n    print('Hello')")
+        self.assertEqual(
+            fixed,
+            "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\ndef hello():\n    print('Hello')",
+        )
 
 
 if __name__ == "__main__":

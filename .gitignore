@@ -4,3 +4,4 @@ __pycache__/
 *.pyd
 *.egg-info/
 *.env
+*$py.class

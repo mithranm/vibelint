@@ -34,23 +34,23 @@ def validate_encoding_cookie(content: str) -> ValidationResult:
     """
     result = ValidationResult()
     lines = content.splitlines()
-    
+
     # Check for encoding cookie pattern
     encoding_pattern = r"^# -\*- coding: (.+) -\*-$"
-    
+
     # Determine where to look for the encoding cookie
     start_line = 0
     # If there's a shebang, look for the encoding cookie on the second line
     if len(lines) > 0 and lines[0].startswith("#!"):
         start_line = 1
-    
+
     # Check the encoding cookie
     if start_line < len(lines):
         match = re.match(encoding_pattern, lines[start_line])
         if match:
             encoding = match.group(1)
             result.line_number = start_line
-            
+
             # Check if the encoding is utf-8
             if encoding.lower() != "utf-8":
                 result.errors.append(
@@ -60,7 +60,7 @@ def validate_encoding_cookie(content: str) -> ValidationResult:
         else:
             # No encoding cookie, but we don't require one
             pass
-    
+
     return result
 
 
@@ -72,11 +72,11 @@ def fix_encoding_cookie(content: str, result: ValidationResult) -> str:
     """
     if not result.needs_fix:
         return content
-        
+
     lines = content.splitlines()
-    
+
     # If there's an invalid encoding cookie, replace it
     if result.line_number >= 0:
         lines[result.line_number] = "# -*- coding: utf-8 -*-"
-    
+
     return "\n".join(lines) + ("\n" if content.endswith("\n") else "")

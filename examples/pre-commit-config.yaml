@@ -1,5 +1,5 @@
 repos:
--   repo: https://github.com/yourusername/vibelint
-    rev: v0.1.0
+-   repo: https://github.com/mithranm/vibelint
+    rev: 0.1.0
     hooks:
     -   id: vibelint
