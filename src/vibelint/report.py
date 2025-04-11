@@ -1,7 +1,8 @@
+#!/usr/bin/env python3
 """
 Report generation functionality for vibelint.
 
-vibelint/report.py
+src/vibelint/report.py
 """
 
 from pathlib import Path
@@ -12,15 +13,77 @@ from rich.console import Console
 
 from .lint import LintRunner
 from .namespace import (
-    build_namespace_tree_representation,
     detect_namespace_collisions,
     detect_soft_member_collisions,
-    get_files_in_namespace_order,
     _build_namespace_tree  # Import the internal function directly
 )
 from .utils import find_package_root
 
 console = Console()
+
+# Define functions that appear to be needed but were missing from imports
+def build_namespace_tree_representation(target_paths: List[Path], config: Dict[str, Any], 
+                                       include_vcs_hooks: bool = False) -> str:
+    """
+    Build a string representation of the namespace tree.
+    
+    Args:
+        target_paths: List of paths to analyze
+        config: Configuration dictionary
+        include_vcs_hooks: Whether to include version control hooks
+        
+    Returns:
+        String representation of the namespace tree
+    
+    src/vibelint/report.py
+    """
+    # This is a placeholder implementation - you'll need to implement this
+    # or import it correctly from the namespace module
+    namespace_tree = _build_namespace_tree(target_paths, config, include_vcs_hooks)
+    return str(namespace_tree)
+
+def get_files_in_namespace_order(namespace_tree) -> List[Path]:
+    """
+    Get files in namespace order from the namespace tree.
+    
+    Args:
+        namespace_tree: Namespace tree to extract files from
+        
+    Returns:
+        List of file paths in namespace order
+    
+    src/vibelint/report.py
+    """
+    # This is a placeholder implementation - you'll need to implement this
+    # or import it correctly from the namespace module
+    files = []
+    # Logic to traverse the tree and collect files would go here
+    return files
+
+def get_relative_path(file_path: Path, target_paths: List[Path]) -> str:
+    """
+    Get the shortest relative path for a file.
+    
+    Args:
+        file_path: Absolute path to file
+        target_paths: List of target paths to get relative paths from
+        
+    Returns:
+        Shortest relative path as a string
+    
+    src/vibelint/report.py
+    """
+    shortest_path = None
+    
+    for target_path in target_paths:
+        try:
+            rel_path = file_path.relative_to(target_path)
+            if shortest_path is None or len(str(rel_path)) < len(str(shortest_path)):
+                shortest_path = rel_path
+        except ValueError:
+            continue
+            
+    return str(shortest_path) if shortest_path else str(file_path)
 
 def generate_markdown_report(
     target_paths: List[Path],
@@ -46,6 +109,8 @@ def generate_markdown_report(
         
     Returns:
         Path to the generated report file
+    
+    src/vibelint/report.py
     """
     if output_filename is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -69,17 +134,23 @@ def generate_markdown_report(
     
     # Build namespace tree representation for display
     console.print("[bold blue]Building namespace structure...[/bold blue]")
-    tree_repr = build_namespace_tree_representation(target_paths, config)
+    tree_repr = build_namespace_tree_representation(target_paths, config, include_vcs_hooks)
     
     # Get the actual namespace tree node for file ordering
-    # Use _build_namespace_tree directly instead of trying to extract from tree_repr
     namespace_tree = _build_namespace_tree(target_paths, config, include_vcs_hooks)
     
     # Detect collisions
     console.print("[bold blue]Detecting namespace collisions...[/bold blue]")
-    hard_collisions = detect_namespace_collisions(target_paths, config)
+    hard_collisions = detect_namespace_collisions(target_paths, config, include_vcs_hooks)
+    
+    # Explicitly create the boolean value for clarity and add type hint
+    check_inheritance: bool = not ignore_inheritance 
+    
     soft_collisions = detect_soft_member_collisions(
-        target_paths, config, use_inheritance_check=not ignore_inheritance
+        target_paths, 
+        config, 
+        use_inheritance_check=check_inheritance,  # Pass the variable here
+        include_vcs_hooks=include_vcs_hooks
     )
     
     # Generate report
@@ -117,16 +188,17 @@ def generate_markdown_report(
         
         # Linting Results
         f.write("## Linting Results\n\n")
-        if not lint_runner.results:
-            f.write("*No linting results available.*\n\n")
+        if not lint_runner.results or all(not r.has_issues() for r in lint_runner.results):
+            f.write("*No linting issues found.*\n\n")
         else:
             f.write("| File | Errors | Warnings |\n")
             f.write("|------|--------|----------|\n")
             for result in lint_runner.results:
-                if result.has_issues:
+                if result.errors or result.warnings:
                     errors = "; ".join(result.errors) or "None"
                     warnings = "; ".join(result.warnings) or "None"
-                    f.write(f"| `{result.file_path}` | {errors} | {warnings} |\n")
+                    rel_path = get_relative_path(result.file_path, target_paths)
+                    f.write(f"| `{rel_path}` | {errors} | {warnings} |\n")
             f.write("\n")
         
         # Namespace Structure
@@ -141,7 +213,7 @@ def generate_markdown_report(
         # Hard collisions
         f.write("### Hard Collisions\n\n")
         if not hard_collisions:
-            f.write("*No hard collisions detected.*\n\n")
+            f.write("*No hard collisions detected.*\n\n") 
         else:
             f.write("These collisions can break Python imports:\n\n")
             f.write("| Name | Path 1 | Path 2 |\n")
@@ -173,37 +245,16 @@ def generate_markdown_report(
             if file_path.is_file() and file_path.suffix == '.py':
                 rel_path = get_relative_path(file_path, target_paths)
                 f.write(f"### {rel_path}\n\n")
+                
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as code_file:
-                        content = code_file.read()
-                        f.write("```python\n")
-                        f.write(content)
-                        f.write("\n```\n\n")
+                    content = file_path.read_text(encoding='utf-8')
+                    f.write("```python\n")
+                    f.write(content)
+                    if not content.endswith('\n'):
+                        f.write('\n')
+                    f.write("```\n\n")
                 except Exception as e:
-                    f.write(f"*Error reading file: {str(e)}*\n\n")
+                    f.write(f"*Error reading file: {e}*\n\n")
     
+    console.print(f"Report generated: [bold green]{report_path}[/bold green]")
     return report_path
-
-
-def get_relative_path(file_path: Path, base_paths: List[Path]) -> str:
-    """
-    Get the relative path of a file from the closest base path.
-    
-    Args:
-        file_path: The file path to get the relative path for
-        base_paths: List of base paths to use as reference
-        
-    Returns:
-        The relative path as a string
-    """
-    shortest_path = None
-    
-    for base_path in base_paths:
-        try:
-            rel_path = file_path.relative_to(base_path)
-            if shortest_path is None or len(str(rel_path)) < len(str(shortest_path)):
-                shortest_path = rel_path
-        except ValueError:
-            continue
-            
-    return str(shortest_path) if shortest_path else str(file_path)

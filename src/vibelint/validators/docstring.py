@@ -1,297 +1,278 @@
 """
-Validator for Python module docstrings.
+Validator for Python docstrings at module/class/function/method level.
 
-vibelint/validators/docstring.py
+src/vibelint/validators/docstring.py
 """
 
-import re
-import os
-from typing import List, Optional
+import ast
+from typing import List, Optional, Dict, Tuple, Any
+
+MISSING_DOCSTRING = object()
 
 
-class ValidationResult:
+class DocstringValidationResult:
     """
-    Class to store the result of a validation.
+    Stores the result of docstring validation.
 
-    vibelint/validators/docstring.py
+    src/vibelint/validators/docstring.py
     """
-
-    def __init__(self):
+    def __init__(self) -> None:
         self.errors: List[str] = []
         self.warnings: List[str] = []
         self.line_number: int = -1
         self.needs_fix: bool = False
-        self.module_docstring: Optional[str] = None
+        self.docstring_issues: Dict[Tuple[int, int], Dict[str, Any]] = {}
 
     def has_issues(self) -> bool:
-        """Check if there are any issues."""
-        return len(self.errors) > 0 or len(self.warnings) > 0
+        return bool(self.errors or self.warnings or self.docstring_issues)
 
 
-def validate_module_docstring(
-    content: str, relative_path: str, docstring_regex: str
-) -> ValidationResult:
+def get_normalized_filepath(relative_path: str) -> str:
     """
-    Validate the module docstring in a Python file.
+    Return a normalized path for docstring references:
+    If file is in 'tests/' or 'src/', we return from there, else as-is.
 
-    vibelint/validators/docstring.py
+    src/vibelint/validators/docstring.py
     """
-    result = ValidationResult()
-    lines = content.splitlines()
+    path = relative_path.replace("\\", "/")
+    if "/tests/" in path:
+        return path.split("/tests/", 1)[-1].rpartition("/")[0].join(["tests/", ""]) if "/tests/" in path else path
+    if "/src/" in path:
+        return path.split("/src/", 1)[-1]
+    return relative_path
 
-    # Skip shebang and encoding cookie if present
-    line_index = 0
-    if len(lines) > line_index and lines[line_index].startswith("#!"):
-        line_index += 1
-    if len(lines) > line_index and lines[line_index].startswith("# -*-"):
-        line_index += 1
 
-    # Skip blank lines
-    while line_index < len(lines) and not lines[line_index].strip():
-        line_index += 1
+def extract_all_docstrings(content: str) -> Dict[Tuple[int, int], Dict[str, Any]]:
+    """
+    Parse the file content, get docstrings for module/class/function/method.
 
-    # Check for docstring
-    docstring_start = None
-    docstring_end = None
-    docstring_lines = []
+    src/vibelint/validators/docstring.py
+    """
+    results: Dict[Tuple[int, int], Dict[str, Any]] = {}
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return results
 
-    # Try to find the docstring
-    for i in range(line_index, min(line_index + 10, len(lines))):
-        line = lines[i].strip()
-        if line.startswith('"""'):
-            docstring_start = i
-            # Single line docstring
-            if line.endswith('"""') and len(line) > 6:
-                docstring_end = i
-                docstring_lines = [line[3:-3].strip()]
-                break
+    # Module docstring
+    if tree.body and isinstance(tree.body[0], ast.Expr):
+        expr = tree.body[0]
+        maybe_doc = None
+        if isinstance(expr.value, ast.Constant) and isinstance(expr.value.value, str):
+            maybe_doc = expr.value.value
+        elif isinstance(expr.value, ast.Str):
+            maybe_doc = expr.value.s
+        if maybe_doc is not None:
+            lineno = expr.lineno
+            end_lineno = lineno + len(maybe_doc.splitlines()) - 1
+            results[(lineno, end_lineno)] = {"type": "module", "name": "module", "docstring": maybe_doc}
+        else:
+            results[(1, 1)] = {"type": "module", "name": "module", "docstring": None}
+    else:
+        results[(1, 1)] = {"type": "module", "name": "module", "docstring": None}
 
-            # Handle multi-line docstring
-            first_content_line = None
-            if line == '"""':
-                # Triple quotes on their own line - content starts on next line
-                first_content_line = i + 1
-            else:
-                # Content starts on same line as opening quotes
-                first_content_line = i
-                docstring_lines.append(line[3:].strip())
+    def record_doc(node, node_type: str, parent_name: str = ""):
+        doc_text = None
+        if node.body and isinstance(node.body[0], ast.Expr):
+            val = node.body[0].value
+            if isinstance(val, ast.Constant) and isinstance(val.value, str):
+                doc_text = val.value
+            elif isinstance(val, ast.Str):
+                doc_text = val.s
 
-            # Find the end of the docstring
-            for j in range(first_content_line, len(lines)):
-                current_line = lines[j].strip()
-                # Look for a line that ends with triple quotes or is just triple quotes
-                if current_line == '"""' or current_line.endswith('"""'):
-                    docstring_end = j
+        name = getattr(node, "name", node_type)
+        if parent_name and node_type in ("method", "function"):
+            name = f"{parent_name}.{name}"
 
-                    # If we didn't already add the first line (when quotes were on their own line)
-                    if first_content_line > i:
-                        # Add lines between opening quote and closing quote
-                        docstring_lines.extend(
-                            lines[k].strip()
-                            for k in range(first_content_line, j)
-                            if lines[k].strip()
-                        )
-                    else:
-                        # Add lines after the first content line
-                        docstring_lines.extend(
-                            lines[k].strip()
-                            for k in range(i + 1, j)
-                            if lines[k].strip()
-                        )
+        if doc_text is None:
+            results[(node.lineno, node.lineno)] = {
+                "type": node_type,
+                "name": name,
+                "docstring": None
+            }
+        else:
+            lines = doc_text.splitlines()
+            start_line = node.body[0].lineno
+            end_line = start_line + len(lines) - 1
+            results[(start_line, end_line)] = {
+                "type": node_type,
+                "name": name,
+                "docstring": doc_text
+            }
 
-                    # Add content from the last line if it has content before the closing quotes
-                    if current_line != '"""':
-                        content_part = current_line.split('"""')[0].strip()
-                        if content_part:
-                            docstring_lines.append(content_part)
-                    break
-            break
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            record_doc(node, "class")
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    record_doc(child, "method", node.name)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node in tree.body:
+                record_doc(node, "function")
 
-    # If no docstring found or incomplete docstring
-    if docstring_start is None or docstring_end is None:
-        result.errors.append("Module docstring missing or incomplete")
-        result.line_number = line_index
+    return results
+
+
+def _docstring_includes_path(doc_lines: List[str], package_path: str) -> bool:
+    """
+    Return True if package_path is in any doc line.
+
+    src/vibelint/validators/docstring.py
+    """
+    for ln in doc_lines:
+        if package_path in ln:
+            return True
+    return False
+
+
+def _split_docstring_lines(docstring: Optional[str]) -> List[str]:
+    """
+    Split docstring into stripped lines ignoring empties.
+
+    src/vibelint/validators/docstring.py
+    """
+    if not docstring:
+        return []
+    return [x.strip() for x in docstring.splitlines() if x.strip()]
+
+
+def validate_every_docstring(content: str, relative_path: str) -> DocstringValidationResult:
+    """
+    Validate that each docstring is present and includes the normalized file path.
+
+    src/vibelint/validators/docstring.py
+    """
+    result = DocstringValidationResult()
+    path_ref = get_normalized_filepath(relative_path)
+    doc_map = extract_all_docstrings(content)
+    if not doc_map:
+        result.errors.append("No docstrings found in file (all missing?).")
         result.needs_fix = True
         return result
 
-    # Store the docstring for potential fixes
-    result.module_docstring = "\n".join(docstring_lines)
-    result.line_number = docstring_start
+    for (start_line, end_line), info in doc_map.items():
+        d_type = info["type"]
+        d_name = info["name"]
+        text = info["docstring"]
+        lines = _split_docstring_lines(text)
 
-    # Validate docstring content
-    if not docstring_lines:
-        result.errors.append("Empty module docstring")
-        result.needs_fix = True
-        return result
-
-    # Check first line format (capitalized sentence ending in period)
-    # Get the first non-empty line
-    first_content = next((line for line in docstring_lines if line), "")
-    if not re.match(docstring_regex, first_content):
-        result.errors.append(
-            f"First line of docstring should match regex: {docstring_regex}"
-        )
-        result.needs_fix = True
-
-    # Check for relative path in docstring
-    path_found = False
-
-    # Extract the package-relative path from the full path
-    package_path = relative_path
-
-    # Handle files in project root differently
-    if os.path.basename(relative_path) == relative_path:
-        # It's already just a filename with no directories, so use as is
-        package_path = relative_path
-    elif "/src/" in relative_path:
-        package_path = relative_path.split("/src/")[-1]
-    elif "/Users/" in relative_path:
-        # Extract just the project path
-        parts = relative_path.split("/")
-        if "vibelint" in parts:
-            idx = parts.index("vibelint")
-            # Handle setup.py and other files in project root
-            if idx + 1 >= len(parts) or parts[idx + 1] in [
-                "setup.py",
-                "README.md",
-                "pyproject.toml",
-            ]:
-                package_path = parts[-1]  # Just use the filename
-            elif idx + 1 < len(parts) and parts[idx + 1] == "src":
-                package_path = "/".join(parts[idx + 2 :])
-            else:
-                package_path = "/".join(
-                    parts[idx + 1 :]
-                )  # Don't include vibelint itself
-
-    # Check for either the full path or the package-relative path
-    for line in docstring_lines:
-        if relative_path in line or package_path in line:
-            path_found = True
-            break
-
-    if not path_found:
-        result.errors.append(
-            f"Docstring should include the relative path: {package_path}"
-        )
-        result.needs_fix = True
+        if text is None:
+            msg = f"Missing docstring for {d_type} '{d_name}'."
+            result.errors.append(msg)
+            result.docstring_issues[(start_line, end_line)] = {
+                "type": d_type,
+                "name": d_name,
+                "missing": True,
+                "message": msg
+            }
+            result.needs_fix = True
+        else:
+            if not _docstring_includes_path(lines, path_ref):
+                msg = f"Docstring for {d_type} '{d_name}' must include file path: {path_ref}"
+                result.errors.append(msg)
+                result.docstring_issues[(start_line, end_line)] = {
+                    "type": d_type,
+                    "name": d_name,
+                    "missing": False,
+                    "message": msg
+                }
+                result.needs_fix = True
 
     return result
 
 
-def fix_module_docstring(
-    content: str, result: ValidationResult, relative_path: str
-) -> str:
+def fix_every_docstring(content: str, result: DocstringValidationResult, relative_path: str) -> str:
     """
-    Fix module docstring issues in a Python file.
+    Fix missing docstrings or missing path references.
 
-    vibelint/validators/docstring.py
+    src/vibelint/validators/docstring.py
     """
-    # Extract the package-relative path with the same logic as in validate_module_docstring
-    package_path = relative_path
-
-    # Handle files in project root differently
-    if os.path.basename(relative_path) == relative_path:
-        # It's already just a filename with no directories, so use as is
-        package_path = relative_path
-    elif "/src/" in relative_path:
-        package_path = relative_path.split("/src/")[-1]
-    elif "/Users/" in relative_path:
-        parts = relative_path.split("/")
-        if "vibelint" in parts:
-            idx = parts.index("vibelint")
-            # Handle setup.py and other files in project root
-            if idx + 1 >= len(parts) or parts[idx + 1] in [
-                "setup.py",
-                "README.md",
-                "pyproject.toml",
-            ]:
-                package_path = parts[-1]  # Just use the filename
-            elif idx + 1 < len(parts) and parts[idx + 1] == "src":
-                package_path = "/".join(parts[idx + 2 :])
-            else:
-                package_path = "/".join(
-                    parts[idx + 1 :]
-                )  # Don't include vibelint itself
-
     if not result.needs_fix:
         return content
 
-    lines = content.splitlines()
+    lines = content.split("\n")
+    path_ref = get_normalized_filepath(relative_path)
 
-    # If there's no docstring, create a new one
-    if result.module_docstring is None:
-        # Get the module name from the relative path
-        module_name = os.path.basename(relative_path).replace(".py", "")
+    # Sort docstring issues from bottom to top
+    doc_issues_sorted = sorted(
+        result.docstring_issues.items(),
+        key=lambda x: x[0][0],
+        reverse=True
+    )
 
-        # Create a docstring with preferred style (quotes on their own lines)
-        docstring = [
-            '"""',
-            f"{module_name.replace('_', ' ').title()} module.",
-            "",
-            f"{package_path}",
-            '"""',
-        ]
+    def create_block(indent: str, d_type: str, d_name: str) -> List[str]:
+        block = []
+        block.append(f'{indent}"""')
+        block.append(f"{indent}Docstring for {d_type} '{d_name}'.")
+        block.append("")
+        block.append(f"{indent}{path_ref}")
+        block.append(f'{indent}"""')
+        return block
 
-        # Insert the docstring at the appropriate position
-        for i, line in enumerate(docstring):
-            lines.insert(result.line_number + i, line)
-    else:
-        # Modify the existing docstring
-        existing_docstring = result.module_docstring.splitlines()
+    def fix_block(original_lines: List[str]) -> List[str]:
+        if not original_lines:
+            return original_lines
+        first_line = original_lines[0].rstrip()
+        if first_line.endswith('"""'):
+            triple_quote = '"""'
+        elif first_line.endswith("'''"):
+            triple_quote = "'''"
+        else:
+            triple_quote = '"""'
 
-        # Fix the first line if needed
-        if existing_docstring:
-            first_content = existing_docstring[0]
-            if not re.match(r"^[A-Z].+\.$", first_content):
-                # Capitalize first letter and ensure it ends with a period
-                if first_content:
-                    first_content = first_content[0].upper() + first_content[1:]
-                    if not first_content.endswith("."):
-                        first_content += "."
-                    existing_docstring[0] = first_content
-
-        # Add relative path if missing
-        path_found = False
-        for i, line in enumerate(existing_docstring):
-            if relative_path in line or package_path in line:
-                path_found = True
+        # indentation
+        indent = ""
+        for ch in first_line:
+            if ch in (" ", "\t"):
+                indent += ch
+            else:
                 break
 
-        if not path_found:
-            # Add an empty line before the path if there isn't one already
-            if existing_docstring and existing_docstring[-1]:
-                existing_docstring.append("")
-            existing_docstring.append(package_path)
+        joined = "\n".join(original_lines).strip()
+        if joined.startswith(triple_quote):
+            joined = joined[len(triple_quote):]
+        if joined.endswith(triple_quote):
+            joined = joined[: -len(triple_quote)]
+        lines_inner = [ln.strip() for ln in joined.splitlines()]
 
-        # Reconstruct the docstring
-        docstring_text = "\n".join(existing_docstring)
+        # Remove old references
+        new_body = [ln for ln in lines_inner if path_ref not in ln]
+        new_body.append(path_ref)
 
-        # Replace the old docstring
-        start_idx = result.line_number
-        end_idx = start_idx
+        updated = [f"{indent}{triple_quote}"]
+        for nb in new_body:
+            updated.append(f"{indent}{nb}" if nb else indent)
+        updated.append(f"{indent}{triple_quote}")
+        return updated
 
-        # Find the end of the old docstring
-        in_docstring = False
-        for i in range(start_idx, len(lines)):
-            line = lines[i].strip()
-            if line.startswith('"""') and not in_docstring:
-                in_docstring = True
-                if line.endswith('"""') and len(line) > 6:
-                    # Single line docstring
-                    end_idx = i
+    for ((start_line, end_line), info) in doc_issues_sorted:
+        missing = info["missing"]
+        d_type = info["type"]
+        d_name = info["name"]
+
+        if missing:
+            insertion_index = start_line
+            def_line_idx = start_line - 1
+            def_line = lines[def_line_idx] if def_line_idx < len(lines) else ""
+            # measure indentation, then add 4 spaces
+            base_indent = ""
+            for ch in def_line:
+                if ch in (" ", "\t"):
+                    base_indent += ch
+                else:
                     break
-            elif (line == '"""' or line.endswith('"""')) and in_docstring:
-                end_idx = i
-                break
+            doc_indent = base_indent + "    "
 
-        # If it's a single-line docstring, convert to multi-line with preferred style
-        new_docstring_lines = ['"""']
-        docstring_lines = docstring_text.splitlines()
-        new_docstring_lines.extend(docstring_lines)
-        new_docstring_lines.append('"""')
+            block = create_block(doc_indent, d_type, d_name)
+            lines = lines[:insertion_index] + block + lines[insertion_index:]
+        else:
+            slice_start = start_line - 1
+            slice_end = end_line
+            existing_block = lines[slice_start:slice_end]
+            fixed = fix_block(existing_block)
+            lines[slice_start:slice_end] = fixed
 
-        # Replace the old docstring lines with the new ones
-        lines = lines[:start_idx] + new_docstring_lines + lines[end_idx + 1 :]
-
-    return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
+    new_content = "\n".join(lines)
+    if content.endswith("\n") and not new_content.endswith("\n"):
+        new_content += "\n"
+    return new_content

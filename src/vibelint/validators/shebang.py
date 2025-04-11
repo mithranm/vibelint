@@ -1,97 +1,95 @@
 """
-Validator for Python shebangs.
+Validator for Python shebang lines.
 
-vibelint/validators/shebang.py
+src/vibelint/validators/shebang.py
 """
 
 from typing import List
 
 
-class ValidationResult:
+class ShebangValidationResult:
     """
-    Class to store the result of a validation.
+    Result of a shebang validation.
 
-    vibelint/validators/shebang.py
+    src/vibelint/validators/shebang.py
     """
-
-    def __init__(self):
+    def __init__(self) -> None:
         self.errors: List[str] = []
         self.warnings: List[str] = []
         self.line_number: int = 0
         self.needs_fix: bool = False
 
     def has_issues(self) -> bool:
-        """Check if there are any issues."""
-        return len(self.errors) > 0 or len(self.warnings) > 0
+        """
+        Check if any issues were found.
+
+        src/vibelint/validators/shebang.py
+        """
+        return bool(self.errors or self.warnings)
 
 
 def validate_shebang(
-    content: str, is_script: bool, allowed_shebangs: List[str]
-) -> ValidationResult:
+    content: str,
+    is_script: bool,
+    allowed_shebangs: List[str]
+) -> ShebangValidationResult:
     """
-    Validate the shebang in a Python file.
+    Validate the shebang line if present; ensure it's correct for scripts with __main__.
 
-    vibelint/validators/shebang.py
+    src/vibelint/validators/shebang.py
     """
-    result = ValidationResult()
+    res = ShebangValidationResult()
     lines = content.splitlines()
 
-    # Check if there's a shebang line
-    has_shebang = len(lines) > 0 and lines[0].startswith("#!")
-
-    if has_shebang:
-        result.line_number = 0
-        shebang_line = lines[0]
-
-        # Check if script has __main__ block
+    if lines and lines[0].startswith("#!"):
+        sb = lines[0]
+        res.line_number = 0
         if not is_script:
-            result.errors.append(
-                f"File has a shebang ({shebang_line}) but no '__main__' block. "
-                "Shebangs should only be used in executable scripts."
+            res.errors.append(
+                f"File has shebang {sb} but no '__main__' block."
             )
-            result.needs_fix = True
-        # Check if shebang is in the allowed list
-        elif shebang_line not in allowed_shebangs:
-            result.errors.append(
-                f"Invalid shebang: {shebang_line}. "
-                f"Allowed shebangs: {', '.join(allowed_shebangs)}"
+            res.needs_fix = True
+        elif sb not in allowed_shebangs:
+            res.errors.append(
+                f"Invalid shebang {sb}. Allowed: {', '.join(allowed_shebangs)}"
             )
-            result.needs_fix = True
+            res.needs_fix = True
     else:
-        # If the file is a script, it should have a shebang
+        # If is_script but no shebang
         if is_script:
-            result.warnings.append(
-                "Script with '__main__' block should have a shebang line."
-            )
-            result.needs_fix = True
-            result.line_number = 0  # Insert at the beginning
+            res.warnings.append("Script has '__main__' but lacks a shebang.")
+            res.needs_fix = True
+            res.line_number = 0
 
-    return result
+    return res
 
 
 def fix_shebang(
-    content: str, result: ValidationResult, is_script: bool, preferred_shebang: str
+    content: str,
+    result: ShebangValidationResult,
+    is_script: bool,
+    preferred_shebang: str
 ) -> str:
     """
-    Fix shebang issues in a Python file.
+    Fix the shebang line if needed.
 
-    vibelint/validators/shebang.py
+    src/vibelint/validators/shebang.py
     """
     if not result.needs_fix:
         return content
 
     lines = content.splitlines()
-
-    # If there's already a shebang line
-    if result.line_number == 0 and len(lines) > 0 and lines[0].startswith("#!"):
-        # Remove it if the file is not a script
+    if lines and lines[0].startswith("#!"):
         if not is_script:
+            # remove it
             lines.pop(0)
-        # Replace it with the preferred shebang if it's invalid
         else:
             lines[0] = preferred_shebang
-    # Add a shebang if the file is a script and doesn't have one
-    elif is_script and (len(lines) == 0 or not lines[0].startswith("#!")):
-        lines.insert(0, preferred_shebang)
-
-    return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
+    else:
+        # add
+        if is_script:
+            lines.insert(0, preferred_shebang)
+    text = "\n".join(lines)
+    if content.endswith("\n"):
+        text += "\n"
+    return text
