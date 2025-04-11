@@ -195,9 +195,13 @@ def fix_module_docstring(content: str, result: ValidationResult, relative_path: 
             lines[start_idx] = f'"""{docstring_text}"""'
         else:
             # Create a multi-line docstring
-            new_docstring_lines = ['"""']
-            new_docstring_lines.extend(docstring_text.splitlines())
-            new_docstring_lines.append('"""')
+            docstring_lines = docstring_text.splitlines()
+            if docstring_lines:
+                # Combine the opening quotes with the first content line
+                new_docstring_lines = [f'"""{docstring_lines[0]}']
+                new_docstring_lines.extend(docstring_lines[1:])
+            else:
+                new_docstring_lines = ['"""']  # Empty docstring content
             
             # Replace the old docstring lines with the new ones
             lines = lines[:start_idx] + new_docstring_lines + lines[end_idx+1:]

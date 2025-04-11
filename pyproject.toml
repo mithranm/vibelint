@@ -4,7 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vibelint"
-description = "A linting tool to make Python codebases more LLM-friendly"
+version = "0.1.0"
+description = "Suite of linting tools to enhance the vibe coding process."
+authors = [
+  { name = "Mithran Mohanraj", email = "mithran.mohanraj@gmail.com" }
+]
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -25,7 +29,6 @@ dependencies = [
     "colorama>=0.4.0",
     "rich>=12.0.0",
 ]
-dynamic = ["version"]
 
 [project.scripts]
 vibelint = "vibelint.cli:main"
@@ -37,9 +40,6 @@ vibelint = "vibelint.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["vibelint*"]
-
-[tool.setuptools_scm]
-write_to = "vibelint/_version.py"
 
 [tool.vibelint]
 package_root = ""
