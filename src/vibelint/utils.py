@@ -5,8 +5,43 @@ vibelint/utils.py
 """
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import fnmatch
+
+
+def find_package_root(path: Path) -> Optional[Path]:
+    """
+    Find the package root directory by looking for a setup.py, pyproject.toml, or __init__.py file.
+    
+    Args:
+        path: Path to start searching from
+        
+    Returns:
+        The package root directory, or None if not found
+    """
+    if path.is_file():
+        path = path.parent
+    
+    current = path
+    
+    # First try to find setup.py or pyproject.toml
+    while current.parent != current:
+        if (current / "setup.py").exists() or (current / "pyproject.toml").exists():
+            return current
+        current = current.parent
+    
+    # If not found, try looking for the top-level __init__.py
+    current = path
+    while current.parent != current:
+        if not (current / "__init__.py").exists() and (current.parent / "__init__.py").exists():
+            return current
+        if not (current.parent / "__init__.py").exists():
+            # Return the last directory that contained __init__.py
+            return current
+        current = current.parent
+    
+    # If no package structure found, return the original directory
+    return path
 
 
 def count_python_files(
@@ -42,22 +77,3 @@ def count_python_files(
             count += 1
 
     return count
-
-
-def find_package_root(directory: Path) -> Path:
-    """
-    Find the Python package root by looking for __init__.py files.
-
-    vibelint/utils.py
-    """
-    current = directory.absolute()
-    while current != current.parent:
-        # If this directory has an __init__.py, check if its parent has one too
-        if (current / "__init__.py").exists():
-            parent = current.parent
-            if not (parent / "__init__.py").exists():
-                return current
-        current = current.parent
-
-    # If no package root found, return the original directory
-    return directory

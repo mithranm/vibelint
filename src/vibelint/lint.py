@@ -27,7 +27,7 @@ from .validators.docstring import validate_module_docstring, fix_module_docstrin
 
 
 console = Console()
-
+testcollision = "test"
 
 class LintResult:
     """
