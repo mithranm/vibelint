@@ -204,7 +204,7 @@ def fix_every_docstring(content: str, result: DocstringValidationResult, relativ
         block = []
         block.append(f'{indent}"""')
         block.append(f"{indent}Docstring for {d_type} '{d_name}'.")
-        block.append("")
+        block.append(f"{indent}") # Add an empty line for spacing
         block.append(f"{indent}{path_ref}")
         block.append(f'{indent}"""')
         return block
@@ -218,7 +218,9 @@ def fix_every_docstring(content: str, result: DocstringValidationResult, relativ
         elif first_line.endswith("'''"):
             triple_quote = "'''"
         else:
-            triple_quote = '"""'
+            # Handle cases where docstring might not start with triple quotes (though unlikely from ast)
+            # Or if the block passed is not actually a docstring
+             return original_lines # Cannot reliably fix if not standard docstring format
 
         # indentation
         indent = ""
@@ -233,15 +235,32 @@ def fix_every_docstring(content: str, result: DocstringValidationResult, relativ
             joined = joined[len(triple_quote):]
         if joined.endswith(triple_quote):
             joined = joined[: -len(triple_quote)]
-        lines_inner = [ln.strip() for ln in joined.splitlines()]
 
-        # Remove old references
-        new_body = [ln for ln in lines_inner if path_ref not in ln]
-        new_body.append(path_ref)
+        # Split carefully, preserving relative indentation within the docstring
+        lines_inner = joined.splitlines()
+        # Strip leading/trailing empty lines and common indent from the original inner content
+        while lines_inner and not lines_inner[0].strip():
+            lines_inner.pop(0)
+        while lines_inner and not lines_inner[-1].strip():
+            lines_inner.pop(-1)
 
+        # Remove old path references if they exist
+        new_body_lines = [ln for ln in lines_inner if path_ref not in ln.strip()]
+
+        # Add the required path reference, ensuring it's on its own line
+        if path_ref not in [ln.strip() for ln in new_body_lines]:
+             # Add an empty line before the path if the body isn't empty
+            if new_body_lines and new_body_lines[-1].strip():
+                 new_body_lines.append("")
+            new_body_lines.append(path_ref)
+
+        # Reconstruct the docstring block
         updated = [f"{indent}{triple_quote}"]
-        for nb in new_body:
-            updated.append(f"{indent}{nb}" if nb else indent)
+        for nb in new_body_lines:
+             # Re-apply original indent + relative indent from original docstring line
+             # This part is tricky without full dedent/reindent logic.
+             # Simplification: just apply the base indent.
+             updated.append(f"{indent}{nb.strip()}") # Apply base indent, strip original relative indent
         updated.append(f"{indent}{triple_quote}")
         return updated
 
@@ -251,28 +270,64 @@ def fix_every_docstring(content: str, result: DocstringValidationResult, relativ
         d_name = info["name"]
 
         if missing:
-            insertion_index = start_line
+            # Find the actual end of the function/method signature (line ending with ':')
             def_line_idx = start_line - 1
-            def_line = lines[def_line_idx] if def_line_idx < len(lines) else ""
-            # measure indentation, then add 4 spaces
+            if def_line_idx < 0 or def_line_idx >= len(lines):
+                # Log error or skip if definition line is out of bounds
+                print(f"Warning: Could not find definition line for {d_name} at {start_line}")
+                continue
+
+            signature_end_idx = -1
+            # Search from the 'def' line downwards
+            for i in range(def_line_idx, len(lines)):
+                # Check if line stripped of trailing whitespace ends with ':'
+                # This handles comments after the colon as well
+                if lines[i].rstrip().endswith(":"):
+                    signature_end_idx = i
+                    break
+
+            if signature_end_idx == -1:
+                # Log error or skip if signature end ':' is not found
+                print(f"Warning: Could not find signature end for {d_name} starting at {start_line}")
+                continue
+
+            insertion_index = signature_end_idx + 1 # Insert *after* the signature line
+
+            # Calculate indentation based on the 'def' or 'class' line
+            def_line = lines[def_line_idx]
             base_indent = ""
             for ch in def_line:
                 if ch in (" ", "\t"):
                     base_indent += ch
                 else:
                     break
+            # Standard Python indent is 4 spaces deeper than the definition line
             doc_indent = base_indent + "    "
 
             block = create_block(doc_indent, d_type, d_name)
+            # Insert the new docstring block at the correct position
             lines = lines[:insertion_index] + block + lines[insertion_index:]
         else:
+            # Fix existing docstring (add missing path)
             slice_start = start_line - 1
-            slice_end = end_line
+            slice_end = end_line # end_line from ast is the last line of the docstring
+            if slice_start < 0 or slice_end > len(lines):
+                 print(f"Warning: Invalid slice [{slice_start}:{slice_end}] for {d_name}")
+                 continue
+
             existing_block = lines[slice_start:slice_end]
             fixed = fix_block(existing_block)
-            lines[slice_start:slice_end] = fixed
+            # Replace the old block with the fixed one
+            # Need to adjust line counts if fix_block changed the number of lines
+            lines = lines[:slice_start] + fixed + lines[slice_end:]
+
 
     new_content = "\n".join(lines)
+    # Preserve trailing newline if original content had one
     if content.endswith("\n") and not new_content.endswith("\n"):
         new_content += "\n"
+    elif not content.endswith("\n") and new_content.endswith("\n"):
+         # Avoid adding a newline if the original didn't have one (less common)
+         new_content = new_content.rstrip("\n")
+
     return new_content
