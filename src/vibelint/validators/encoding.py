@@ -15,6 +15,11 @@ class EncodingValidationResult:
     src/vibelint/validators/encoding.py
     """
     def __init__(self) -> None:
+        """
+        Docstring for method 'EncodingValidationResult.__init__'.
+        
+        vibelint/validators/encoding.py
+        """
         self.errors: List[str] = []
         self.warnings: List[str] = []
         self.line_number: int = -1

@@ -37,6 +37,11 @@ class LintResult:
     src/vibelint/lint.py
     """
     def __init__(self) -> None:
+        """
+        Docstring for method 'LintResult.__init__'.
+        
+        vibelint/lint.py
+        """
         self.file_path: Path = Path()
         self.errors: List[str] = []
         self.warnings: List[str] = []
@@ -44,6 +49,11 @@ class LintResult:
 
     @property
     def has_issues(self) -> bool:
+        """
+        Docstring for method 'LintResult.has_issues'.
+        
+        vibelint/lint.py
+        """
         return bool(self.errors or self.warnings)
 
 
@@ -60,6 +70,11 @@ class LintRunner:
         skip_confirmation: bool = False,
         include_vcs_hooks: bool = False,
     ) -> None:
+        """
+        Docstring for method 'LintRunner.__init__'.
+        
+        vibelint/lint.py
+        """
         self.config = config
         self.check_only = check_only
         self.skip_confirmation = skip_confirmation
@@ -71,6 +86,11 @@ class LintRunner:
         self.files_with_warnings: int = 0
 
     def run(self, paths: List[Path]) -> int:
+        """
+        Docstring for method 'LintRunner.run'.
+        
+        vibelint/lint.py
+        """
         python_files = self._collect_python_files(paths)
         if not python_files:
             console.print("[yellow]No Python files found to lint.[/yellow]")
@@ -112,6 +132,11 @@ class LintRunner:
         return 0
 
     def _collect_python_files(self, paths: List[Path]) -> List[Path]:
+        """
+        Docstring for method 'LintRunner._collect_python_files'.
+        
+        vibelint/lint.py
+        """
         python_files: List[Path] = []
         includes = self.config.get("include_globs", ["**/*.py"])
         excludes = self.config.get("exclude_globs", [])
@@ -135,6 +160,11 @@ class LintRunner:
         return python_files
 
     def _confirm_large_directory(self, file_count: int) -> bool:
+        """
+        Docstring for method 'LintRunner._confirm_large_directory'.
+        
+        vibelint/lint.py
+        """
         console.print(
             f"[yellow]Warning:[/yellow] Found {file_count} Python files, "
             f"exceeding large_dir_threshold={self.config['large_dir_threshold']}."
@@ -142,6 +172,11 @@ class LintRunner:
         return click.confirm("Do you want to continue?", default=True)
 
     def _process_file(self, file_path: Path) -> LintResult:
+        """
+        Docstring for method 'LintRunner._process_file'.
+        
+        vibelint/lint.py
+        """
         lr = LintResult()
         lr.file_path = file_path
         try:
@@ -182,6 +217,11 @@ class LintRunner:
         return lr
 
     def _print_summary(self) -> None:
+        """
+        Docstring for method 'LintRunner._print_summary'.
+        
+        vibelint/lint.py
+        """
         table = Table(title="vibelint Results Summary")
         table.add_column("Metric", style="cyan")
         table.add_column("Count", style="green")

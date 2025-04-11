@@ -14,6 +14,11 @@ class ShebangValidationResult:
     src/vibelint/validators/shebang.py
     """
     def __init__(self) -> None:
+        """
+        Docstring for method 'ShebangValidationResult.__init__'.
+        
+        vibelint/validators/shebang.py
+        """
         self.errors: List[str] = []
         self.warnings: List[str] = []
         self.line_number: int = 0

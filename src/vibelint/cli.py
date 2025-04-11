@@ -168,6 +168,8 @@ def report(path: str, output: str, filename: Optional[str], ignore_inheritance: 
            include_vcs_hooks: bool, paths: List[str]):
     """
     Generate a comprehensive markdown report (docstring lint, collisions, file contents).
+    
+    vibelint/cli.py
     """
     root_path = Path(path).resolve()
     config = load_config(root_path)

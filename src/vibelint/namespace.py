@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 class CollisionType:
+    """
+    Docstring for class 'CollisionType'.
+    
+    vibelint/namespace.py
+    """
     HARD = "hard"
     SOFT = "soft"
 
@@ -28,6 +33,11 @@ class NamespaceCollision:
         path2: Path,
         collision_type: str = CollisionType.HARD
     ) -> None:
+        """
+        Docstring for method 'NamespaceCollision.__init__'.
+        
+        vibelint/namespace.py
+        """
         self.name = name
         self.path1 = path1
         self.path2 = path2
@@ -116,20 +126,40 @@ class NamespaceNode:
     src/vibelint/namespace.py
     """
     def __init__(self, name: str, path: Optional[Path] = None) -> None:
+        """
+        Docstring for method 'NamespaceNode.__init__'.
+        
+        vibelint/namespace.py
+        """
         self.name = name
         self.path = path
         self.children: Dict[str, "NamespaceNode"] = {}
         self.members: Dict[str, Path] = {}
 
     def add_member(self, name: str, path: Path):
+        """
+        Docstring for method 'NamespaceNode.add_member'.
+        
+        vibelint/namespace.py
+        """
         self.members[name] = path
 
     def add_child(self, name: str, path: Path) -> "NamespaceNode":
+        """
+        Docstring for method 'NamespaceNode.add_child'.
+        
+        vibelint/namespace.py
+        """
         if name not in self.children:
             self.children[name] = NamespaceNode(name, path)
         return self.children[name]
 
     def get_collisions(self) -> List[NamespaceCollision]:
+        """
+        Docstring for method 'NamespaceNode.get_collisions'.
+        
+        vibelint/namespace.py
+        """
         collisions: List[NamespaceCollision] = []
         # check if a child node name is also in members
         for mname, mpath in self.members.items():
@@ -143,6 +173,11 @@ class NamespaceNode:
         return collisions
 
     def collect_all_members(self, all_dict: Dict[str, List[Path]]):
+        """
+        Docstring for method 'NamespaceNode.collect_all_members'.
+        
+        vibelint/namespace.py
+        """
         for mname, mpath in self.members.items():
             all_dict.setdefault(mname, []).append(mpath)
         for cnode in self.children.values():
@@ -172,6 +207,11 @@ def _extract_module_members(file_path: Path) -> List[str]:
 
 
 def _build_namespace_tree(paths: List[Path], config: Dict[str, Any], include_vcs_hooks: bool) -> NamespaceNode:
+    """
+    Docstring for function '_build_namespace_tree'.
+    
+    vibelint/namespace.py
+    """
     root = NamespaceNode("root")
     includes = config.get("include_globs", ["**/*.py"])
     excludes = config.get("exclude_globs", [])

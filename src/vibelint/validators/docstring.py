@@ -17,6 +17,11 @@ class DocstringValidationResult:
     src/vibelint/validators/docstring.py
     """
     def __init__(self) -> None:
+        """
+        Docstring for method 'DocstringValidationResult.__init__'.
+        
+        vibelint/validators/docstring.py
+        """
         self.errors: List[str] = []
         self.warnings: List[str] = []
         self.line_number: int = -1
@@ -24,6 +29,11 @@ class DocstringValidationResult:
         self.docstring_issues: Dict[Tuple[int, int], Dict[str, Any]] = {}
 
     def has_issues(self) -> bool:
+        """
+        Docstring for method 'DocstringValidationResult.has_issues'.
+        
+        vibelint/validators/docstring.py
+        """
         return bool(self.errors or self.warnings or self.docstring_issues)
 
 
