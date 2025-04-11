@@ -1,5 +1,5 @@
 """
-vibelint package initialization module.
+Vibelint package initialization module.
 
 vibelint/__init__.py
 """

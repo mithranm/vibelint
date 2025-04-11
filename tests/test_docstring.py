@@ -75,9 +75,12 @@ class DocstringValidatorTests(unittest.TestCase):
         content = '"""module example without capitalization or period\n\npath/to/module.py\n"""\n\ndef hello():\n    print("Hello")'
         result = validate_module_docstring(content, "path/to/module.py", r"^[A-Z].+\.$")
         fixed = fix_module_docstring(content, result, "path/to/module.py")
-        # Check if the first line is properly capitalized and has a period
-        first_line = fixed.split("\n")[0]
-        self.assertTrue(re.match(r'^"""[A-Z].+\.$', first_line))
+        # Check if the first content line is properly capitalized and has a period
+        lines = fixed.split("\n")
+        # In multi-line docstrings, the first line is just the opening quotes,
+        # and the actual content starts on the second line
+        content_line = lines[1] if lines[0].strip() == '"""' else lines[0].replace('"""', '', 1)
+        self.assertTrue(re.match(r'^[A-Z].+\.$', content_line.strip()))
 
     def test_fix_docstring_add_path(self):
         """Test fixing a docstring by adding the module path."""

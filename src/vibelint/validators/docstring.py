@@ -5,6 +5,7 @@ vibelint/validators/docstring.py
 """
 
 import re
+import os
 from typing import List, Optional
 
 
@@ -54,30 +55,53 @@ def validate_module_docstring(content: str, relative_path: str, docstring_regex:
     
     # Try to find the docstring
     for i in range(line_index, min(line_index + 10, len(lines))):
-        if lines[i].strip().startswith('"""'):
+        line = lines[i].strip()
+        if line.startswith('"""'):
             docstring_start = i
             # Single line docstring
-            if lines[i].strip().endswith('"""') and len(lines[i].strip()) > 6:
+            if line.endswith('"""') and len(line) > 6:
                 docstring_end = i
-                docstring_lines = [lines[i].strip()[3:-3].strip()]
+                docstring_lines = [line[3:-3].strip()]
                 break
-            # Multi-line docstring
-            for j in range(i + 1, len(lines)):
-                if '"""' in lines[j]:
-                    docstring_lines = [lines[i].strip()[3:].strip()]
-                    docstring_lines.extend(line.strip() for line in lines[i+1:j])
-                    if lines[j].strip().startswith('"""'):
-                        # The closing triple quotes are on their own line
-                        pass
+            
+            # Handle multi-line docstring
+            first_content_line = None
+            if line == '"""':
+                # Triple quotes on their own line - content starts on next line
+                first_content_line = i + 1
+            else:
+                # Content starts on same line as opening quotes
+                first_content_line = i
+                docstring_lines.append(line[3:].strip())
+            
+            # Find the end of the docstring
+            for j in range(first_content_line, len(lines)):
+                current_line = lines[j].strip()
+                # Look for a line that ends with triple quotes or is just triple quotes
+                if current_line == '"""' or current_line.endswith('"""'):
+                    docstring_end = j
+                    
+                    # If we didn't already add the first line (when quotes were on their own line)
+                    if first_content_line > i:
+                        # Add lines between opening quote and closing quote
+                        docstring_lines.extend(lines[k].strip() for k in range(first_content_line, j) 
+                                              if lines[k].strip())
                     else:
-                        # The closing triple quotes are at the end of content
-                        docstring_lines.append(lines[j].split('"""')[0].strip())
+                        # Add lines after the first content line
+                        docstring_lines.extend(lines[k].strip() for k in range(i+1, j) 
+                                              if lines[k].strip())
+                    
+                    # Add content from the last line if it has content before the closing quotes
+                    if current_line != '"""':
+                        content_part = current_line.split('"""')[0].strip()
+                        if content_part:
+                            docstring_lines.append(content_part)
                     break
             break
             
-    # If no docstring found
-    if docstring_start is None:
-        result.errors.append("Module docstring missing")
+    # If no docstring found or incomplete docstring
+    if docstring_start is None or docstring_end is None:
+        result.errors.append("Module docstring missing or incomplete")
         result.line_number = line_index
         result.needs_fix = True
         return result
@@ -93,7 +117,9 @@ def validate_module_docstring(content: str, relative_path: str, docstring_regex:
         return result
     
     # Check first line format (capitalized sentence ending in period)
-    if not re.match(docstring_regex, docstring_lines[0]):
+    # Get the first non-empty line
+    first_content = next((line for line in docstring_lines if line), "")
+    if not re.match(docstring_regex, first_content):
         result.errors.append(
             f"First line of docstring should match regex: {docstring_regex}"
         )
@@ -101,14 +127,38 @@ def validate_module_docstring(content: str, relative_path: str, docstring_regex:
     
     # Check for relative path in docstring
     path_found = False
+    
+    # Extract the package-relative path from the full path
+    package_path = relative_path
+    
+    # Handle files in project root differently
+    if os.path.basename(relative_path) == relative_path:
+        # It's already just a filename with no directories, so use as is
+        package_path = relative_path
+    elif '/src/' in relative_path:
+        package_path = relative_path.split('/src/')[-1]
+    elif '/Users/' in relative_path:
+        # Extract just the project path
+        parts = relative_path.split('/')
+        if 'vibelint' in parts:
+            idx = parts.index('vibelint')
+            # Handle setup.py and other files in project root
+            if idx + 1 >= len(parts) or parts[idx+1] in ['setup.py', 'README.md', 'pyproject.toml']:
+                package_path = parts[-1]  # Just use the filename
+            elif idx + 1 < len(parts) and parts[idx+1] == 'src':
+                package_path = '/'.join(parts[idx+2:])
+            else:
+                package_path = '/'.join(parts[idx+1:])  # Don't include vibelint itself
+    
+    # Check for either the full path or the package-relative path
     for line in docstring_lines:
-        if relative_path in line:
+        if relative_path in line or package_path in line:
             path_found = True
             break
     
     if not path_found:
         result.errors.append(
-            f"Docstring should include the relative path: {relative_path}"
+            f"Docstring should include the relative path: {package_path}"
         )
         result.needs_fix = True
     
@@ -121,6 +171,27 @@ def fix_module_docstring(content: str, result: ValidationResult, relative_path: 
 
     vibelint/validators/docstring.py
     """
+    # Extract the package-relative path with the same logic as in validate_module_docstring
+    package_path = relative_path
+    
+    # Handle files in project root differently
+    if os.path.basename(relative_path) == relative_path:
+        # It's already just a filename with no directories, so use as is
+        package_path = relative_path
+    elif '/src/' in relative_path:
+        package_path = relative_path.split('/src/')[-1]
+    elif '/Users/' in relative_path:
+        parts = relative_path.split('/')
+        if 'vibelint' in parts:
+            idx = parts.index('vibelint')
+            # Handle setup.py and other files in project root
+            if idx + 1 >= len(parts) or parts[idx+1] in ['setup.py', 'README.md', 'pyproject.toml']:
+                package_path = parts[-1]  # Just use the filename
+            elif idx + 1 < len(parts) and parts[idx+1] == 'src':
+                package_path = '/'.join(parts[idx+2:])
+            else:
+                package_path = '/'.join(parts[idx+1:])  # Don't include vibelint itself
+    
     if not result.needs_fix:
         return content
         
@@ -129,14 +200,14 @@ def fix_module_docstring(content: str, result: ValidationResult, relative_path: 
     # If there's no docstring, create a new one
     if result.module_docstring is None:
         # Get the module name from the relative path
-        module_name = relative_path.split("/")[-1].replace(".py", "")
+        module_name = os.path.basename(relative_path).replace(".py", "")
         
-        # Create a docstring
+        # Create a docstring with preferred style (quotes on their own lines)
         docstring = [
             '"""',
             f"{module_name.replace('_', ' ').title()} module.",
             "",
-            f"{relative_path}",
+            f"{package_path}",
             '"""'
         ]
         
@@ -148,27 +219,28 @@ def fix_module_docstring(content: str, result: ValidationResult, relative_path: 
         existing_docstring = result.module_docstring.splitlines()
         
         # Fix the first line if needed
-        if not re.match(r"^[A-Z].+\.$", existing_docstring[0]):
-            # Capitalize first letter and ensure it ends with a period
-            first_line = existing_docstring[0]
-            if first_line:
-                first_line = first_line[0].upper() + first_line[1:]
-                if not first_line.endswith("."):
-                    first_line += "."
-                existing_docstring[0] = first_line
+        if existing_docstring:
+            first_content = existing_docstring[0]
+            if not re.match(r"^[A-Z].+\.$", first_content):
+                # Capitalize first letter and ensure it ends with a period
+                if first_content:
+                    first_content = first_content[0].upper() + first_content[1:]
+                    if not first_content.endswith("."):
+                        first_content += "."
+                    existing_docstring[0] = first_content
         
         # Add relative path if missing
         path_found = False
         for i, line in enumerate(existing_docstring):
-            if relative_path in line:
+            if relative_path in line or package_path in line:
                 path_found = True
                 break
         
         if not path_found:
             # Add an empty line before the path if there isn't one already
-            if len(existing_docstring) > 1 and existing_docstring[-1]:
+            if existing_docstring and existing_docstring[-1]:
                 existing_docstring.append("")
-            existing_docstring.append(relative_path)
+            existing_docstring.append(package_path)
         
         # Reconstruct the docstring
         docstring_text = "\n".join(existing_docstring)
@@ -180,30 +252,24 @@ def fix_module_docstring(content: str, result: ValidationResult, relative_path: 
         # Find the end of the old docstring
         in_docstring = False
         for i in range(start_idx, len(lines)):
-            if lines[i].strip().startswith('"""') and not in_docstring:
+            line = lines[i].strip()
+            if line.startswith('"""') and not in_docstring:
                 in_docstring = True
-                if lines[i].strip().endswith('"""') and len(lines[i].strip()) > 6:
+                if line.endswith('"""') and len(line) > 6:
                     # Single line docstring
                     end_idx = i
                     break
-            elif '"""' in lines[i] and in_docstring:
+            elif (line == '"""' or line.endswith('"""')) and in_docstring:
                 end_idx = i
                 break
         
-        # If it's a single-line docstring
-        if start_idx == end_idx:
-            lines[start_idx] = f'"""{docstring_text}"""'
-        else:
-            # Create a multi-line docstring
-            docstring_lines = docstring_text.splitlines()
-            if docstring_lines:
-                # Combine the opening quotes with the first content line
-                new_docstring_lines = [f'"""{docstring_lines[0]}']
-                new_docstring_lines.extend(docstring_lines[1:])
-            else:
-                new_docstring_lines = ['"""']  # Empty docstring content
-            
-            # Replace the old docstring lines with the new ones
-            lines = lines[:start_idx] + new_docstring_lines + lines[end_idx+1:]
+        # If it's a single-line docstring, convert to multi-line with preferred style
+        new_docstring_lines = ['"""']
+        docstring_lines = docstring_text.splitlines()
+        new_docstring_lines.extend(docstring_lines)
+        new_docstring_lines.append('"""')
+        
+        # Replace the old docstring lines with the new ones
+        lines = lines[:start_idx] + new_docstring_lines + lines[end_idx+1:]
     
     return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
