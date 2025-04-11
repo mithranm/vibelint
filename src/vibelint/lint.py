@@ -82,7 +82,8 @@ class LintRunner:
 
         # Check if directory is large and requires confirmation
         if (
-            not self.skip_confirmation and len(python_files) > self.config["large_dir_threshold"]
+            not self.skip_confirmation
+            and len(python_files) > self.config["large_dir_threshold"]
         ):
             if not self._confirm_large_directory(len(python_files)):
                 console.print("[yellow]Operation cancelled.[/yellow]")
