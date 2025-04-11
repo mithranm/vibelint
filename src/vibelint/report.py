@@ -188,7 +188,7 @@ def generate_markdown_report(
         
         # Linting Results
         f.write("## Linting Results\n\n")
-        if not lint_runner.results or all(not r.has_issues() for r in lint_runner.results):
+        if not lint_runner.results or all(not r.has_issues for r in lint_runner.results):
             f.write("*No linting issues found.*\n\n")
         else:
             f.write("| File | Errors | Warnings |\n")

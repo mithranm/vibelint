@@ -160,7 +160,7 @@ def tape_archive_cmd(path: str, output: str, include_vcs_hooks: bool, paths: Lis
     help="Path to analyze (default: current directory)")
 @click.option("-o", "--output", default="./vibelint_reports", type=click.Path(writable=True),
     help="Output directory for the report.")
-@click.option("--filename", default=None, type=str, help="Output filename (defaults to vibelint_report_TIMESTAMP.md)")
+@click.option("-f", "--filename", default=None, type=str, help="Output filename (defaults to vibelint_report_TIMESTAMP.md)")
 @click.option("--ignore-inheritance", is_flag=True, help="Ignore class inheritance for soft collisions")
 @click.option("--include-vcs-hooks", is_flag=True, help="Include .git, .hg, .svn, etc.")
 @click.argument("paths", nargs=-1, type=click.Path(exists=True))
@@ -176,12 +176,12 @@ def report(path: str, output: str, filename: Optional[str], ignore_inheritance: 
     out_dir = Path(output).resolve()
     out_dir.mkdir(exist_ok=True, parents=True)
 
-    from .report import generate_markdown_report
+    # Note: generate_markdown_report handles linting and collision detection internally
     report_path = generate_markdown_report(
         target_paths=target_paths,
         output_dir=out_dir,
         config=config,
-        check_only=True,
+        check_only=True, # Report should only check, not fix
         include_vcs_hooks=include_vcs_hooks,
         ignore_inheritance=ignore_inheritance,
         output_filename=filename
