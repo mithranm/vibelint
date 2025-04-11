@@ -1,0 +1,7 @@
+- id: vibelint
+  name: vibelint
+  description: Make Python codebases more LLM-friendly
+  entry: vibelint headers
+  language: python
+  types: [python]
+  pass_filenames: true
