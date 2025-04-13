@@ -10,3 +10,7 @@ try:
     __version__ = version("vibelint")
 except PackageNotFoundError:
     __version__ = "unknown"
+
+__all__ = [
+    "__version__",
+]

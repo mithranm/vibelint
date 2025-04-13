@@ -31,7 +31,7 @@ def _get_files_in_namespace_order(
         collected_files: A set to store the absolute paths of collected files.
         project_root: The project root path for checking containment.
 
-    vibelint/report.py (Modified)
+    vibelint/report.py
     """
 
     if node.is_package and node.path and node.path.is_dir():
@@ -104,7 +104,7 @@ def write_report_content(
     root_node: The root NamespaceNode of the project structure.
     config: Configuration object.
 
-    vibelint/report.py (Modified - calling corrected helper)
+    vibelint/report.py
     """
 
     package_name = project_root.name if project_root else "Unknown"

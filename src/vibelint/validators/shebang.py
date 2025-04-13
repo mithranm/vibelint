@@ -27,21 +27,37 @@ class ShebangValidationResult:
     """
 
     def __init__(self) -> None:
-        """Initializes ShebangValidationResult."""
+        """
+        Initializes ShebangValidationResult.
+
+        vibelint/validators/shebang.py
+        """
         self.errors: List[ValidationIssue] = []
         self.warnings: List[ValidationIssue] = []
         self.line_number: int = 0
 
     def has_issues(self) -> bool:
-        """Check if any issues were found."""
+        """
+        Check if any issues were found.
+
+        vibelint/validators/shebang.py
+        """
         return bool(self.errors or self.warnings)
 
     def add_error(self, code: str, message: str):
-        """Adds an error with its code."""
+        """
+        Adds an error with its code.
+
+        vibelint/validators/shebang.py
+        """
         self.errors.append((code, message))
 
     def add_warning(self, code: str, message: str):
-        """Adds a warning with its code."""
+        """
+        Adds a warning with its code.
+
+        vibelint/validators/shebang.py
+        """
         self.warnings.append((code, message))
 
 

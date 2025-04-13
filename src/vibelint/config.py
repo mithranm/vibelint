@@ -55,23 +55,39 @@ class Config:
     """
 
     def __init__(self, project_root: Optional[Path], config_dict: Dict[str, Any]):
-        """Initializes Config."""
+        """
+        Initializes Config.
+
+        vibelint/config.py
+        """
         self._project_root = project_root
         self._config_dict = config_dict.copy()
 
     @property
     def project_root(self) -> Optional[Path]:
-        """The detected project root directory, or None if not found."""
+        """
+        The detected project root directory, or None if not found.
+
+        vibelint/config.py
+        """
         return self._project_root
 
     @property
     def settings(self) -> Mapping[str, Any]:
-        """Read-only view of the settings loaded from [tool.vibelint]."""
+        """
+        Read-only view of the settings loaded from [tool.vibelint].
+
+        vibelint/config.py
+        """
         return self._config_dict
 
     @property
     def ignore_codes(self) -> List[str]:
-        """Returns the list of error codes to ignore, from config or empty list."""
+        """
+        Returns the list of error codes to ignore, from config or empty list.
+
+        vibelint/config.py
+        """
         ignored = self.get("ignore", [])
         if isinstance(ignored, list) and all(isinstance(item, str) for item in ignored):
             return ignored
@@ -84,11 +100,19 @@ class Config:
             return []
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Gets a value from the loaded settings, returning default if not found."""
+        """
+        Gets a value from the loaded settings, returning default if not found.
+
+        vibelint/config.py
+        """
         return self._config_dict.get(key, default)
 
     def __getitem__(self, key: str) -> Any:
-        """Gets a value, raising KeyError if the key is not found."""
+        """
+        Gets a value, raising KeyError if the key is not found.
+
+        vibelint/config.py
+        """
         if key not in self._config_dict:
             raise KeyError(
                 f"Required configuration key '{key}' not found in "
@@ -97,11 +121,19 @@ class Config:
         return self._config_dict[key]
 
     def __contains__(self, key: str) -> bool:
-        """Checks if a key exists in the loaded settings."""
+        """
+        Checks if a key exists in the loaded settings.
+
+        vibelint/config.py
+        """
         return key in self._config_dict
 
     def is_present(self) -> bool:
-        """Checks if a project root was found and some settings were loaded."""
+        """
+        Checks if a project root was found and some settings were loaded.
+
+        vibelint/config.py
+        """
         return self._project_root is not None and bool(self._config_dict)
 
 

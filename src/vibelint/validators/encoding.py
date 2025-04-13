@@ -25,21 +25,37 @@ class EncodingValidationResult:
     """
 
     def __init__(self) -> None:
-        """Initializes EncodingValidationResult."""
+        """
+        Initializes EncodingValidationResult.
+
+        vibelint/validators/encoding.py
+        """
         self.errors: List[ValidationIssue] = []
         self.warnings: List[ValidationIssue] = []
         self.line_number: int = -1
 
     def has_issues(self) -> bool:
-        """Check if there are any issues."""
+        """
+        Check if there are any issues.
+
+        vibelint/validators/encoding.py
+        """
         return bool(self.errors or self.warnings)
 
     def add_error(self, code: str, message: str):
-        """Adds an error with its code."""
+        """
+        Adds an error with its code.
+
+        vibelint/validators/encoding.py
+        """
         self.errors.append((code, message))
 
     def add_warning(self, code: str, message: str):
-        """Adds a warning with its code."""
+        """
+        Adds a warning with its code.
+
+        vibelint/validators/encoding.py
+        """
         self.warnings.append((code, message))
 
 

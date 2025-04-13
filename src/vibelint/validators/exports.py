@@ -26,7 +26,11 @@ class ExportValidationResult:
     """
 
     def __init__(self, file_path: str) -> None:
-        """Initializes ExportValidationResult."""
+        """
+        Initializes ExportValidationResult.
+
+        vibelint/validators/exports.py
+        """
         self.file_path = file_path
         self.errors: List[ValidationIssue] = []
         self.warnings: List[ValidationIssue] = []
@@ -35,15 +39,27 @@ class ExportValidationResult:
         self.all_lineno: Optional[int] = None
 
     def has_issues(self) -> bool:
-        """Returns True if there are any errors or warnings."""
+        """
+        Returns True if there are any errors or warnings.
+
+        vibelint/validators/exports.py
+        """
         return bool(self.errors or self.warnings)
 
     def add_error(self, code: str, message: str):
-        """Adds an error with its code."""
+        """
+        Adds an error with its code.
+
+        vibelint/validators/exports.py
+        """
         self.errors.append((code, message))
 
     def add_warning(self, code: str, message: str):
-        """Adds a warning with its code."""
+        """
+        Adds a warning with its code.
+
+        vibelint/validators/exports.py
+        """
         self.warnings.append((code, message))
 
 

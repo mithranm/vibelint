@@ -1,12 +1,19 @@
 """
-File discovery routines for vibelint.
+Discovers files using pathlib glob/rglob based on include patterns from
+pyproject.toml, respecting the pattern's implied scope, then filters
+using exclude patterns.
 
-Uses pathlib glob/rglob based on include patterns from pyproject.toml,
-then filters results using exclude patterns.
-Warns if essential configuration (like include_globs) is missing.
-Warns if files inside common VCS directories are included due to missing excludes.
+If `include_globs` is missing from the configuration:
+- If `default_includes_if_missing` is provided, uses those patterns and logs a warning.
+- Otherwise, logs an error and returns an empty list.
 
-vibelint/discovery.py
+Exclusions from `config.exclude_globs` are always applied. Explicitly
+provided paths are also excluded.
+
+Warns if files within common VCS directories (.git, .hg, .svn) are found
+and not covered by exclude_globs.
+
+src/vibelint/discovery.py
 """
 
 import fnmatch
@@ -21,11 +28,10 @@ from .utils import get_relative_path
 __all__ = ["discover_files"]
 logger = logging.getLogger(__name__)
 
+_VCS_DIRS = {".git", ".hg", ".svn"}  # Keep this if needed for VCS warnings later
 
-_VCS_DIRS = {".git", ".hg", ".svn"}
 
-
-def _is_excluded(
+def _is_excluded(  # Keep this helper function as is
     file_path_abs: Path,
     project_root: Path,
     exclude_globs: List[str],
@@ -53,38 +59,53 @@ def _is_excluded(
         return True
 
     try:
-        rel_path_str = get_relative_path(file_path_abs, project_root)
+        # Use resolve() for consistent comparison base
+        rel_path = file_path_abs.resolve().relative_to(project_root.resolve())
+        rel_path_str = str(rel_path).replace("\\", "/")  # Normalize for fnmatch
     except ValueError:
         logger.warning(f"Path {file_path_abs} is outside project root {project_root}. Excluding.")
         return True
+    except Exception as e:
+        logger.error(f"Error getting relative path for exclusion check on {file_path_abs}: {e}")
+        return True  # Exclude if relative path fails
 
     for pattern in exclude_globs:
         normalized_pattern = pattern.replace("\\", "/")
-        if fnmatch.fnmatch(str(rel_path_str), normalized_pattern):
-            logger.debug(f"Excluding '{rel_path_str}' due to pattern '{pattern}'")
+        # Use fnmatch which matches based on Unix glob rules
+        if fnmatch.fnmatch(rel_path_str, normalized_pattern):
+            logger.debug(f"Excluding '{rel_path_str}' due to exclude pattern '{pattern}'")
             return True
+        # Also check if the pattern matches any parent directory part
+        # Example: exclude "build/" should match "build/lib/module.py"
+        if "/" in normalized_pattern.rstrip("/"):  # Check if it's a directory pattern
+            dir_pattern = normalized_pattern.rstrip("/") + "/"
+            if rel_path_str.startswith(dir_pattern):
+                logger.debug(
+                    f"Excluding '{rel_path_str}' due to directory exclude pattern '{dir_pattern}'"
+                )
+                return True
 
-    logger.debug(f"Path '{rel_path_str}' not excluded by any pattern.")
+    # logger.debug(f"Path '{rel_path_str}' not excluded by any pattern.") # Too verbose
     return False
 
 
 def discover_files(
-    paths: List[Path],
+    paths: List[Path],  # Note: This argument seems unused for the main globbing logic
     config: Config,
     default_includes_if_missing: Optional[List[str]] = None,
     explicit_exclude_paths: Optional[Set[Path]] = None,
 ) -> List[Path]:
     """
     Discovers files using pathlib glob/rglob based on include patterns from
-    pyproject.toml, then filters using exclude patterns.
+    pyproject.toml, respecting the pattern's implied scope, then filters
+    using exclude patterns.
 
     If `include_globs` is missing from the configuration:
     - If `default_includes_if_missing` is provided, uses those patterns and logs a warning.
     - Otherwise, logs an error and returns an empty list.
 
-    Exclusions from `config.exclude_globs` are always applied. If missing,
-    no exclusions based on globs are applied. Explicitly provided paths are
-    also excluded.
+    Exclusions from `config.exclude_globs` are always applied. Explicitly
+    provided paths are also excluded.
 
     Warns if files within common VCS directories (.git, .hg, .svn) are found
     and not covered by exclude_globs.
@@ -111,9 +132,11 @@ def discover_files(
 
     project_root = config.project_root.resolve()
     candidate_files: Set[Path] = set()
-    _explicit_excludes = explicit_exclude_paths or set()
+    _explicit_excludes = {
+        p.resolve() for p in (explicit_exclude_paths or set())
+    }  # Resolve explicit excludes
 
-    # --- Load include/exclude globs ---
+    # --- Load include/exclude globs (Same as before) ---
     include_globs_config = config.get("include_globs")
     if include_globs_config is None:
         if default_includes_if_missing is not None:
@@ -125,8 +148,7 @@ def discover_files(
         else:
             logger.error(
                 "Configuration key 'include_globs' missing in [tool.vibelint] section "
-                "of pyproject.toml. No include patterns specified. "
-                "To include files, add 'include_globs = [\"**/*.py\"]' (or similar) "
+                "of pyproject.toml. No include patterns specified. Add 'include_globs' "
                 "to pyproject.toml."
             )
             return []
@@ -147,42 +169,21 @@ def discover_files(
 
     normalized_includes = [p.replace("\\", "/") for p in include_globs_effective]
 
-    exclude_globs = config.get("exclude_globs", [])
-    if not isinstance(exclude_globs, list):
+    exclude_globs_config = config.get("exclude_globs", [])
+    if not isinstance(exclude_globs_config, list):
         logger.error(
             f"Configuration error: 'exclude_globs' in pyproject.toml must be a list. "
-            f"Found type {type(exclude_globs)}. Ignoring exclusions."
+            f"Found type {type(exclude_globs_config)}. Ignoring exclusions."
         )
-        exclude_globs = []
-    normalized_exclude_globs = [p.replace("\\", "/") for p in exclude_globs]
-
-    # --- Identify common exclude patterns for early checking ---
-    _common_exclude_identifiers = [
-        ".tox",
-        "__pycache__",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".mypy_cache",
-        ".venv",
-        "venv",
-        ".env",
-        "env",
-        "node_modules",
-    ]
-    common_exclude_patterns = [
-        pat
-        for pat in normalized_exclude_globs
-        if any(
-            f"/{ident}/" in f"/{pat}/" or pat.startswith(f"{ident}/") or pat == ident
-            for ident in _common_exclude_identifiers
-        )
-    ]
+        exclude_globs_effective = []
+    else:
+        exclude_globs_effective = exclude_globs_config
+    normalized_exclude_globs = [p.replace("\\", "/") for p in exclude_globs_effective]
 
     logger.debug(f"Starting file discovery from project root: {project_root}")
     logger.debug(f"Effective Include globs: {normalized_includes}")
     logger.debug(f"Exclude globs: {normalized_exclude_globs}")
     logger.debug(f"Explicit excludes: {_explicit_excludes}")
-    logger.debug(f"Pre-checking against common exclude patterns: {common_exclude_patterns}")
 
     start_time = time.time()
     total_glob_yield_count = 0
@@ -193,55 +194,76 @@ def discover_files(
         glob_method = project_root.rglob if "**" in pattern else project_root.glob
         pattern_yield_count = 0
         pattern_added_count = 0
+
+        # --- Determine expected base directory for anchored patterns ---
+        expected_base_dir: Optional[Path] = None
+        pattern_path = Path(pattern)
+        # Check if the first part of the pattern is a simple directory name (not a wildcard)
+        # and the pattern contains a separator (implying it's not just a root file pattern)
+        if (
+            not pattern_path.is_absolute()
+            and pattern_path.parts
+            and not any(c in pattern_path.parts[0] for c in "*?[]")
+            and ("/" in pattern or "\\" in pattern)  # Check if it contains a path separator
+        ):
+            expected_base_dir = project_root / pattern_path.parts[0]
+            logger.debug(f"Pattern '{pattern}' implies base directory: {expected_base_dir}")
+
         try:
             logger.debug(f"Running {glob_method.__name__}('{pattern}')...")
             for p in glob_method(pattern):
                 pattern_yield_count += 1
                 total_glob_yield_count += 1
-                is_symlink = p.is_symlink()
+                abs_p = p.resolve()  # Resolve once
 
                 logger.debug(
-                    f"  Glob yielded (from '{pattern}'): {p} (is_file: {p.is_file()}, is_dir: {p.is_dir()}, is_symlink: {is_symlink})"
+                    f"  Glob yielded (from '{pattern}'): {abs_p} (orig: {p}, is_file: {p.is_file()})"
                 )
 
-                if is_symlink:
+                # --- <<< FIX: Post-Glob Validation >>> ---
+                is_valid_for_pattern = True  # Assume valid unless proven otherwise
+                if expected_base_dir:
+                    # If pattern implies a base dir (e.g., "src/..."), check path is relative to it
+                    try:
+                        # Use resolved paths for reliable check
+                        abs_p.relative_to(expected_base_dir.resolve())
+                    except ValueError:
+                        logger.debug(
+                            f"    -> Skipping {abs_p}: Yielded by anchored pattern '{pattern}' but not relative to expected base {expected_base_dir}"
+                        )
+                        is_valid_for_pattern = False
+                    except Exception as path_err:
+                        logger.warning(
+                            f"    -> Error checking relative path for {abs_p} against {expected_base_dir}: {path_err}. Allowing through."
+                        )
+                elif (
+                    "/" not in pattern
+                    and "\\" not in pattern
+                    and not any(c in pattern for c in "*?[]")
+                ):
+                    # If pattern is a simple filename (e.g., "pyproject.toml"), check it's directly under root
+                    if abs_p.parent != project_root:
+                        logger.debug(
+                            f"    -> Skipping {abs_p}: Yielded by root pattern '{pattern}' but not in project root directory."
+                        )
+                        is_valid_for_pattern = False
+
+                if not is_valid_for_pattern:
+                    continue  # Skip this path if it didn't belong to the pattern's scope
+                # --- <<< END FIX >>> ---
+
+                if p.is_symlink():
                     logger.debug(f"    -> Skipping discovered symlink: {p}")
                     continue
 
-                if common_exclude_patterns:
-                    try:
-                        rel_path_check = p.relative_to(project_root)
-                        rel_path_check_str = str(rel_path_check).replace("\\", "/")
-
-                        should_exclude_early = False
-                        for exclude_pattern in common_exclude_patterns:
-                            if fnmatch.fnmatch(rel_path_check_str, exclude_pattern):
-                                logger.debug(
-                                    f"    -> EARLY EXCLUDE: Skipping {p} due to pre-check against '{exclude_pattern}'"
-                                )
-                                should_exclude_early = True
-                                break
-                        if should_exclude_early:
-                            continue
-
-                    except ValueError:
-                        logger.warning(
-                            f"    -> EARLY SKIP: Path {p} outside project root {project_root}"
-                        )
-                        continue
-                    except Exception as e_rel:
-                        logger.error(
-                            f"    -> ERROR getting relative path for early check on {p}: {e_rel}"
-                        )
-                        continue
-
+                # We only care about files from here on for candidacy
                 if p.is_file():
-                    resolved_p = p.resolve()
-                    logger.debug(
-                        f"    -> Adding candidate: {resolved_p} (from pattern '{pattern}')"
-                    )
-                    candidate_files.add(resolved_p)
+                    # Add the *resolved* absolute path to the candidates
+                    logger.debug(f"    -> Adding candidate: {abs_p} (from pattern '{pattern}')")
+                    candidate_files.add(abs_p)
                     pattern_added_count += 1
+                # else: # Log directories yielded if needed for debugging
+                #      logger.debug(f"    -> Ignoring directory yielded by glob: {p}")
 
         except PermissionError as e:
             logger.warning(
@@ -260,65 +282,77 @@ def discover_files(
         f"Initial globbing finished in {discovery_time:.4f} seconds. Total yielded paths: {total_glob_yield_count}. Total candidates: {len(candidate_files)}"
     )
 
-    logger.debug(f"Applying *remaining* exclude rules to {len(candidate_files)} candidates...")
+    logger.debug(f"Applying exclude rules to {len(candidate_files)} candidates...")
     final_files_set: Set[Path] = set()
     exclusion_start_time = time.time()
 
-    sorted_candidates = sorted(list(candidate_files), key=lambda x: str(x))
+    # Sort candidates for deterministic processing order (optional but good)
+    sorted_candidates = sorted(list(candidate_files), key=str)
 
-    for file_path in sorted_candidates:
-        if not _is_excluded(file_path, project_root, normalized_exclude_globs, _explicit_excludes):
-            logger.debug(f"Including file: {file_path}")
-            final_files_set.add(file_path)
+    for file_path_abs in sorted_candidates:
+        if not _is_excluded(
+            file_path_abs, project_root, normalized_exclude_globs, _explicit_excludes
+        ):
+            logger.debug(f"Including file: {file_path_abs}")
+            final_files_set.add(file_path_abs)
+        # else: # No need to log every exclusion unless debugging excludes specifically
+        # try:
+        #     rel_path_exc = get_relative_path(file_path_abs, project_root)
+        #     logger.debug(f"Excluding file based on rules: {rel_path_exc}")
+        # except ValueError:
+        #      logger.debug(f"Excluding file based on rules: {file_path_abs}")
 
     exclusion_time = time.time() - exclusion_start_time
     logger.debug(f"Exclusion phase finished in {exclusion_time:.4f} seconds.")
 
-    discovered_files = final_files_set
-
+    # --- VCS Warning Logic (Optional, keep if desired) ---
+    # ... (keep the existing VCS warning logic if you want it) ...
     vcs_warnings: Set[Path] = set()
-    potential_vcs_candidates = candidate_files
-    if potential_vcs_candidates:
-        for file_path in potential_vcs_candidates:
-            is_in_vcs_dir = any(part in _VCS_DIRS for part in file_path.parts)
-            if is_in_vcs_dir:
-                if not _is_excluded(
-                    file_path, project_root, normalized_exclude_globs, _explicit_excludes
-                ):
-                    if file_path in discovered_files:
-                        vcs_warnings.add(file_path)
-
-    final_count = len(discovered_files)
+    if final_files_set:  # Check against final included files
+        for file_path in final_files_set:
+            try:
+                is_in_vcs_dir = any(
+                    part in _VCS_DIRS for part in file_path.relative_to(project_root).parts
+                )
+                if is_in_vcs_dir:
+                    # Check if it *would* have been excluded if a pattern existed
+                    # This check is slightly complex - maybe simplify the warning?
+                    # For now, let's just warn if *any* included file is in a dir matching VCS name parts
+                    vcs_warnings.add(file_path)
+            except ValueError:  # Outside project root
+                pass
+            except Exception as e_vcs:
+                logger.debug(f"Error during VCS check for {file_path}: {e_vcs}")
 
     if vcs_warnings:
         logger.warning(
-            f"Found {len(vcs_warnings)} files within potential VCS directories "
-            f"({', '.join(_VCS_DIRS)}) that were included because they were not "
-            f"matched by any 'exclude_globs' pattern in pyproject.toml:"
-        )
-        sorted_warnings = sorted(list(vcs_warnings), key=lambda x: str(x))
-        paths_to_log = []
-        try:
-            paths_to_log = [get_relative_path(p, project_root) for p in sorted_warnings[:5]]
-        except ValueError:
-            paths_to_log = [p for p in sorted_warnings[:5]]
-
-        for rel_path_warn in paths_to_log:
-            logger.warning(f"  - {rel_path_warn}")
-        if len(vcs_warnings) > 5:
-            logger.warning(f"  - ... and {len(vcs_warnings) - 5} more.")
-        logger.warning(
-            "Consider adding patterns like '.git/**' to 'exclude_globs' "
+            f"Found {len(vcs_warnings)} included files within potential VCS directories "
+            f"({', '.join(_VCS_DIRS)}). Consider adding patterns like '.git/**' to 'exclude_globs' "
             "in your [tool.vibelint] section if this was unintended."
         )
+        # Log first few examples
+        try:
+            paths_to_log = [
+                get_relative_path(p, project_root) for p in sorted(list(vcs_warnings), key=str)[:5]
+            ]
+            for rel_path_warn in paths_to_log:
+                logger.warning(f"  - {rel_path_warn}")
+            if len(vcs_warnings) > 5:
+                logger.warning(f"  - ... and {len(vcs_warnings) - 5} more.")
+        except ValueError:
+            logger.warning("  (Could not display example relative paths - outside project root?)")
+        except Exception as e_log:
+            logger.warning(f"  (Error logging example paths: {e_log})")
 
+    # --- Final Count Logging (Same as before) ---
+    final_count = len(final_files_set)
     if final_count == 0 and len(candidate_files) > 0 and include_globs_effective:
         logger.warning("All candidate files were excluded. Check your exclude_globs patterns.")
     elif final_count == 0 and not include_globs_effective:
-        pass
+        pass  # Expected if includes are empty
     elif final_count == 0:
         if include_globs_effective and total_glob_yield_count == 0:
             logger.warning("No files found matching include_globs patterns.")
 
-    logger.debug(f"Discovery complete. Returning {len(discovered_files)} files.")
-    return sorted(list(discovered_files))
+    logger.debug(f"Discovery complete. Returning {final_count} files.")
+    return sorted(list(final_files_set))

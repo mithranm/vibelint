@@ -29,7 +29,6 @@ dependencies = [
     "tomli-w",
     "colorama>=0.4.0",
     "rich>=12.0.0",
-    "docformatter>=1.7.0",
     "libcst"
 ]
 
@@ -45,35 +44,23 @@ where = ["src"]
 include = ["vibelint*"]
 
 [tool.vibelint]
-# --- More specific includes ---
 include_globs = [
-    "src/**/*.py",      # All Python files in src
-    "tests/**/*.py",     # All Python files in tests
-    # "scripts/*.py",    # Add if you have top-level scripts
-    "pyproject.toml",  # Include config for snapshots/reports
-    "README.md",       # Include README for snapshots/reports
-    "LICENSE",         # Include LICENSE for snapshots/reports
-    # Add other specific files/patterns as needed
+    "src/**/*.py",
+    "tests/**/*.py",
+    "pyproject.toml",
+    "VIBECHECKER.txt"
 ]
-# --- Keep your excludes ---
 exclude_globs = [
-    ".git/**",
-    ".pytest_cache/**",
-    ".ruff_cache/**",
-    ".tox/**",
-    "*.egg-info/**",
-    "*.env*",
-    "**/__pycache__/**",
-    "**/.DS_Store",
-    "tests/fixtures/*",
-    "debug.txt"
+    "tests/fixtures/*"
 ]
 peek_globs = ["coverage.xml"]
 allowed_shebangs = ["#!/usr/bin/env python3"]
 large_dir_threshold = 500
 error_on_missing_all_in_init = false
 
-
 [tool.black]
 target-version = ["py310", "py311", "py312"]
 line-length=100
+
+[tool.setuptools.package-data]
+vibelint = ["VIBECHECKER.txt"]

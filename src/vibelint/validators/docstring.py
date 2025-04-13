@@ -242,17 +242,29 @@ class DocstringInfoExtractor(cst.CSTVisitor):
         )
 
     def visit_Module(self, node: Module) -> None:
-        """Visits Module node."""
+        """
+        Visits Module node.
+
+        vibelint/validators/docstring.py
+        """
         doc_node = _get_docstring_node(node.body)
         doc_text = _extract_docstring_text(doc_node)
         self._validate_docstring(node, doc_node, doc_text, "module", "module")
 
     def leave_Module(self, node: Module) -> None:
-        """Leaves Module node."""
+        """
+        Leaves Module node.
+
+        vibelint/validators/docstring.py
+        """
         pass  # No action needed on leave
 
     def visit_ClassDef(self, node: ClassDef) -> bool:
-        """Visits ClassDef node."""
+        """
+        Visits ClassDef node.
+
+        vibelint/validators/docstring.py
+        """
         if isinstance(node.body, IndentedBlock):
             doc_node = _get_docstring_node(node.body.body)
             doc_text = _extract_docstring_text(doc_node)
@@ -263,11 +275,19 @@ class DocstringInfoExtractor(cst.CSTVisitor):
         return True  # Continue traversal
 
     def leave_ClassDef(self, node: ClassDef) -> None:
-        """Leaves ClassDef node."""
+        """
+        Leaves ClassDef node.
+
+        vibelint/validators/docstring.py
+        """
         pass  # No action needed on leave
 
     def visit_FunctionDef(self, node: FunctionDef) -> bool:
-        """Visits FunctionDef node."""
+        """
+        Visits FunctionDef node.
+
+        vibelint/validators/docstring.py
+        """
         parent = self.get_metadata(ParentNodeProvider, node)
         is_method = isinstance(parent, IndentedBlock) and isinstance(
             self.get_metadata(ParentNodeProvider, parent), ClassDef
@@ -284,7 +304,11 @@ class DocstringInfoExtractor(cst.CSTVisitor):
         return True  # Continue traversal
 
     def leave_FunctionDef(self, node: FunctionDef) -> None:
-        """Leaves FunctionDef node."""
+        """
+        Leaves FunctionDef node.
+
+        vibelint/validators/docstring.py
+        """
         pass  # No action needed on leave
 
     def _validate_docstring(
