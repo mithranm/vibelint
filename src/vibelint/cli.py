@@ -6,34 +6,30 @@ Provides commands to check codebase health, visualize namespaces, and create sna
 vibelint/cli.py
 """
 
-import sys
 import logging
+import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional, Tuple
-from collections import defaultdict
 
 import click
 from rich.console import Console
-from rich.table import Table
 from rich.logging import RichHandler
+from rich.table import Table
 
-
-from .results import CheckResult, NamespaceResult, SnapshotResult, CommandResult
-
-
-from .config import load_config, Config
+from .config import Config, load_config
 from .lint import LintRunner
 from .namespace import (
-    build_namespace_tree,
-    detect_hard_collisions,
-    detect_global_definition_collisions,
-    detect_local_export_collisions,
     NamespaceCollision,
+    build_namespace_tree,
+    detect_global_definition_collisions,
+    detect_hard_collisions,
+    detect_local_export_collisions,
 )
-from .snapshot import create_snapshot
 from .report import write_report_content
-from .utils import get_relative_path, find_project_root
-
+from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
+from .snapshot import create_snapshot
+from .utils import find_project_root, get_relative_path
 
 ValidationIssue = Tuple[str, str]
 
@@ -101,11 +97,7 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
             for code, warning_msg in lr.warnings:
                 console.print(f"  [yellow]▲ [{code}] {warning_msg}[/yellow]")
 
-    if (
-        result.hard_collisions
-        or result.global_soft_collisions
-        or result.local_soft_collisions
-    ):
+    if result.hard_collisions or result.global_soft_collisions or result.local_soft_collisions:
         console.print()
         _display_collisions(
             result.hard_collisions,
@@ -121,13 +113,9 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
         if result.report_generated:
             console.print(f"[green]✓ Report generated at {result.report_path}[/green]")
         elif result.report_error:
-            console.print(
-                f"\n[bold red]Error generating report:[/bold red] {result.report_error}"
-            )
+            console.print(f"\n[bold red]Error generating report:[/bold red] {result.report_error}")
         else:
-            console.print(
-                f"[yellow]Report status unknown for {result.report_path}[/yellow]"
-            )
+            console.print(f"[yellow]Report status unknown for {result.report_path}[/yellow]")
 
     console.print()
     if result.exit_code != 0:
@@ -137,9 +125,7 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
     elif runner.results:
         console.print("[bold green]Check finished successfully.[/bold green]")
     else:
-        console.print(
-            "[bold blue]Check finished. No Python files found or processed.[/bold blue]"
-        )
+        console.print("[bold blue]Check finished. No Python files found or processed.[/bold blue]")
 
 
 def _present_namespace_results(result: NamespaceResult, console: Console):
@@ -150,9 +136,7 @@ def _present_namespace_results(result: NamespaceResult, console: Console):
     """
 
     if not result.success:
-        console.print(
-            f"[bold red]Error building namespace tree:[/bold red] {result.error_message}"
-        )
+        console.print(f"[bold red]Error building namespace tree:[/bold red] {result.error_message}")
         return
 
     if result.intra_file_collisions:
@@ -160,24 +144,16 @@ def _present_namespace_results(result: NamespaceResult, console: Console):
         console.print("These duplicate names were found within the same file:")
         ctx = click.get_current_context(silent=True)
         project_root = (
-            ctx.obj.project_root
-            if ctx and hasattr(ctx.obj, "project_root")
-            else Path(".")
+            ctx.obj.project_root if ctx and hasattr(ctx.obj, "project_root") else Path(".")
         )
 
-        for c in sorted(
-            result.intra_file_collisions, key=lambda x: (str(x.paths[0]), x.name)
-        ):
+        for c in sorted(result.intra_file_collisions, key=lambda x: (str(x.paths[0]), x.name)):
             try:
                 rel_path = get_relative_path(c.paths[0], project_root)
             except ValueError:
                 rel_path = c.paths[0]
 
-            loc1 = (
-                f"{rel_path}:{c.linenos[0]}"
-                if c.linenos and c.linenos[0]
-                else str(rel_path)
-            )
+            loc1 = f"{rel_path}:{c.linenos[0]}" if c.linenos and c.linenos[0] else str(rel_path)
             line1 = c.linenos[0] if c.linenos else "?"
             line2 = c.linenos[1] if len(c.linenos) > 1 else "?"
             console.print(
@@ -188,9 +164,7 @@ def _present_namespace_results(result: NamespaceResult, console: Console):
         if result.intra_file_collisions:
             console.print()
         if result.output_saved:
-            console.print(
-                f"\n[green]✓ Namespace tree saved to {result.output_path}[/green]"
-            )
+            console.print(f"\n[green]✓ Namespace tree saved to {result.output_path}[/green]")
         elif result.output_error:
             console.print(
                 f"[bold red]Error saving namespace tree:[/bold red] {result.output_error}"
@@ -214,13 +188,9 @@ def _present_snapshot_results(result: SnapshotResult, console: Console):
     """
 
     if result.success and result.output_path:
-        console.print(
-            f"[green]✓ Codebase snapshot created at {result.output_path}[/green]"
-        )
+        console.print(f"[green]✓ Codebase snapshot created at {result.output_path}[/green]")
     elif not result.success:
-        console.print(
-            f"[bold red]Error creating snapshot:[/bold red] {result.error_message}"
-        )
+        console.print(f"[bold red]Error creating snapshot:[/bold red] {result.error_message}")
 
 
 def _display_collisions(
@@ -242,9 +212,7 @@ def _display_collisions(
         return 0
 
     ctx = click.get_current_context(silent=True)
-    project_root = (
-        ctx.obj.project_root if ctx and hasattr(ctx.obj, "project_root") else Path(".")
-    )
+    project_root = ctx.obj.project_root if ctx and hasattr(ctx.obj, "project_root") else Path(".")
 
     def get_rel_path_display(p: Path) -> str:
         """
@@ -261,9 +229,7 @@ def _display_collisions(
     table = Table(title="Namespace Collision Results Summary")
     table.add_column("Type", style="cyan")
     table.add_column("Count", style="magenta")
-    table.add_row(
-        "Hard Collisions", str(len(hard_coll)), style="red" if hard_coll else ""
-    )
+    table.add_row("Hard Collisions", str(len(hard_coll)), style="red" if hard_coll else "")
     table.add_row(
         "Global Soft Collisions (Definitions)",
         str(len(global_soft_coll)),
@@ -311,17 +277,13 @@ def _display_collisions(
 
     if local_soft_coll:
         console.print("\n[bold yellow]Local Soft Collisions (__all__):[/bold yellow]")
-        console.print(
-            "These names are exported via __all__ in multiple sibling modules:"
-        )
+        console.print("These names are exported via __all__ in multiple sibling modules:")
         local_table = Table(show_header=True, header_style="bold yellow")
         local_table.add_column("Name", style="cyan", min_width=15)
         local_table.add_column("Exporting Files")
         grouped_local = defaultdict(list)
         for c in local_soft_coll:
-            grouped_local[c.name].extend(
-                p for p in c.paths if p not in grouped_local[c.name]
-            )
+            grouped_local[c.name].extend(p for p in c.paths if p not in grouped_local[c.name])
 
         for name, involved_paths in sorted(grouped_local.items()):
             paths_str_list = sorted([get_rel_path_display(p) for p in involved_paths])
@@ -329,18 +291,14 @@ def _display_collisions(
         console.print(local_table)
 
     if global_soft_coll:
-        console.print(
-            "\n[bold yellow]Global Soft Collisions (Definitions):[/bold yellow]"
-        )
+        console.print("\n[bold yellow]Global Soft Collisions (Definitions):[/bold yellow]")
         console.print("These names are defined in multiple modules (may confuse LLMs):")
         global_table = Table(show_header=True, header_style="bold yellow")
         global_table.add_column("Name", style="cyan", min_width=15)
         global_table.add_column("Defining Files")
         grouped_global = defaultdict(list)
         for c in global_soft_coll:
-            grouped_global[c.name].extend(
-                p for p in c.paths if p not in grouped_global[c.name]
-            )
+            grouped_global[c.name].extend(p for p in c.paths if p not in grouped_global[c.name])
 
         for name, involved_paths in sorted(grouped_global.items()):
             paths_str_list = sorted([get_rel_path_display(p) for p in involved_paths])
@@ -400,9 +358,7 @@ def cli(ctx: click.Context, debug: bool):
 
 
 @cli.command("check")
-@click.option(
-    "--yes", is_flag=True, help="Skip confirmation prompt for large directories."
-)
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt for large directories.")
 @click.option(
     "-o",
     "--output-report",
@@ -421,9 +377,7 @@ def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
     vibelint_ctx: VibelintContext = ctx.obj
     project_root = vibelint_ctx.project_root
 
-    assert (
-        project_root is not None
-    ), "Project root must be set in context before calling check."
+    assert project_root is not None, "Project root must be set in context before calling check."
 
     logger_cli.debug(f"Running 'check' command (yes={yes}, report={output_report})")
 
@@ -437,9 +391,7 @@ def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
 
     try:
         if not config.project_root:
-            raise ValueError(
-                "Project root could not be definitively determined in config."
-            )
+            raise ValueError("Project root could not be definitively determined in config.")
         target_paths = [config.project_root]
 
         runner = LintRunner(config=config, skip_confirmation=yes)
@@ -452,9 +404,7 @@ def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
         result_data.global_soft_collisions = detect_global_definition_collisions(
             target_paths, config
         )
-        result_data.local_soft_collisions = detect_local_export_collisions(
-            target_paths, config
-        )
+        result_data.local_soft_collisions = detect_local_export_collisions(target_paths, config)
 
         collision_exit_code = 1 if result_data.hard_collisions else 0
 
@@ -485,9 +435,7 @@ def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
                 result_data.report_error = str(e)
                 report_failed = True
 
-        final_exit_code = (
-            lint_exit_code or collision_exit_code or (1 if report_failed else 0)
-        )
+        final_exit_code = lint_exit_code or collision_exit_code or (1 if report_failed else 0)
         result_data.exit_code = final_exit_code
         result_data.success = final_exit_code == 0
         logger_cli.debug(f"Check command finished. Exit code: {final_exit_code}")
@@ -503,9 +451,7 @@ def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
     if runner:
         _present_check_results(result_data, runner, console)
     else:
-        console.print(
-            "[bold red]Check command failed before linting could start.[/bold red]"
-        )
+        console.print("[bold red]Check command failed before linting could start.[/bold red]")
         if result_data.error_message:
             console.print(f"[red]Error: {result_data.error_message}[/red]")
 
@@ -531,26 +477,20 @@ def namespace(ctx: click.Context, output: Optional[Path]):
     vibelint_ctx: VibelintContext = ctx.obj
     project_root = vibelint_ctx.project_root
 
-    assert (
-        project_root is not None
-    ), "Project root must be set in context before calling namespace."
+    assert project_root is not None, "Project root must be set in context before calling namespace."
 
     logger_cli.debug(f"Running 'namespace' command (output={output})")
 
     config = load_config(project_root)
     if config.project_root is None:
-        logger_cli.warning(
-            "Project root missing from loaded config, forcing from context."
-        )
+        logger_cli.warning("Project root missing from loaded config, forcing from context.")
         config._project_root = project_root
 
     result_data = NamespaceResult()
 
     try:
         if not config.project_root:
-            raise ValueError(
-                "Project root could not be definitively determined in config."
-            )
+            raise ValueError("Project root could not be definitively determined in config.")
         target_paths = [config.project_root]
 
         logger_cli.info("Building namespace tree...")
@@ -605,17 +545,13 @@ def snapshot(ctx: click.Context, output: Path):
     vibelint_ctx: VibelintContext = ctx.obj
     project_root = vibelint_ctx.project_root
 
-    assert (
-        project_root is not None
-    ), "Project root must be set in context before calling snapshot."
+    assert project_root is not None, "Project root must be set in context before calling snapshot."
 
     logger_cli.debug(f"Running 'snapshot' command (output={output})")
 
     config = load_config(project_root)
     if config.project_root is None:
-        logger_cli.warning(
-            "Project root missing from loaded config, forcing from context."
-        )
+        logger_cli.warning("Project root missing from loaded config, forcing from context.")
         config._project_root = project_root
 
     result_data = SnapshotResult()
@@ -624,16 +560,12 @@ def snapshot(ctx: click.Context, output: Path):
 
     try:
         if not config.project_root:
-            raise ValueError(
-                "Project root could not be definitively determined in config."
-            )
+            raise ValueError("Project root could not be definitively determined in config.")
         target_paths = [config.project_root]
 
         logger_cli.info(f"Creating codebase snapshot at {output_path}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        create_snapshot(
-            output_path=output_path, target_paths=target_paths, config=config
-        )
+        create_snapshot(output_path=output_path, target_paths=target_paths, config=config)
         result_data.success = True
         result_data.exit_code = 0
 

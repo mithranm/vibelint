@@ -4,7 +4,7 @@ vibelint package initialization module.
 vibelint/__init__.py
 """
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version("vibelint")

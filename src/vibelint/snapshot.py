@@ -7,7 +7,7 @@ vibelint/snapshot.py
 import fnmatch
 import logging
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
 
 from .config import Config
 from .discovery import discover_files
@@ -35,9 +35,7 @@ def create_snapshot(
     vibelint/snapshot.py
     """
 
-    assert (
-        config.project_root is not None
-    ), "Project root must be set before creating snapshot."
+    assert config.project_root is not None, "Project root must be set before creating snapshot."
     project_root = config.project_root.resolve()
 
     absolute_output_path = output_path.resolve()
@@ -135,9 +133,7 @@ def create_snapshot(
             outfile.write("# Snapshot\n\n")
 
             outfile.write("## Filesystem Tree\n\n```\n")
-            tree_root_name = (
-                project_root.name if project_root.name else str(project_root)
-            )
+            tree_root_name = project_root.name if project_root.name else str(project_root)
             outfile.write(f"{tree_root_name}/\n")
             _write_tree(outfile, tree, "")
             outfile.write("```\n\n")
@@ -148,9 +144,7 @@ def create_snapshot(
                 try:
                     relpath_header = get_relative_path(f, project_root)
                     outfile.write(f"### File: {relpath_header}\n\n")
-                    logger.debug(
-                        f"Writing content for {relpath_header} (Category: {cat})"
-                    )
+                    logger.debug(f"Writing content for {relpath_header} (Category: {cat})")
 
                     if cat == "BINARY":
                         outfile.write("```\n")
@@ -160,9 +154,7 @@ def create_snapshot(
                         outfile.write("```\n")
                         outfile.write("[PEEK - Content truncated]\n")
                         try:
-                            with open(
-                                f, "r", encoding="utf-8", errors="ignore"
-                            ) as infile:
+                            with open(f, "r", encoding="utf-8", errors="ignore") as infile:
                                 lines_read = 0
                                 for line in infile:
                                     if lines_read >= 10:
@@ -171,26 +163,20 @@ def create_snapshot(
                                     outfile.write(line)
                                     lines_read += 1
                         except Exception as e:
-                            logger.warning(
-                                f"Error reading file for peek {relpath_header}: {e}"
-                            )
+                            logger.warning(f"Error reading file for peek {relpath_header}: {e}")
                             outfile.write(f"[Error reading file for peek: {e}]\n")
                         outfile.write("```\n\n---\n")
                     else:
                         lang = _get_language(f)
                         outfile.write(f"```{lang}\n")
                         try:
-                            with open(
-                                f, "r", encoding="utf-8", errors="ignore"
-                            ) as infile:
+                            with open(f, "r", encoding="utf-8", errors="ignore") as infile:
                                 content = infile.read()
                                 if not content.endswith("\n"):
                                     content += "\n"
                                 outfile.write(content)
                         except Exception as e:
-                            logger.warning(
-                                f"Error reading file content {relpath_header}: {e}"
-                            )
+                            logger.warning(f"Error reading file content {relpath_header}: {e}")
                             outfile.write(f"[Error reading file: {e}]\n")
                         outfile.write("```\n\n---\n")
 
@@ -211,15 +197,11 @@ def create_snapshot(
 
     except IOError as e:
 
-        logger.error(
-            f"Failed to write snapshot file {absolute_output_path}: {e}", exc_info=True
-        )
+        logger.error(f"Failed to write snapshot file {absolute_output_path}: {e}", exc_info=True)
         raise
     except Exception as e:
 
-        logger.error(
-            f"An unexpected error occurred during snapshot writing: {e}", exc_info=True
-        )
+        logger.error(f"An unexpected error occurred during snapshot writing: {e}", exc_info=True)
         raise
 
 
@@ -232,9 +214,7 @@ def _write_tree(outfile, node: Dict, prefix=""):
 
     dirs = sorted([k for k in node if k != "__FILES__"])
 
-    files_data: List[Tuple[Path, str]] = sorted(
-        node.get("__FILES__", []), key=lambda x: x[0].name
-    )
+    files_data: List[Tuple[Path, str]] = sorted(node.get("__FILES__", []), key=lambda x: x[0].name)
 
     entries = dirs + [f[0].name for f in files_data]
 
@@ -250,9 +230,7 @@ def _write_tree(outfile, node: Dict, prefix=""):
             _write_tree(outfile, node[name], new_prefix)
         else:
 
-            file_info_tuple = next(
-                (info for info in files_data if info[0].name == name), None
-            )
+            file_info_tuple = next((info for info in files_data if info[0].name == name), None)
             file_cat = "FULL"
             if file_info_tuple:
                 file_cat = file_info_tuple[1]

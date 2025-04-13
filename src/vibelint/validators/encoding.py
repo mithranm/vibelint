@@ -7,7 +7,6 @@ vibelint/validators/encoding.py
 import re
 from typing import List, Tuple
 
-
 from ..error_codes import VBL201
 
 __all__ = [

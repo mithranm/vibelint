@@ -6,8 +6,7 @@ vibelint/utils.py
 
 import os
 from pathlib import Path
-from typing import Optional, List
-
+from typing import List, Optional
 
 __all__ = [
     "ensure_directory",
@@ -80,9 +79,7 @@ def find_package_root(start_path: Path) -> Optional[Path]:
             if project_root_marker and current_path.is_relative_to(project_root_marker):
                 pass
 
-        if (current_path / "pyproject.toml").is_file() or (
-            current_path / ".git"
-        ).is_dir():
+        if (current_path / "pyproject.toml").is_file() or (current_path / ".git").is_dir():
             src_dir = current_path / "src"
             if src_dir.is_dir():
                 if start_path.resolve().is_relative_to(src_dir):
@@ -212,8 +209,7 @@ def find_files_by_extension(
     for file_path in root_path.glob(f"**/*{extension}"):
         if not include_vcs_hooks:
             if any(
-                part.startswith(".") and part in {".git", ".hg", ".svn"}
-                for part in file_path.parts
+                part.startswith(".") and part in {".git", ".hg", ".svn"} for part in file_path.parts
             ):
                 continue
 
@@ -310,9 +306,7 @@ def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
             return True
 
         text_characters = bytes(range(32, 127)) + b"\n\r\t\f\b"
-        non_text_count = sum(
-            1 for byte in chunk if bytes([byte]) not in text_characters
-        )
+        non_text_count = sum(1 for byte in chunk if bytes([byte]) not in text_characters)
 
         if len(chunk) > 0 and (non_text_count / len(chunk)) > 0.3:
             return True

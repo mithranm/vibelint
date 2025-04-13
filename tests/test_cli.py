@@ -1,12 +1,11 @@
-import pytest
-from click.testing import CliRunner
-from pathlib import Path
+import os
+import re
 import shutil
 import sys
-import os
-import io
-import re
+from pathlib import Path
 
+import pytest
+from click.testing import CliRunner
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -22,9 +21,8 @@ except ImportError:
     tomli_w = None
 
 
-from vibelint.cli import cli
 from vibelint import __version__
-
+from vibelint.cli import cli
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -54,9 +52,7 @@ def setup_test_project(tmp_path, request):
         if (source_fixture_path / "pyproject.toml").exists():
             project_dir_name = None
             target_project_root = tmp_path / fixture_name
-            shutil.copytree(
-                source_fixture_path, target_project_root, dirs_exist_ok=True
-            )
+            shutil.copytree(source_fixture_path, target_project_root, dirs_exist_ok=True)
         else:
             raise ValueError(
                 f"Fixture '{fixture_name}' must contain exactly one project subdirectory "
@@ -83,9 +79,7 @@ def modify_pyproject(project_path: Path, updates: dict):
     if tomllib is None:
         pytest.fail("TOML reading library (tomllib/tomli) could not be imported.")
     if tomli_w is None:
-        pytest.fail(
-            "TOML writing library (tomli_w) could not be imported. Is it installed?"
-        )
+        pytest.fail("TOML writing library (tomli_w) could not be imported. Is it installed?")
 
     pyproject_file = project_path / "pyproject.toml"
     print(f"DEBUG: Attempting to modify pyproject.toml at: {pyproject_file}")
@@ -218,8 +212,7 @@ def test_check_errors_missing_all(runner, setup_test_project):
     assert "[VBL101] Missing docstring for function 'func_one'" in result.output
     assert "[VBL101] Missing docstring for function 'something'" in result.output
     assert (
-        "[VBL102] Docstring for module 'module' missing/incorrect path reference"
-        in result.output
+        "[VBL102] Docstring for module 'module' missing/incorrect path reference" in result.output
     )
     assert "Check finished with errors (exit code 1)" in result.output
 
@@ -249,9 +242,7 @@ def test_check_output_report(runner, setup_test_project):
     report_file = setup_test_project / "vibelint_report.md"
     assert not report_file.exists()
 
-    result = runner.invoke(
-        cli, ["check", "-o", "vibelint_report.md"], prog_name="vibelint"
-    )
+    result = runner.invoke(cli, ["check", "-o", "vibelint_report.md"], prog_name="vibelint")
     print(f"Output:\n{result.output}")
 
     assert (
@@ -335,9 +326,7 @@ def test_namespace_output_file(runner, setup_test_project):
     tree_file = setup_test_project / "namespace_tree.txt"
     assert not tree_file.exists()
 
-    result = runner.invoke(
-        cli, ["namespace", "-o", "namespace_tree.txt"], prog_name="vibelint"
-    )
+    result = runner.invoke(cli, ["namespace", "-o", "namespace_tree.txt"], prog_name="vibelint")
     print(f"Output:\n{result.output}")
 
     assert (
@@ -370,9 +359,7 @@ def test_namespace_intra_file_collision(runner, setup_test_project):
         result.exit_code == 0
     ), f"Expected exit code 0, got {result.exit_code}. Output:\n{result.output}"
     assert "Intra-file Collisions Found:" in result.output
-    assert (
-        "- 'hello': Duplicate definition/import in src/mypkg/module.py" in result.output
-    )
+    assert "- 'hello': Duplicate definition/import in src/mypkg/module.py" in result.output
     assert "Namespace Structure:" in result.output
     assert "myproject" in result.output
 
@@ -427,9 +414,7 @@ def test_snapshot_basic(runner, setup_snapshot_project):
 
     snapshot_content = snapshot_file.read_text()
 
-    tree_match = re.search(
-        r"## Filesystem Tree\s*```\s*(.*?)\s*```", snapshot_content, re.DOTALL
-    )
+    tree_match = re.search(r"## Filesystem Tree\s*```\s*(.*?)\s*```", snapshot_content, re.DOTALL)
     assert tree_match, "Filesystem Tree section not found in snapshot"
     tree_block = tree_match.group(1)
 
@@ -454,9 +439,7 @@ def test_snapshot_output_file(runner, setup_snapshot_project):
     snapshot_file = setup_snapshot_project / "custom_snapshot.md"
     assert not snapshot_file.exists()
 
-    result = runner.invoke(
-        cli, ["snapshot", "-o", "custom_snapshot.md"], prog_name="vibelint"
-    )
+    result = runner.invoke(cli, ["snapshot", "-o", "custom_snapshot.md"], prog_name="vibelint")
     print(f"Output:\n{result.output}")
     assert (
         result.exit_code == 0
@@ -480,9 +463,7 @@ def test_snapshot_exclude(runner, setup_test_project):
     assert snapshot_file.exists()
 
     snapshot_content = snapshot_file.read_text()
-    tree_match = re.search(
-        r"## Filesystem Tree\s*```\s*(.*?)\s*```", snapshot_content, re.DOTALL
-    )
+    tree_match = re.search(r"## Filesystem Tree\s*```\s*(.*?)\s*```", snapshot_content, re.DOTALL)
     assert tree_match, "Filesystem Tree section not found in snapshot"
     tree_block = tree_match.group(1)
 
@@ -500,20 +481,12 @@ def test_snapshot_exclude_output_file(runner, setup_snapshot_project):
     """Test snapshot doesn't include its own output file (using modified fixture)."""
     snapshot_file = setup_snapshot_project / "mysnapshot.md"
 
-    result1 = runner.invoke(
-        cli, ["snapshot", "-o", "mysnapshot.md"], prog_name="vibelint"
-    )
-    assert (
-        result1.exit_code == 0
-    ), f"Snapshot creation failed (1st run). Output:\n{result1.output}"
+    result1 = runner.invoke(cli, ["snapshot", "-o", "mysnapshot.md"], prog_name="vibelint")
+    assert result1.exit_code == 0, f"Snapshot creation failed (1st run). Output:\n{result1.output}"
     assert snapshot_file.exists()
 
-    result2 = runner.invoke(
-        cli, ["snapshot", "-o", "mysnapshot.md"], prog_name="vibelint"
-    )
-    assert (
-        result2.exit_code == 0
-    ), f"Snapshot creation failed (2nd run). Output:\n{result2.output}"
+    result2 = runner.invoke(cli, ["snapshot", "-o", "mysnapshot.md"], prog_name="vibelint")
+    assert result2.exit_code == 0, f"Snapshot creation failed (2nd run). Output:\n{result2.output}"
 
     snapshot_content = snapshot_file.read_text()
     assert "mysnapshot.md" not in snapshot_content

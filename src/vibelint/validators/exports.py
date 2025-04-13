@@ -9,9 +9,8 @@ vibelint/validators/exports.py
 import ast
 from pathlib import Path
 from typing import List, Optional, Tuple
+
 from ..config import Config
-
-
 from ..error_codes import VBL301, VBL302, VBL303, VBL304
 
 __all__ = ["ExportValidationResult", "validate_exports"]

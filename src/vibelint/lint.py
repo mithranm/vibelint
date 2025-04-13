@@ -5,35 +5,24 @@ vibelint/lint.py
 """
 
 import logging
+import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Optional, Tuple
-from concurrent.futures import ThreadPoolExecutor
-import traceback
-
 
 import click
 from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    BarColumn,
-    TaskProgressColumn,
-)
 
 from .config import Config
-
-
-from .validators.shebang import validate_shebang, file_contains_top_level_main_block
-from .validators.encoding import validate_encoding_cookie
-from .validators.docstring import validate_every_docstring
-from .validators.exports import validate_exports
 from .discovery import discover_files
-from .utils import get_relative_path
-
-
 from .error_codes import VBL901, VBL902, VBL903, VBL904, VBL905
+from .utils import get_relative_path
+from .validators.docstring import validate_every_docstring
+from .validators.encoding import validate_encoding_cookie
+from .validators.exports import validate_exports
+from .validators.shebang import file_contains_top_level_main_block, validate_shebang
 
 __all__ = ["LintResult", "LintRunner"]
 
@@ -151,11 +140,7 @@ class LintRunner:
                         rel_path_log_err = file_proc.name
                         try:
                             rel_path_log_err = (
-                                str(
-                                    get_relative_path(
-                                        file_proc, self.config.project_root
-                                    )
-                                )
+                                str(get_relative_path(file_proc, self.config.project_root))
                                 if self.config.project_root
                                 else file_proc.name
                             )
@@ -168,9 +153,7 @@ class LintRunner:
                         lr_err = LintResult()
                         lr_err.file_path = file_proc
 
-                        lr_err.errors.append(
-                            (VBL904, f"Processing thread error: {exc}")
-                        )
+                        lr_err.errors.append((VBL904, f"Processing thread error: {exc}"))
                         temp_results.append(lr_err)
                     finally:
                         progress.update(task_id, advance=1)
@@ -202,9 +185,7 @@ class LintRunner:
 
             if self.config.project_root:
                 try:
-                    relative_path = get_relative_path(
-                        file_path, self.config.project_root
-                    )
+                    relative_path = get_relative_path(file_path, self.config.project_root)
                     relative_path_str = str(relative_path).replace("\\", "/")
                     log_prefix = f"[{relative_path_str}]"
                 except ValueError:
@@ -218,18 +199,14 @@ class LintRunner:
                 original_content = file_path.read_text(encoding="utf-8")
                 logger.debug(f"{log_prefix} Read {len(original_content)} bytes.")
             except Exception as read_e:
-                logger.error(
-                    f"{log_prefix} Error reading file: {read_e}", exc_info=True
-                )
+                logger.error(f"{log_prefix} Error reading file: {read_e}", exc_info=True)
 
                 lr.errors.append((VBL901, f"Error reading file: {read_e}"))
                 return lr
 
             try:
 
-                doc_res, _ = validate_every_docstring(
-                    original_content, relative_path_str
-                )
+                doc_res, _ = validate_every_docstring(original_content, relative_path_str)
                 if doc_res:
                     collected_errors.extend(doc_res.errors)
                     collected_warnings.extend(doc_res.warnings)
@@ -237,9 +214,7 @@ class LintRunner:
                 allowed_sb: List[str] = self.config.get(
                     "allowed_shebangs", ["#!/usr/bin/env python3"]
                 )
-                is_script = file_contains_top_level_main_block(
-                    file_path, original_content
-                )
+                is_script = file_contains_top_level_main_block(file_path, original_content)
                 sb_res = validate_shebang(original_content, is_script, allowed_sb)
                 collected_errors.extend(sb_res.errors)
                 collected_warnings.extend(sb_res.warnings)
@@ -248,9 +223,7 @@ class LintRunner:
                 collected_errors.extend(enc_res.errors)
                 collected_warnings.extend(enc_res.warnings)
 
-                export_res = validate_exports(
-                    original_content, relative_path_str, self.config
-                )
+                export_res = validate_exports(original_content, relative_path_str, self.config)
                 collected_errors.extend(export_res.errors)
                 collected_warnings.extend(export_res.warnings)
 
@@ -275,19 +248,15 @@ class LintRunner:
                 collected_errors.append((VBL903, f"Internal validation error: {val_e}"))
 
             lr.errors = [
-                (code, msg)
-                for code, msg in collected_errors
-                if code not in ignore_codes_set
+                (code, msg) for code, msg in collected_errors if code not in ignore_codes_set
             ]
             lr.warnings = [
-                (code, msg)
-                for code, msg in collected_warnings
-                if code not in ignore_codes_set
+                (code, msg) for code, msg in collected_warnings if code not in ignore_codes_set
             ]
 
-            if len(collected_errors) != len(lr.errors) or len(
-                collected_warnings
-            ) != len(lr.warnings):
+            if len(collected_errors) != len(lr.errors) or len(collected_warnings) != len(
+                lr.warnings
+            ):
                 logger.debug(
                     f"{log_prefix} Filtered issues based on ignore config. Final E={len(lr.errors)}, W={len(lr.warnings)}"
                 )
@@ -347,9 +316,7 @@ class LintRunner:
         ok = total - errors - warns
 
         table.add_row("Files Scanned", str(total))
-        table.add_row(
-            "Files OK", str(ok), style="green" if ok == total and total > 0 else ""
-        )
+        table.add_row("Files OK", str(ok), style="green" if ok == total and total > 0 else "")
         table.add_row("Files with Errors", str(errors), style="red" if errors else "")
         table.add_row(
             "Files with Warnings only",

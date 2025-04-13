@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vibelint"
 version = "0.1.1"
-description = "Suite of linting tools to enhance the vibe coding process."
+description = "Suite of tools to enhance the vibe coding process."
 authors = [
   { name = "Mithran Mohanraj", email = "mithran.mohanraj@gmail.com" }
 ]
@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "click>=8.1.0",
     "tomli>=2.0.0; python_version < '3.11'",
+    "tomli-w",
     "colorama>=0.4.0",
     "rich>=12.0.0",
     "docformatter>=1.7.0",
@@ -44,8 +45,17 @@ where = ["src"]
 include = ["vibelint*"]
 
 [tool.vibelint]
-allowed_shebangs = ["#!/usr/bin/env python3"]
-include_globs = ["**/*"]
+# --- More specific includes ---
+include_globs = [
+    "src/**/*.py",      # All Python files in src
+    "tests/**/*.py",     # All Python files in tests
+    # "scripts/*.py",    # Add if you have top-level scripts
+    "pyproject.toml",  # Include config for snapshots/reports
+    "README.md",       # Include README for snapshots/reports
+    "LICENSE",         # Include LICENSE for snapshots/reports
+    # Add other specific files/patterns as needed
+]
+# --- Keep your excludes ---
 exclude_globs = [
     ".git/**",
     ".pytest_cache/**",
@@ -55,8 +65,15 @@ exclude_globs = [
     "*.env*",
     "**/__pycache__/**",
     "**/.DS_Store",
-    ".DS_Store",
+    "tests/fixtures/*",
     "debug.txt"
 ]
+peek_globs = ["coverage.xml"]
+allowed_shebangs = ["#!/usr/bin/env python3"]
 large_dir_threshold = 500
 error_on_missing_all_in_init = false
+
+
+[tool.black]
+target-version = ["py310", "py311", "py312"]
+line-length=100

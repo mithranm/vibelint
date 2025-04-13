@@ -4,10 +4,9 @@ Validator for Python shebang lines.
 vibelint/validators/shebang.py
 """
 
-from typing import List, Tuple
 import ast
 from pathlib import Path
-
+from typing import List, Tuple
 
 from ..error_codes import VBL401, VBL402, VBL403
 

@@ -6,14 +6,13 @@ vibelint/namespace.py
 
 import ast
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from collections import defaultdict
 
 from .config import Config
-from .utils import get_relative_path, find_project_root
 from .discovery import discover_files
-
+from .utils import find_project_root, get_relative_path
 
 __all__ = [
     "CollisionType",
@@ -76,22 +75,17 @@ class NamespaceCollision:
         self.paths = sorted(list(set(paths)), key=str)
 
         self.linenos = (
-            linenos
-            if linenos and len(linenos) == len(self.paths)
-            else [None] * len(self.paths)
+            linenos if linenos and len(linenos) == len(self.paths) else [None] * len(self.paths)
         )
 
         self.path1: Path = self.paths[0]
         self.path2: Path = self.paths[1] if len(self.paths) > 1 else self.paths[0]
         self.lineno1: Optional[int] = self.linenos[0] if self.linenos else None
-        self.lineno2: Optional[int] = (
-            self.linenos[1] if len(self.linenos) > 1 else self.lineno1
-        )
+        self.lineno2: Optional[int] = self.linenos[1] if len(self.linenos) > 1 else self.lineno1
 
         self.definition_paths: List[Path] = (
             self.paths
-            if self.collision_type
-            in [CollisionType.GLOBAL_SOFT, CollisionType.LOCAL_SOFT]
+            if self.collision_type in [CollisionType.GLOBAL_SOFT, CollisionType.LOCAL_SOFT]
             else []
         )
 
@@ -119,11 +113,7 @@ class NamespaceCollision:
 
         paths_str_list = []
         for i, p in enumerate(self.paths):
-            loc = (
-                f":{self.linenos[i]}"
-                if self.linenos and self.linenos[i] is not None
-                else ""
-            )
+            loc = f":{self.linenos[i]}" if self.linenos and self.linenos[i] is not None else ""
             try:
                 paths_str_list.append(f"{get_relative_path(p, base_path)}{loc}")
             except ValueError:
@@ -273,10 +263,7 @@ def get_namespace_collisions_str(
         for name, involved_paths in sorted(grouped.items()):
             try:
                 paths_str = ", ".join(
-                    sorted(
-                        str(get_relative_path(p, base_path))
-                        for p in set(involved_paths)
-                    )
+                    sorted(str(get_relative_path(p, base_path)) for p in set(involved_paths))
                 )
             except ValueError:
                 paths_str = ", ".join(sorted(str(p) for p in set(involved_paths)))
@@ -291,10 +278,7 @@ def get_namespace_collisions_str(
         for name, involved_paths in sorted(grouped.items()):
             try:
                 paths_str = ", ".join(
-                    sorted(
-                        str(get_relative_path(p, base_path))
-                        for p in set(involved_paths)
-                    )
+                    sorted(str(get_relative_path(p, base_path)) for p in set(involved_paths))
                 )
             except ValueError:
                 paths_str = ", ".join(sorted(str(p) for p in set(involved_paths)))
@@ -311,9 +295,7 @@ class NamespaceNode:
     vibelint/namespace.py
     """
 
-    def __init__(
-        self, name: str, path: Optional[Path] = None, is_package: bool = False
-    ) -> None:
+    def __init__(self, name: str, path: Optional[Path] = None, is_package: bool = False) -> None:
         """
         Initializes a NamespaceNode.
 
@@ -345,9 +327,7 @@ class NamespaceNode:
 
         self.exported_names = names
 
-    def add_child(
-        self, name: str, path: Path, is_package: bool = False
-    ) -> "NamespaceNode":
+    def add_child(self, name: str, path: Path, is_package: bool = False) -> "NamespaceNode":
         """
         Adds a child node, creating if necessary.
 
@@ -361,9 +341,7 @@ class NamespaceNode:
 
             if not (self.children[name].is_package and not is_package):
                 self.children[name].path = path
-            self.children[name].is_package = (
-                is_package or self.children[name].is_package
-            )
+            self.children[name].is_package = is_package or self.children[name].is_package
         return self.children[name]
 
     def get_hard_collisions(self) -> List[NamespaceCollision]:
@@ -389,9 +367,7 @@ class NamespaceNode:
 
         for name in common_names:
 
-            member_def_path, member_lineno = member_names_with_info.get(
-                name, (None, None)
-            )
+            member_def_path, member_lineno = member_names_with_info.get(name, (None, None))
             cnode = self.children[name]
             child_path = cnode.path
 
@@ -410,9 +386,7 @@ class NamespaceNode:
             collisions.extend(cnode.get_hard_collisions())
         return collisions
 
-    def collect_defined_members(
-        self, all_dict: Dict[str, List[Tuple[Path, Optional[int]]]]
-    ):
+    def collect_defined_members(self, all_dict: Dict[str, List[Tuple[Path, Optional[int]]]]):
         """
         Recursively collects defined members (path, lineno) for global definition collision check.
 
@@ -434,9 +408,7 @@ class NamespaceNode:
         vibelint/namespace.py
         """
 
-        all_defined_members: Dict[str, List[Tuple[Path, Optional[int]]]] = defaultdict(
-            list
-        )
+        all_defined_members: Dict[str, List[Tuple[Path, Optional[int]]]] = defaultdict(list)
         self.collect_defined_members(all_defined_members)
 
         collisions: List[NamespaceCollision] = []
@@ -529,9 +501,7 @@ class NamespaceNode:
         proj_root = find_project_root(Path(".").resolve())
         base_path_for_display = proj_root if proj_root else Path(".")
 
-        def build_tree_lines(
-            node: "NamespaceNode", prefix: str = "", base: Path = Path(".")
-        ):
+        def build_tree_lines(node: "NamespaceNode", prefix: str = "", base: Path = Path(".")):
             """
             Docstring for function 'build_tree_lines'.
 
@@ -601,8 +571,7 @@ class NamespaceNode:
                     if child.children or (
                         child.members
                         and any(
-                            m_path.resolve()
-                            == (child.path.resolve() if child.path else None)
+                            m_path.resolve() == (child.path.resolve() if child.path else None)
                             for m, (m_path, _) in child.members.items()
                         )
                     ):
@@ -615,24 +584,18 @@ class NamespaceNode:
             root_path_resolved = self.path.resolve()
             try:
 
-                rel_p = get_relative_path(
-                    root_path_resolved, base_path_for_display.parent
-                )
+                rel_p = get_relative_path(root_path_resolved, base_path_for_display.parent)
 
                 if rel_p == Path("."):
                     rel_p = Path(self.name)
 
                 root_indicator = (
-                    " (P)"
-                    if self.is_package
-                    else (" (M)" if root_path_resolved.is_file() else "")
+                    " (P)" if self.is_package else (" (M)" if root_path_resolved.is_file() else "")
                 )
                 root_path_str = f"  [{rel_p}{root_indicator}]"
             except ValueError:
                 root_indicator = (
-                    " (P)"
-                    if self.is_package
-                    else (" (M)" if root_path_resolved.is_file() else "")
+                    " (P)" if self.is_package else (" (M)" if root_path_resolved.is_file() else "")
                 )
                 root_path_str = f"  [{root_path_resolved}{root_indicator}]"
         else:
@@ -645,9 +608,7 @@ class NamespaceNode:
 
 def _extract_module_members(
     file_path: Path,
-) -> Tuple[
-    Dict[str, Tuple[Path, Optional[int]]], List[NamespaceCollision], Optional[List[str]]
-]:
+) -> Tuple[Dict[str, Tuple[Path, Optional[int]]], List[NamespaceCollision], Optional[List[str]]]:
     """
     Parses a Python file and extracts top-level member definitions/assignments,
     intra-file hard collisions, and the contents of __all__ if present.
@@ -793,9 +754,7 @@ def build_namespace_tree(
     else:
         root_node_name = project_root_found.name
 
-    root = NamespaceNode(
-        root_node_name, path=project_root_found.resolve(), is_package=True
-    )
+    root = NamespaceNode(root_node_name, path=project_root_found.resolve(), is_package=True)
     root_path_for_rel = project_root_found.resolve()
     all_intra_file_collisions: List[NamespaceCollision] = []
 
@@ -809,9 +768,7 @@ def build_namespace_tree(
     ]
 
     if not python_files:
-        logger.info(
-            "No Python files found for namespace analysis based on configuration."
-        )
+        logger.info("No Python files found for namespace analysis based on configuration.")
         return root, all_intra_file_collisions
 
     for f in python_files:
@@ -837,9 +794,7 @@ def build_namespace_tree(
         mod_name = Path(file_name).stem
         file_abs_path = f
 
-        members, intra_collisions, exported_names = _extract_module_members(
-            file_abs_path
-        )
+        members, intra_collisions, exported_names = _extract_module_members(file_abs_path)
         all_intra_file_collisions.extend(intra_collisions)
 
         if mod_name == "__init__":

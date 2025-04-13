@@ -11,8 +11,7 @@ vibelint/config.py
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Mapping, List
-
+from typing import Any, Dict, List, Mapping, Optional
 
 if sys.version_info >= (3, 11):
 

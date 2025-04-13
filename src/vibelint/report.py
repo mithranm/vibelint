@@ -4,16 +4,15 @@ Report generation functionality for vibelint.
 vibelint/report.py
 """
 
-from pathlib import Path
-from typing import List, TextIO, Set
+import logging
 from collections import defaultdict
 from datetime import datetime
-import logging
+from pathlib import Path
+from typing import List, Set, TextIO
 
-
-from .lint import LintResult
-from .namespace import NamespaceNode, NamespaceCollision
 from .config import Config
+from .lint import LintResult
+from .namespace import NamespaceCollision, NamespaceNode
 from .utils import get_relative_path
 
 __all__ = ["write_report_content"]
@@ -47,13 +46,9 @@ def _get_files_in_namespace_order(
                 logger.debug(f"Report: Adding package init file: {init_file}")
                 collected_files.add(init_file)
         except ValueError:
-            logger.warning(
-                f"Report: Skipping package node outside project root: {node.path}"
-            )
+            logger.warning(f"Report: Skipping package node outside project root: {node.path}")
         except Exception as e:
-            logger.error(
-                f"Report: Error checking package init file for {node.path}: {e}"
-            )
+            logger.error(f"Report: Error checking package init file for {node.path}: {e}")
 
     for child_name in sorted(node.children.keys()):
         child_node = node.children[child_name]
@@ -70,9 +65,7 @@ def _get_files_in_namespace_order(
                     f"Report: Skipping module file outside project root: {child_node.path}"
                 )
             except Exception as e:
-                logger.error(
-                    f"Report: Error checking module file {child_node.path}: {e}"
-                )
+                logger.error(f"Report: Error checking module file {child_node.path}: {e}")
 
         _get_files_in_namespace_order(child_node, collected_files, project_root)
 
@@ -83,9 +76,7 @@ def _get_files_in_namespace_order(
                 logger.debug(f"Report: Adding root file node: {node.path}")
                 collected_files.add(node.path)
         except ValueError:
-            logger.warning(
-                f"Report: Skipping root file node outside project root: {node.path}"
-            )
+            logger.warning(f"Report: Skipping root file node outside project root: {node.path}")
         except Exception as e:
             logger.error(f"Report: Error checking root file node {node.path}: {e}")
 
@@ -170,9 +161,7 @@ def write_report_content(
             )
             try:
 
-                rel_path = get_relative_path(
-                    result.file_path.resolve(), project_root.resolve()
-                )
+                rel_path = get_relative_path(result.file_path.resolve(), project_root.resolve())
             except ValueError:
                 rel_path = result.file_path
 
@@ -195,9 +184,7 @@ def write_report_content(
     if not hard_coll:
         f.write("*No hard collisions detected.*\n\n")
     else:
-        f.write(
-            "These collisions can break Python imports or indicate duplicate definitions:\n\n"
-        )
+        f.write("These collisions can break Python imports or indicate duplicate definitions:\n\n")
         f.write("| Name | Path 1 | Path 2 | Details |\n")
         f.write("|------|--------|--------|---------|\n")
         for collision in sorted(hard_coll, key=lambda c: (c.name, str(c.path1))):
@@ -218,13 +205,9 @@ def write_report_content(
             loc1 = f":{collision.lineno1}" if collision.lineno1 else ""
             loc2 = f":{collision.lineno2}" if collision.lineno2 else ""
             details = (
-                "Intra-file duplicate"
-                if str(p1_rel) == str(p2_rel)
-                else "Module/Member clash"
+                "Intra-file duplicate" if str(p1_rel) == str(p2_rel) else "Module/Member clash"
             )
-            f.write(
-                f"| `{collision.name}` | `{p1_rel}{loc1}` | `{p2_rel}{loc2}` | {details} |\n"
-            )
+            f.write(f"| `{collision.name}` | `{p1_rel}{loc1}` | `{p2_rel}{loc2}` | {details} |\n")
         f.write("\n")
 
     f.write("### Definition & Export Collisions (Soft)\n\n")
@@ -252,9 +235,7 @@ def write_report_content(
                 except ValueError:
                     paths_str_list.append(f"`{p}`")
             type_str = (
-                " & ".join(
-                    sorted([t.replace("_soft", "").upper() for t in data["types"]])
-                )
+                " & ".join(sorted([t.replace("_soft", "").upper() for t in data["types"]]))
                 or "Unknown"
             )
             f.write(f"| `{name}` | {type_str} | {', '.join(paths_str_list)} |\n")
@@ -265,16 +246,12 @@ def write_report_content(
 
     collected_files_set: Set[Path] = set()
     try:
-        _get_files_in_namespace_order(
-            root_node, collected_files_set, project_root.resolve()
-        )
+        _get_files_in_namespace_order(root_node, collected_files_set, project_root.resolve())
 
         python_files_abs = sorted(list(collected_files_set), key=lambda p: str(p))
         logger.info(f"Report: Found {len(python_files_abs)} files for content section.")
     except Exception as e:
-        logger.error(
-            f"Report: Error collecting files for content section: {e}", exc_info=True
-        )
+        logger.error(f"Report: Error collecting files for content section: {e}", exc_info=True)
         python_files_abs = []
 
     if not python_files_abs:
@@ -290,9 +267,7 @@ def write_report_content(
 
                     try:
                         lang = "python"
-                        content = abs_file_path.read_text(
-                            encoding="utf-8", errors="ignore"
-                        )
+                        content = abs_file_path.read_text(encoding="utf-8", errors="ignore")
                         f.write(f"```{lang}\n")
                         f.write(content)
 
@@ -311,9 +286,7 @@ def write_report_content(
                         f"Report: Skipping file outside project root in content section: {abs_file_path}"
                     )
                     f.write(f"### {abs_file_path} (Outside Project Root)\n\n")
-                    f.write(
-                        "*Skipping content as file is outside the detected project root.*\n\n"
-                    )
+                    f.write("*Skipping content as file is outside the detected project root.*\n\n")
                 except Exception as e_outer:
                     logger.error(
                         f"Report: Error processing file entry for {abs_file_path}: {e_outer}",

@@ -5,13 +5,11 @@ vibelint/results.py
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 from pathlib import Path
-
+from typing import List, Optional
 
 from .lint import LintResult
-from .namespace import NamespaceNode, NamespaceCollision
-
+from .namespace import NamespaceCollision, NamespaceNode
 
 __all__ = ["CheckResult", "CommandResult", "NamespaceResult", "SnapshotResult"]
 

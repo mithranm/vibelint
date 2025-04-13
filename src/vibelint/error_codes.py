@@ -15,7 +15,7 @@ vibelint/error_codes.py
 
 VBL101 = "VBL101"
 VBL102 = "VBL102"
-VBL103 = "VBL103"
+# VBL103 removed
 
 
 VBL201 = "VBL201"
@@ -42,7 +42,6 @@ VBL905 = "VBL905"
 CODE_DESCRIPTIONS = {
     VBL101: "Missing docstring for module, class, or function.",
     VBL102: "Docstring does not end with the expected relative file path reference.",
-    VBL103: "Docstring has potential formatting or indentation issues.",
     VBL201: "Invalid encoding cookie value (must be 'utf-8').",
     VBL301: "`__all__` definition is missing in a module where it is required.",
     VBL302: "`__all__` definition is missing in `__init__.py` (Optional based on config).",
@@ -62,7 +61,6 @@ CODE_DESCRIPTIONS = {
 __all__ = [
     "VBL101",
     "VBL102",
-    "VBL103",
     "VBL201",
     "VBL301",
     "VBL302",
