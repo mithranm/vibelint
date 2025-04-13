@@ -1,1 +1,3 @@
-please
+These tests are far from comprehensive... and were generated from the LLM generated code.
+
+However, they serve as a baseline for communicating the intended behavior of vibelint to the greater open source community.

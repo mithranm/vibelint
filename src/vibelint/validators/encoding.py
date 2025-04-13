@@ -1,44 +1,54 @@
 """
 Validator for Python encoding cookies.
 
-src/vibelint/validators/encoding.py
+vibelint/validators/encoding.py
 """
 
 import re
-from typing import List
+from typing import List, Tuple
+
+
+from ..error_codes import VBL201
+
+__all__ = [
+    "EncodingValidationResult",
+    "validate_encoding_cookie",
+]
+
+ValidationIssue = Tuple[str, str]
 
 
 class EncodingValidationResult:
     """
     Result of a validation for encoding cookies.
 
-    src/vibelint/validators/encoding.py
+    vibelint/validators/encoding.py
     """
+
     def __init__(self) -> None:
-        """
-        Docstring for method 'EncodingValidationResult.__init__'.
-        
-        vibelint/validators/encoding.py
-        """
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        """Initializes EncodingValidationResult."""
+        self.errors: List[ValidationIssue] = []
+        self.warnings: List[ValidationIssue] = []
         self.line_number: int = -1
-        self.needs_fix: bool = False
 
     def has_issues(self) -> bool:
-        """
-        Check if there are any issues.
-
-        src/vibelint/validators/encoding.py
-        """
+        """Check if there are any issues."""
         return bool(self.errors or self.warnings)
+
+    def add_error(self, code: str, message: str):
+        """Adds an error with its code."""
+        self.errors.append((code, message))
+
+    def add_warning(self, code: str, message: str):
+        """Adds a warning with its code."""
+        self.warnings.append((code, message))
 
 
 def validate_encoding_cookie(content: str) -> EncodingValidationResult:
     """
     Validate the encoding cookie in a Python file.
 
-    src/vibelint/validators/encoding.py
+    vibelint/validators/encoding.py
     """
     result = EncodingValidationResult()
     lines = content.splitlines()
@@ -54,24 +64,7 @@ def validate_encoding_cookie(content: str) -> EncodingValidationResult:
             enc = m.group(1).lower()
             result.line_number = idx
             if enc != "utf-8":
-                result.errors.append(f"Invalid encoding cookie: {enc}, must be utf-8.")
-                result.needs_fix = True
+                msg = f"Invalid encoding cookie: '{enc}' found on line {idx + 1}, must be 'utf-8'."
+                result.add_error(VBL201, msg)
+
     return result
-
-
-def fix_encoding_cookie(content: str, result: EncodingValidationResult) -> str:
-    """
-    Fix encoding cookie issues in a Python file.
-
-    src/vibelint/validators/encoding.py
-    """
-    if not result.needs_fix:
-        return content
-
-    lines = content.splitlines()
-    if 0 <= result.line_number < len(lines):
-        lines[result.line_number] = "# -*- coding: utf-8 -*-"
-    text = "\n".join(lines)
-    if content.endswith("\n"):
-        text += "\n"
-    return text

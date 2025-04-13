@@ -1,2 +1,7 @@
 [ignore]
-reports/
+tests/
+LICENSE
+README.md
+o.md
+out.txt
+code_tape_archive.md

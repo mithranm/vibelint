@@ -6,4 +6,4 @@ __pycache__/
 *.env
 *$py.class
 
-o.md
+.DS_Store

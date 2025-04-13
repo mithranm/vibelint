@@ -1,0 +1,8 @@
+[project]
+name = "myproject"
+version = "0.1.0"
+
+[tool.vibelint]
+include_globs = ["src/**/*.py"]
+error_on_missing_all_in_init = false
+large_dir_threshold = 500

@@ -1,14 +1,22 @@
+# Include these specific top-level files in the sdist
 include LICENSE
 include README.md
 include pyproject.toml
-include .pre-commit-hooks.yaml
+# include .pre-commit-hooks.yaml # We decided to remove this
 include tox.ini
 
+# Recursively include all files (*) found within the 'examples' directory
 recursive-include examples *
+# Recursively include all Python files (*.py) found within the 'tests' directory
 recursive-include tests *.py
 
+# Recursively exclude any directory named '__pycache__' anywhere in the project
 recursive-exclude * __pycache__
+# Recursively exclude compiled Python files anywhere
 recursive-exclude * *.py[cod]
+# Recursively exclude compiled C extensions anywhere
 recursive-exclude * *.so
+# Recursively exclude VIM swap files anywhere
 recursive-exclude * .*.swp
+# Recursively exclude macOS metadata files anywhere
 recursive-exclude * .DS_Store

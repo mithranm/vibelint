@@ -1,0 +1,7 @@
+[project]
+name = "fixproj"
+version = "0.1.0"
+
+[tool.vibelint]
+include_globs = ["*.py"]
+large_dir_threshold = 500

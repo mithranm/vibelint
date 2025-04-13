@@ -1,343 +1,496 @@
 """
-Validator for Python docstrings at module/class/function/method level.
+Validator for Python docstrings. Checks for presence and path reference.
 
-src/vibelint/validators/docstring.py
+vibelint/validators/docstring.py
 """
 
-import ast
-from typing import List, Optional, Dict, Tuple, Any
+import logging
+import re
+import sys
+from typing import List, Optional, Dict, Tuple, Any, Union, Sequence, cast, Mapping
 
-MISSING_DOCSTRING = object()
+import libcst as cst
+from libcst import (
+    BaseStatement,
+    IndentedBlock,
+    Module,
+    SimpleStatementLine,
+    ClassDef,
+    FunctionDef,
+    Expr,
+    SimpleString,
+    BaseSuite,
+    EmptyLine,
+    Newline,
+    Comment,
+    Pass,
+    TrailingWhitespace,
+    CSTNode,
+    BaseCompoundStatement,
+    RemovalSentinel,
+    BaseSmallStatement,
+    MaybeSentinel,
+    Name,
+)
+from libcst.metadata import (
+    PositionProvider,
+    CodeRange,
+    MetadataWrapper,
+    ProviderT,
+    WhitespaceInclusivePositionProvider,
+    ParentNodeProvider,
+    CodePosition,
+)
+
+
+from ..error_codes import VBL101, VBL102, VBL103
+
+logger = logging.getLogger(__name__)
+
+
+__all__ = [
+    "DocstringValidationResult",
+    "get_normalized_filepath",
+    "validate_every_docstring",
+]
+
+IssueKey = int
+BodyItem = Union[BaseStatement, BaseSmallStatement, EmptyLine, Comment]
+ValidationIssue = Tuple[str, str]
+
+
+def _get_docstring_node(body_stmts: Sequence[CSTNode]) -> Optional[SimpleStatementLine]:
+    """
+    Attempts to get the CST node representing the docstring from a sequence of body statements.
+    Searches for the first non-comment/empty statement and checks if it's a SimpleString expression.
+
+    vibelint/validators/docstring.py
+    """
+
+    first_real_stmt = None
+    for stmt in body_stmts:
+        if not isinstance(stmt, (EmptyLine, Comment)):
+            first_real_stmt = stmt
+            break
+
+    if (
+        first_real_stmt
+        and isinstance(first_real_stmt, SimpleStatementLine)
+        and len(first_real_stmt.body) == 1
+        and isinstance(first_real_stmt.body[0], Expr)
+        and isinstance(first_real_stmt.body[0].value, SimpleString)
+    ):
+        return first_real_stmt
+    return None
+
+
+def _get_simple_string_node(body_stmts: Sequence[CSTNode]) -> Optional[SimpleString]:
+    """
+    Gets the SimpleString node if it's the first statement.
+
+    vibelint/validators/docstring.py
+    """
+
+    doc_stmt_line = _get_docstring_node(body_stmts)
+    if doc_stmt_line:
+        try:
+            expr_node = doc_stmt_line.body[0]
+            if isinstance(expr_node, Expr) and isinstance(
+                expr_node.value, SimpleString
+            ):
+                return expr_node.value
+        except (IndexError, AttributeError):
+            pass
+    return None
+
+
+def _extract_docstring_text(node: Optional[SimpleStatementLine]) -> Optional[str]:
+    """
+    Extracts the interpreted string value from a docstring node.
+
+    vibelint/validators/docstring.py
+    """
+
+    if node:
+        try:
+            expr_node = node.body[0]
+            if isinstance(expr_node, Expr):
+                str_node = expr_node.value
+                if isinstance(str_node, SimpleString):
+
+                    evaluated = str_node.evaluated_value
+                    return evaluated if isinstance(evaluated, str) else None
+        except (IndexError, AttributeError, Exception) as e:
+
+            logger.debug(f"Failed to extract/evaluate SimpleString: {e}", exc_info=True)
+            return None
+    return None
+
+
+def _get_docstring_node_index(body_stmts: Sequence[CSTNode]) -> Optional[int]:
+    """
+    Gets the index of the docstring node in a body list.
+
+    vibelint/validators/docstring.py
+    """
+
+    for i, stmt in enumerate(body_stmts):
+
+        if isinstance(stmt, (EmptyLine, Comment)):
+            continue
+
+        if (
+            isinstance(stmt, SimpleStatementLine)
+            and len(stmt.body) == 1
+            and isinstance(stmt.body[0], Expr)
+            and isinstance(stmt.body[0].value, SimpleString)
+        ):
+            return i
+        else:
+
+            return None
+
+    return None
 
 
 class DocstringValidationResult:
     """
     Stores the result of docstring validation.
 
-    src/vibelint/validators/docstring.py
+    vibelint/validators/docstring.py
     """
+
     def __init__(self) -> None:
         """
-        Docstring for method 'DocstringValidationResult.__init__'.
-        
+        Initializes DocstringValidationResult.
+
         vibelint/validators/docstring.py
         """
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
-        self.line_number: int = -1
-        self.needs_fix: bool = False
-        self.docstring_issues: Dict[Tuple[int, int], Dict[str, Any]] = {}
+        self.errors: List[ValidationIssue] = []
+        self.warnings: List[ValidationIssue] = []
 
     def has_issues(self) -> bool:
         """
-        Docstring for method 'DocstringValidationResult.has_issues'.
-        
+        Checks if there are any errors or warnings.
+
         vibelint/validators/docstring.py
         """
-        return bool(self.errors or self.warnings or self.docstring_issues)
+        return bool(self.errors or self.warnings)
+
+    def add_error(self, code: str, message: str):
+        """
+        Adds an error with its code.
+
+        vibelint/validators/docstring.py
+        """
+        self.errors.append((code, message))
+
+    def add_warning(self, code: str, message: str):
+        """
+        Adds a warning with its code.
+
+        vibelint/validators/docstring.py
+        """
+        self.warnings.append((code, message))
 
 
 def get_normalized_filepath(relative_path: str) -> str:
     """
-    Return a normalized path for docstring references:
-    If file is in 'tests/' or 'src/', we return from there, else as-is.
+    Normalizes a path for docstring references.
+    Removes './', converts '' to '/', and removes leading 'src/'.
 
-    src/vibelint/validators/docstring.py
+    vibelint/validators/docstring.py
     """
-    path = relative_path.replace("\\", "/")
-    if "/tests/" in path:
-        return path.split("/tests/", 1)[-1].rpartition("/")[0].join(["tests/", ""]) if "/tests/" in path else path
-    if "/src/" in path:
-        return path.split("/src/", 1)[-1]
-    return relative_path
+
+    path = relative_path.replace("\\", "/").lstrip("./")
+    if path.startswith("src/"):
+        return path[len("src/") :]
+    return path
 
 
-def extract_all_docstrings(content: str) -> Dict[Tuple[int, int], Dict[str, Any]]:
+def get_node_start_line(
+    node: CSTNode, metadata: Mapping[ProviderT, Mapping[CSTNode, object]]
+) -> int:
     """
-    Parse the file content, get docstrings for module/class/function/method.
+    Gets the 1-based start line number of a CST node using metadata.
+    Returns 0 if position info is unavailable.
 
-    src/vibelint/validators/docstring.py
+    vibelint/validators/docstring.py
     """
-    results: Dict[Tuple[int, int], Dict[str, Any]] = {}
+
     try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        return results
-
-    # Module docstring
-    if tree.body and isinstance(tree.body[0], ast.Expr):
-        expr = tree.body[0]
-        maybe_doc = None
-        if isinstance(expr.value, ast.Constant) and isinstance(expr.value.value, str):
-            maybe_doc = expr.value.value
-        elif isinstance(expr.value, ast.Str):
-            maybe_doc = expr.value.s
-        if maybe_doc is not None:
-            lineno = expr.lineno
-            end_lineno = lineno + len(maybe_doc.splitlines()) - 1
-            results[(lineno, end_lineno)] = {"type": "module", "name": "module", "docstring": maybe_doc}
-        else:
-            results[(1, 1)] = {"type": "module", "name": "module", "docstring": None}
-    else:
-        results[(1, 1)] = {"type": "module", "name": "module", "docstring": None}
-
-    def record_doc(node, node_type: str, parent_name: str = ""):
-        doc_text = None
-        if node.body and isinstance(node.body[0], ast.Expr):
-            val = node.body[0].value
-            if isinstance(val, ast.Constant) and isinstance(val.value, str):
-                doc_text = val.value
-            elif isinstance(val, ast.Str):
-                doc_text = val.s
-
-        name = getattr(node, "name", node_type)
-        if parent_name and node_type in ("method", "function"):
-            name = f"{parent_name}.{name}"
-
-        if doc_text is None:
-            results[(node.lineno, node.lineno)] = {
-                "type": node_type,
-                "name": name,
-                "docstring": None
-            }
-        else:
-            lines = doc_text.splitlines()
-            start_line = node.body[0].lineno
-            end_line = start_line + len(lines) - 1
-            results[(start_line, end_line)] = {
-                "type": node_type,
-                "name": name,
-                "docstring": doc_text
-            }
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            record_doc(node, "class")
-            for child in node.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    record_doc(child, "method", node.name)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node in tree.body:
-                record_doc(node, "function")
-
-    return results
+        pos_info = metadata.get(PositionProvider, {}).get(node)
+        return pos_info.start.line if isinstance(pos_info, CodeRange) else 0
+    except Exception:
+        logger.debug(f"Failed to get start line for node {type(node)}", exc_info=True)
+        return 0
 
 
-def _docstring_includes_path(doc_lines: List[str], package_path: str) -> bool:
+def _get_node_base_indent_str(
+    node: Union[FunctionDef, ClassDef, Module],
+    metadata: Mapping[ProviderT, Mapping[CSTNode, object]],
+) -> str:
     """
-    Return True if package_path is in any doc line.
+    Get the base indentation string of the node definition line.
+    Returns empty string for Module or if indent info is unavailable.
 
-    src/vibelint/validators/docstring.py
+    vibelint/validators/docstring.py
     """
-    for ln in doc_lines:
-        if package_path in ln:
-            return True
-    return False
+
+    if isinstance(node, Module):
+        return ""
+    try:
+        pos_info = metadata.get(WhitespaceInclusivePositionProvider, {}).get(node)
+        return " " * pos_info.start.column if isinstance(pos_info, CodeRange) else ""
+    except Exception:
+        logger.debug(f"Failed to get indentation for node {type(node)}", exc_info=True)
+        return ""
 
 
-def _split_docstring_lines(docstring: Optional[str]) -> List[str]:
+class DocstringInfoExtractor(cst.CSTVisitor):
     """
-    Split docstring into stripped lines ignoring empties.
+    Visits CST nodes to extract docstring info and validate.
 
-    src/vibelint/validators/docstring.py
+    vibelint/validators/docstring.py
     """
-    if not docstring:
-        return []
-    return [x.strip() for x in docstring.splitlines() if x.strip()]
 
-
-def validate_every_docstring(content: str, relative_path: str) -> DocstringValidationResult:
-    """
-    Validate that each docstring is present and includes the normalized file path.
-
-    src/vibelint/validators/docstring.py
-    """
-    result = DocstringValidationResult()
-    path_ref = get_normalized_filepath(relative_path)
-    doc_map = extract_all_docstrings(content)
-    if not doc_map:
-        result.errors.append("No docstrings found in file (all missing?).")
-        result.needs_fix = True
-        return result
-
-    for (start_line, end_line), info in doc_map.items():
-        d_type = info["type"]
-        d_name = info["name"]
-        text = info["docstring"]
-        lines = _split_docstring_lines(text)
-
-        if text is None:
-            msg = f"Missing docstring for {d_type} '{d_name}'."
-            result.errors.append(msg)
-            result.docstring_issues[(start_line, end_line)] = {
-                "type": d_type,
-                "name": d_name,
-                "missing": True,
-                "message": msg
-            }
-            result.needs_fix = True
-        else:
-            if not _docstring_includes_path(lines, path_ref):
-                msg = f"Docstring for {d_type} '{d_name}' must include file path: {path_ref}"
-                result.errors.append(msg)
-                result.docstring_issues[(start_line, end_line)] = {
-                    "type": d_type,
-                    "name": d_name,
-                    "missing": False,
-                    "message": msg
-                }
-                result.needs_fix = True
-
-    return result
-
-
-def fix_every_docstring(content: str, result: DocstringValidationResult, relative_path: str) -> str:
-    """
-    Fix missing docstrings or missing path references.
-
-    src/vibelint/validators/docstring.py
-    """
-    if not result.needs_fix:
-        return content
-
-    lines = content.split("\n")
-    path_ref = get_normalized_filepath(relative_path)
-
-    # Sort docstring issues from bottom to top
-    doc_issues_sorted = sorted(
-        result.docstring_issues.items(),
-        key=lambda x: x[0][0],
-        reverse=True
+    METADATA_DEPENDENCIES = (
+        PositionProvider,
+        WhitespaceInclusivePositionProvider,
+        ParentNodeProvider,
     )
 
-    def create_block(indent: str, d_type: str, d_name: str) -> List[str]:
-        block = []
-        block.append(f'{indent}"""')
-        block.append(f"{indent}Docstring for {d_type} '{d_name}'.")
-        block.append(f"{indent}") # Add an empty line for spacing
-        block.append(f"{indent}{path_ref}")
-        block.append(f'{indent}"""')
-        return block
+    def __init__(self, relative_path: str):
+        """
+        Initializes DocstringInfoExtractor.
 
-    def fix_block(original_lines: List[str]) -> List[str]:
-        if not original_lines:
-            return original_lines
-        first_line = original_lines[0].rstrip()
-        if first_line.endswith('"""'):
-            triple_quote = '"""'
-        elif first_line.endswith("'''"):
-            triple_quote = "'''"
+        vibelint/validators/docstring.py
+        """
+        super().__init__()
+        self.relative_path = relative_path
+        self.path_ref = get_normalized_filepath(relative_path)
+        self.result = DocstringValidationResult()
+
+        logger.debug(
+            f"[Validator:{self.relative_path}] Initialized. Expecting path ref: '{self.path_ref}'"
+        )
+
+    def visit_Module(self, node: Module) -> None:
+        """Visits Module node."""
+        doc_node = _get_docstring_node(node.body)
+        doc_text = _extract_docstring_text(doc_node)
+        self._validate_docstring(node, doc_node, doc_text, "module", "module")
+
+    def leave_Module(self, node: Module) -> None:
+        """Leaves Module node."""
+        pass
+
+    def visit_ClassDef(self, node: ClassDef) -> bool:
+        """Visits ClassDef node."""
+        if isinstance(node.body, IndentedBlock):
+            doc_node = _get_docstring_node(node.body.body)
+            doc_text = _extract_docstring_text(doc_node)
+            self._validate_docstring(node, doc_node, doc_text, "class", node.name.value)
         else:
-            # Handle cases where docstring might not start with triple quotes (though unlikely from ast)
-            # Or if the block passed is not actually a docstring
-             return original_lines # Cannot reliably fix if not standard docstring format
+            self._validate_docstring(node, None, None, "class", node.name.value)
+        return True
 
-        # indentation
-        indent = ""
-        for ch in first_line:
-            if ch in (" ", "\t"):
-                indent += ch
+    def leave_ClassDef(self, node: ClassDef) -> None:
+        """Leaves ClassDef node."""
+        pass
+
+    def visit_FunctionDef(self, node: FunctionDef) -> bool:
+        """Visits FunctionDef node."""
+        parent = self.get_metadata(ParentNodeProvider, node)
+        is_method = isinstance(parent, IndentedBlock) and isinstance(
+            self.get_metadata(ParentNodeProvider, parent), ClassDef
+        )
+        node_type = "method" if is_method else "function"
+
+        if isinstance(node.body, IndentedBlock):
+            doc_node = _get_docstring_node(node.body.body)
+            doc_text = _extract_docstring_text(doc_node)
+            self._validate_docstring(
+                node, doc_node, doc_text, node_type, node.name.value
+            )
+        else:
+            self._validate_docstring(node, None, None, node_type, node.name.value)
+        return True
+
+    def leave_FunctionDef(self, node: FunctionDef) -> None:
+        """Leaves FunctionDef node."""
+        pass
+
+    def _validate_docstring(
+        self,
+        node: Union[Module, ClassDef, FunctionDef],
+        node_doc: Optional[SimpleStatementLine],
+        text_doc: Optional[str],
+        n_type: str,
+        n_name: str,
+    ) -> None:
+        """
+        Performs the validation logic, reporting issues with codes.
+
+        vibelint/validators/docstring.py
+        """
+        is_module = isinstance(node, Module)
+        start_line = get_node_start_line(node, self.metadata)
+        if start_line == 0:
+            logger.warning(
+                f"Could not get start line for {n_type} '{n_name}', skipping validation."
+            )
+            return
+
+        doc_present = node_doc is not None
+
+        is_simple_init = False
+        if (
+            n_name == "__init__"
+            and n_type == "method"
+            and isinstance(node, FunctionDef)
+            and isinstance(node.body, IndentedBlock)
+        ):
+            non_empty_stmts = [
+                s for s in node.body.body if not isinstance(s, (EmptyLine, Comment))
+            ]
+            doc_node_in_body = _get_docstring_node(node.body.body)
+            actual_code_stmts = [
+                s for s in non_empty_stmts if s is not doc_node_in_body
+            ]
+            if (
+                len(actual_code_stmts) == 1
+                and isinstance(actual_code_stmts[0], SimpleStatementLine)
+                and len(actual_code_stmts[0].body) == 1
+                and isinstance(actual_code_stmts[0].body[0], Pass)
+            ):
+                is_simple_init = True
+
+        if not doc_present:
+            if not (n_type == "method" and is_simple_init):
+                msg = f"Missing docstring for {n_type} '{n_name}'."
+                self.result.add_error(VBL101, msg)
+                logger.debug(
+                    f"[Validator:{self.relative_path}] Added issue {VBL101} for line {start_line}: Missing docstring"
+                )
             else:
-                break
+                logger.debug(
+                    f"[Validator:{self.relative_path}] Validation OK (Suppressed simple __init__) for {n_type} '{n_name}' line {start_line}"
+                )
+            return
 
-        joined = "\n".join(original_lines).strip()
-        if joined.startswith(triple_quote):
-            joined = joined[len(triple_quote):]
-        if joined.endswith(triple_quote):
-            joined = joined[: -len(triple_quote)]
-
-        # Split carefully, preserving relative indentation within the docstring
-        lines_inner = joined.splitlines()
-        # Strip leading/trailing empty lines and common indent from the original inner content
-        while lines_inner and not lines_inner[0].strip():
-            lines_inner.pop(0)
-        while lines_inner and not lines_inner[-1].strip():
-            lines_inner.pop(-1)
-
-        # Remove old path references if they exist
-        new_body_lines = [ln for ln in lines_inner if path_ref not in ln.strip()]
-
-        # Add the required path reference, ensuring it's on its own line
-        if path_ref not in [ln.strip() for ln in new_body_lines]:
-             # Add an empty line before the path if the body isn't empty
-            if new_body_lines and new_body_lines[-1].strip():
-                 new_body_lines.append("")
-            new_body_lines.append(path_ref)
-
-        # Reconstruct the docstring block
-        updated = [f"{indent}{triple_quote}"]
-        for nb in new_body_lines:
-             # Re-apply original indent + relative indent from original docstring line
-             # This part is tricky without full dedent/reindent logic.
-             # Simplification: just apply the base indent.
-             updated.append(f"{indent}{nb.strip()}") # Apply base indent, strip original relative indent
-        updated.append(f"{indent}{triple_quote}")
-        return updated
-
-    for ((start_line, end_line), info) in doc_issues_sorted:
-        missing = info["missing"]
-        d_type = info["type"]
-        d_name = info["name"]
-
-        if missing:
-            # Find the actual end of the function/method signature (line ending with ':')
-            def_line_idx = start_line - 1
-            if def_line_idx < 0 or def_line_idx >= len(lines):
-                # Log error or skip if definition line is out of bounds
-                print(f"Warning: Could not find definition line for {d_name} at {start_line}")
-                continue
-
-            signature_end_idx = -1
-            # Search from the 'def' line downwards
-            for i in range(def_line_idx, len(lines)):
-                # Check if line stripped of trailing whitespace ends with ':'
-                # This handles comments after the colon as well
-                if lines[i].rstrip().endswith(":"):
-                    signature_end_idx = i
-                    break
-
-            if signature_end_idx == -1:
-                # Log error or skip if signature end ':' is not found
-                print(f"Warning: Could not find signature end for {d_name} starting at {start_line}")
-                continue
-
-            insertion_index = signature_end_idx + 1 # Insert *after* the signature line
-
-            # Calculate indentation based on the 'def' or 'class' line
-            def_line = lines[def_line_idx]
-            base_indent = ""
-            for ch in def_line:
-                if ch in (" ", "\t"):
-                    base_indent += ch
-                else:
-                    break
-            # Standard Python indent is 4 spaces deeper than the definition line
-            doc_indent = base_indent + "    "
-
-            block = create_block(doc_indent, d_type, d_name)
-            # Insert the new docstring block at the correct position
-            lines = lines[:insertion_index] + block + lines[insertion_index:]
+        path_issue = False
+        if text_doc is not None:
+            stripped_text = text_doc.rstrip()
+            if not stripped_text.endswith(self.path_ref):
+                path_issue = True
         else:
-            # Fix existing docstring (add missing path)
-            slice_start = start_line - 1
-            slice_end = end_line # end_line from ast is the last line of the docstring
-            if slice_start < 0 or slice_end > len(lines):
-                 print(f"Warning: Invalid slice [{slice_start}:{slice_end}] for {d_name}")
-                 continue
+            path_issue = True
 
-            existing_block = lines[slice_start:slice_end]
-            fixed = fix_block(existing_block)
-            # Replace the old block with the fixed one
-            # Need to adjust line counts if fix_block changed the number of lines
-            lines = lines[:slice_start] + fixed + lines[slice_end:]
+        if path_issue:
+            msg = f"Docstring for {n_type} '{n_name}' missing/incorrect path reference (expected '{self.path_ref}')."
+            self.result.add_warning(VBL102, msg)
+            logger.debug(
+                f"[Validator:{self.relative_path}] Added issue {VBL102} for line {start_line}: Path reference"
+            )
+
+        format_issue = False
+        raw_value = None
+        try:
+            if node_doc:
+                expr_node = node_doc.body[0]
+                if isinstance(expr_node, Expr):
+                    str_node = expr_node.value
+                    if isinstance(str_node, SimpleString):
+                        raw_value = str_node.value
+
+                        is_multiline = "\n" in raw_value
+                        if is_multiline:
+
+                            base_indent = _get_node_base_indent_str(node, self.metadata)
+                            docstring_stmt_indent = (
+                                "" if is_module else base_indent + "    "
+                            )
+                            expected_ending = f'\n{docstring_stmt_indent}"""'
+
+                            if not raw_value.endswith(expected_ending):
+                                format_issue = True
+                                logger.debug(
+                                    f"Format issue L{start_line}: Closing quote mismatch. Raw: {repr(raw_value)}"
+                                )
+
+        except Exception as e:
+            logger.debug(
+                f"Format check failed for {n_name} L{start_line}: {e}", exc_info=True
+            )
+
+        if format_issue:
+            msg = f"Docstring for {n_type} '{n_name}' has potential format/indentation issues."
+            self.result.add_warning(VBL103, msg)
+            logger.debug(
+                f"[Validator:{self.relative_path}] Added issue {VBL103} for line {start_line}: Format/Indent"
+            )
+
+        if not path_issue and not format_issue and doc_present:
+            logger.debug(
+                f"[Validator:{self.relative_path}] Validation OK for {n_type} '{n_name}' line {start_line}"
+            )
 
 
-    new_content = "\n".join(lines)
-    # Preserve trailing newline if original content had one
-    if content.endswith("\n") and not new_content.endswith("\n"):
-        new_content += "\n"
-    elif not content.endswith("\n") and new_content.endswith("\n"):
-         # Avoid adding a newline if the original didn't have one (less common)
-         new_content = new_content.rstrip("\n")
+def validate_every_docstring(
+    content: str, relative_path: str
+) -> Tuple[DocstringValidationResult, Optional[Module]]:
+    """
+    Parse source code and run the DocstringInfoExtractor visitor to validate all docstrings.
 
-    return new_content
+    Args:
+    content: The source code as a string.
+    relative_path: The relative path of the file (used for path refs).
+
+    Returns:
+    A tuple containing:
+    - DocstringValidationResult object with found issues.
+    - The parsed CST Module node (or None if parsing failed).
+
+    Raises:
+    SyntaxError: If LibCST encounters a parsing error, it's converted and re-raised.
+
+    vibelint/validators/docstring.py
+    """
+    result = DocstringValidationResult()
+    module = None
+    try:
+        module = cst.parse_module(content)
+        wrapper = MetadataWrapper(module, unsafe_skip_copy=True)
+
+        wrapper.resolve(PositionProvider)
+        wrapper.resolve(WhitespaceInclusivePositionProvider)
+        wrapper.resolve(ParentNodeProvider)
+
+        extractor = DocstringInfoExtractor(relative_path)
+        wrapper.visit(extractor)
+        logger.debug(
+            f"[Validator:{relative_path}] Validation complete. Issues found: E={len(extractor.result.errors)}, W={len(extractor.result.warnings)}"
+        )
+        return extractor.result, module
+    except cst.ParserSyntaxError as e:
+
+        logger.warning(
+            f"CST ParserSyntaxError in {relative_path} L{e.raw_line}:{e.raw_column}: {e.message}"
+        )
+        err = SyntaxError(e.message)
+        err.lineno = e.raw_line
+        err.offset = e.raw_column + 1 if e.raw_column is not None else None
+        err.filename = relative_path
+        try:
+            err.text = content.splitlines()[e.raw_line - 1]
+        except IndexError:
+            err.text = None
+        raise err from e
+    except Exception as e:
+        logger.error(
+            f"Unexpected CST validation error {relative_path}: {e}", exc_info=True
+        )
+
+        result.add_error("VBL903", f"Internal validation error: {e}")
+        return result, None

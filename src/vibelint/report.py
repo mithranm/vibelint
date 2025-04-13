@@ -1,259 +1,331 @@
 """
 Report generation functionality for vibelint.
 
-src/vibelint/report.py
+vibelint/report.py
 """
 
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List, TextIO, Set
+from collections import defaultdict
 from datetime import datetime
+import logging
 
-from rich.console import Console
 
-from .lint import LintRunner
-from .namespace import (
-    detect_namespace_collisions,
-    detect_soft_member_collisions,
-    _build_namespace_tree  # Import the internal function directly
-)
-from .utils import find_package_root
+from .lint import LintResult
+from .namespace import NamespaceNode, NamespaceCollision
+from .config import Config
+from .utils import get_relative_path
 
-console = Console()
+__all__ = ["write_report_content"]
+logger = logging.getLogger(__name__)
 
-# Define functions that appear to be needed but were missing from imports
-def build_namespace_tree_representation(target_paths: List[Path], config: Dict[str, Any], 
-                                       include_vcs_hooks: bool = False) -> str:
+
+def _get_files_in_namespace_order(
+    node: NamespaceNode, collected_files: Set[Path], project_root: Path
+) -> None:
     """
-    Build a string representation of the namespace tree.
-    
+    Recursively collects file paths from the namespace tree in DFS order,
+    including __init__.py files for packages. Populates the collected_files set.
+
     Args:
-        target_paths: List of paths to analyze
-        config: Configuration dictionary
-        include_vcs_hooks: Whether to include version control hooks
-        
-    Returns:
-        String representation of the namespace tree
-    
-    src/vibelint/report.py
-    """
-    # This is a placeholder implementation - you'll need to implement this
-    # or import it correctly from the namespace module
-    namespace_tree = _build_namespace_tree(target_paths, config, include_vcs_hooks)
-    return str(namespace_tree)
+        node: The current NamespaceNode.
+        collected_files: A set to store the absolute paths of collected files.
+        project_root: The project root path for checking containment.
 
-def get_files_in_namespace_order(namespace_tree) -> List[Path]:
+    vibelint/report.py (Modified)
     """
-    Get files in namespace order from the namespace tree.
-    
-    Args:
-        namespace_tree: Namespace tree to extract files from
-        
-    Returns:
-        List of file paths in namespace order
-    
-    src/vibelint/report.py
-    """
-    # This is a placeholder implementation - you'll need to implement this
-    # or import it correctly from the namespace module
-    files = []
-    # Logic to traverse the tree and collect files would go here
-    return files
 
-def get_relative_path(file_path: Path, target_paths: List[Path]) -> str:
-    """
-    Get the shortest relative path for a file.
-    
-    Args:
-        file_path: Absolute path to file
-        target_paths: List of target paths to get relative paths from
-        
-    Returns:
-        Shortest relative path as a string
-    
-    src/vibelint/report.py
-    """
-    shortest_path = None
-    
-    for target_path in target_paths:
+    if node.is_package and node.path and node.path.is_dir():
         try:
-            rel_path = file_path.relative_to(target_path)
-            if shortest_path is None or len(str(rel_path)) < len(str(shortest_path)):
-                shortest_path = rel_path
-        except ValueError:
-            continue
-            
-    return str(shortest_path) if shortest_path else str(file_path)
 
-def generate_markdown_report(
+            node.path.relative_to(project_root)
+            init_file = node.path / "__init__.py"
+
+            if init_file.is_file() and init_file not in collected_files:
+
+                init_file.relative_to(project_root)
+                logger.debug(f"Report: Adding package init file: {init_file}")
+                collected_files.add(init_file)
+        except ValueError:
+            logger.warning(
+                f"Report: Skipping package node outside project root: {node.path}"
+            )
+        except Exception as e:
+            logger.error(
+                f"Report: Error checking package init file for {node.path}: {e}"
+            )
+
+    for child_name in sorted(node.children.keys()):
+        child_node = node.children[child_name]
+
+        if child_node.path and child_node.path.is_file() and not child_node.is_package:
+            try:
+
+                child_node.path.relative_to(project_root)
+                if child_node.path not in collected_files:
+                    logger.debug(f"Report: Adding module file: {child_node.path}")
+                    collected_files.add(child_node.path)
+            except ValueError:
+                logger.warning(
+                    f"Report: Skipping module file outside project root: {child_node.path}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Report: Error checking module file {child_node.path}: {e}"
+                )
+
+        _get_files_in_namespace_order(child_node, collected_files, project_root)
+
+    if not node.children and node.path and node.path.is_file():
+        try:
+            node.path.relative_to(project_root)
+            if node.path not in collected_files:
+                logger.debug(f"Report: Adding root file node: {node.path}")
+                collected_files.add(node.path)
+        except ValueError:
+            logger.warning(
+                f"Report: Skipping root file node outside project root: {node.path}"
+            )
+        except Exception as e:
+            logger.error(f"Report: Error checking root file node {node.path}: {e}")
+
+
+def write_report_content(
+    f: TextIO,
+    project_root: Path,
     target_paths: List[Path],
-    output_dir: Path,
-    config: Dict[str, Any],
-    check_only: bool = True,
-    include_vcs_hooks: bool = False,
-    ignore_inheritance: bool = False,
-    output_filename: Optional[str] = None
-) -> Path:
+    lint_results: List[LintResult],
+    hard_coll: List[NamespaceCollision],
+    soft_coll: List[NamespaceCollision],
+    root_node: NamespaceNode,
+    config: Config,
+) -> None:
     """
-    Generate a comprehensive markdown report of linting results, namespace structure,
-    and file contents.
-    
+    Writes the comprehensive markdown report content to the given file handle.
+
     Args:
-        target_paths: List of paths to analyze
-        output_dir: Directory where the report will be saved
-        config: Configuration dictionary
-        check_only: Only check for issues without suggesting fixes
-        include_vcs_hooks: Whether to include version control hooks
-        ignore_inheritance: Whether to ignore inheritance when checking for soft collisions
-        output_filename: Optional filename for the report (default: vibelint_report_{timestamp}.md)
-        
-    Returns:
-        Path to the generated report file
-    
-    src/vibelint/report.py
+    f: The text file handle to write the report to.
+    project_root: The root directory of the project.
+    target_paths: List of paths that were analyzed.
+    lint_results: List of LintResult objects from the linting phase.
+    hard_coll: List of hard NamespaceCollision objects.
+    soft_coll: List of definition/export (soft) NamespaceCollision objects.
+    root_node: The root NamespaceNode of the project structure.
+    config: Configuration object.
+
+    vibelint/report.py (Modified - calling corrected helper)
     """
-    if output_filename is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"vibelint_report_{timestamp}.md"
-    elif not output_filename.endswith('.md'):
-        # Ensure the file has a markdown extension
-        output_filename = f"{output_filename}.md"
-        
-    report_path = output_dir / output_filename
-    
-    # Run linting
-    lint_runner = LintRunner(
-        config=config,
-        check_only=True,  # Always check only for reports
-        skip_confirmation=True,
-        include_vcs_hooks=include_vcs_hooks,
+
+    package_name = project_root.name if project_root else "Unknown"
+
+    f.write("# vibelint Report\n\n")
+    f.write(f"*Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
+    f.write(f"**Project:** {package_name}\n")
+
+    f.write(f"**Project Root:** `{str(project_root.resolve())}`\n\n")
+    f.write(f"**Paths analyzed:** {', '.join(str(p) for p in target_paths)}\n\n")
+
+    f.write("## Table of Contents\n\n")
+    f.write("1. [Summary](#summary)\n")
+    f.write("2. [Linting Results](#linting-results)\n")
+    f.write("3. [Namespace Structure](#namespace-structure)\n")
+    f.write("4. [Namespace Collisions](#namespace-collisions)\n")
+    f.write("5. [File Contents](#file-contents)\n\n")
+
+    f.write("## Summary\n\n")
+    f.write("| Metric | Count |\n")
+    f.write("|--------|-------|\n")
+
+    files_analyzed_count = len(lint_results)
+    f.write(f"| Files analyzed | {files_analyzed_count} |\n")
+    f.write(f"| Files with errors | {sum(1 for r in lint_results if r.errors)} |\n")
+    f.write(
+        f"| Files with warnings only | {sum(1 for r in lint_results if r.warnings and not r.errors)} |\n"
     )
-    
-    console.print("[bold blue]Running linting checks...[/bold blue]")
-    lint_runner.run(target_paths)
-    
-    # Build namespace tree representation for display
-    console.print("[bold blue]Building namespace structure...[/bold blue]")
-    tree_repr = build_namespace_tree_representation(target_paths, config, include_vcs_hooks)
-    
-    # Get the actual namespace tree node for file ordering
-    namespace_tree = _build_namespace_tree(target_paths, config, include_vcs_hooks)
-    
-    # Detect collisions
-    console.print("[bold blue]Detecting namespace collisions...[/bold blue]")
-    hard_collisions = detect_namespace_collisions(target_paths, config, include_vcs_hooks)
-    
-    # Explicitly create the boolean value for clarity and add type hint
-    check_inheritance: bool = not ignore_inheritance 
-    
-    soft_collisions = detect_soft_member_collisions(
-        target_paths, 
-        config, 
-        use_inheritance_check=check_inheritance,  # Pass the variable here
-        include_vcs_hooks=include_vcs_hooks
-    )
-    
-    # Generate report
-    console.print("[bold blue]Generating markdown report...[/bold blue]")
-    with open(report_path, "w", encoding="utf-8") as f:
-        # Report header
-        package_roots = [find_package_root(path) for path in target_paths]
-        package_names = []
-        for p in package_roots:
-            if p is not None and p.exists() and p.name:
-                package_names.append(p.name)
-        
-        f.write("# vibelint Report\n\n")
-        f.write(f"*Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
-        f.write(f"**Project(s):** {', '.join(package_names) or 'Unknown'}\n\n")
-        f.write(f"**Paths analyzed:** {', '.join(str(p) for p in target_paths)}\n\n")
-        
-        # Table of Contents
-        f.write("## Table of Contents\n\n")
-        f.write("1. [Summary](#summary)\n")
-        f.write("2. [Linting Results](#linting-results)\n")
-        f.write("3. [Namespace Structure](#namespace-structure)\n")
-        f.write("4. [Namespace Collisions](#namespace-collisions)\n")
-        f.write("5. [File Contents](#file-contents)\n\n")
-        
-        # Summary section
-        f.write("## Summary\n\n")
-        f.write("| Metric | Count |\n")
-        f.write("|--------|-------|\n")
-        f.write(f"| Files analyzed | {len(lint_runner.results)} |\n")
-        f.write(f"| Files with errors | {lint_runner.files_with_errors} |\n")
-        f.write(f"| Files with warnings | {lint_runner.files_with_warnings} |\n")
-        f.write(f"| Hard namespace collisions | {len(hard_collisions)} |\n")
-        f.write(f"| Soft namespace collisions | {len(soft_collisions)} |\n\n")
-        
-        # Linting Results
-        f.write("## Linting Results\n\n")
-        if not lint_runner.results or all(not r.has_issues for r in lint_runner.results):
-            f.write("*No linting issues found.*\n\n")
-        else:
-            f.write("| File | Errors | Warnings |\n")
-            f.write("|------|--------|----------|\n")
-            for result in lint_runner.results:
-                if result.errors or result.warnings:
-                    errors = "; ".join(result.errors) or "None"
-                    warnings = "; ".join(result.warnings) or "None"
-                    rel_path = get_relative_path(result.file_path, target_paths)
-                    f.write(f"| `{rel_path}` | {errors} | {warnings} |\n")
-            f.write("\n")
-        
-        # Namespace Structure
-        f.write("## Namespace Structure\n\n")
-        f.write("```\n")
-        f.write(str(tree_repr))
-        f.write("\n```\n\n")
-        
-        # Namespace Collisions
-        f.write("## Namespace Collisions\n\n")
-        
-        # Hard collisions
-        f.write("### Hard Collisions\n\n")
-        if not hard_collisions:
-            f.write("*No hard collisions detected.*\n\n") 
-        else:
-            f.write("These collisions can break Python imports:\n\n")
-            f.write("| Name | Path 1 | Path 2 |\n")
-            f.write("|------|--------|--------|\n")
-            for collision in hard_collisions:
-                f.write(f"| `{collision.name}` | {collision.path1} | {collision.path2} |\n")
-            f.write("\n")
-        
-        # Soft collisions
-        f.write("### Soft Collisions\n\n")
-        if not soft_collisions:
-            f.write("*No soft collisions detected.*\n\n") 
-        else:
-            f.write("These don't break Python but may confuse humans and LLMs:\n\n")
-            f.write("| Name | Path 1 | Path 2 |\n")
-            f.write("|------|--------|--------|\n")
-            for collision in soft_collisions:
-                f.write(f"| `{collision.name}` | {collision.path1} | {collision.path2} |\n")
-            f.write("\n")
-        
-        # File Contents
-        f.write("## File Contents\n\n")
-        f.write("Files are ordered by their position in the namespace hierarchy.\n\n")
-        
-        # Get all Python files from the namespace tree in a logical order
-        python_files = get_files_in_namespace_order(namespace_tree)
-        
-        for file_path in python_files:
-            if file_path.is_file() and file_path.suffix == '.py':
-                rel_path = get_relative_path(file_path, target_paths)
-                f.write(f"### {rel_path}\n\n")
-                
+    f.write(f"| Hard namespace collisions | {len(hard_coll)} |\n")
+    total_soft_collisions = len(soft_coll)
+    f.write(f"| Definition/Export namespace collisions | {total_soft_collisions} |\n\n")
+
+    f.write("## Linting Results\n\n")
+
+    sorted_lint_results = sorted(lint_results, key=lambda r: r.file_path)
+    files_with_issues = [r for r in sorted_lint_results if r.has_issues]
+
+    if not files_with_issues:
+        f.write("*No linting issues found.*\n\n")
+    else:
+        f.write("| File | Errors | Warnings |\n")
+        f.write("|------|--------|----------|\n")
+        for result in files_with_issues:
+
+            errors_str = (
+                "; ".join(f"`[{code}]` {msg}" for code, msg in result.errors)
+                if result.errors
+                else "None"
+            )
+            warnings_str = (
+                "; ".join(f"`[{code}]` {msg}" for code, msg in result.warnings)
+                if result.warnings
+                else "None"
+            )
+            try:
+
+                rel_path = get_relative_path(
+                    result.file_path.resolve(), project_root.resolve()
+                )
+            except ValueError:
+                rel_path = result.file_path
+
+            f.write(f"| `{rel_path}` | {errors_str} | {warnings_str} |\n")
+        f.write("\n")
+
+    f.write("## Namespace Structure\n\n")
+    f.write("```\n")
+    try:
+
+        tree_str = root_node.__str__()
+        f.write(tree_str)
+    except Exception as e:
+        logger.error(f"Report: Error generating namespace tree string: {e}")
+        f.write(f"[Error generating namespace tree: {e}]\n")
+    f.write("\n```\n\n")
+
+    f.write("## Namespace Collisions\n\n")
+    f.write("### Hard Collisions\n\n")
+    if not hard_coll:
+        f.write("*No hard collisions detected.*\n\n")
+    else:
+        f.write(
+            "These collisions can break Python imports or indicate duplicate definitions:\n\n"
+        )
+        f.write("| Name | Path 1 | Path 2 | Details |\n")
+        f.write("|------|--------|--------|---------|\n")
+        for collision in sorted(hard_coll, key=lambda c: (c.name, str(c.path1))):
+            try:
+                p1_rel = (
+                    get_relative_path(collision.path1.resolve(), project_root.resolve())
+                    if collision.path1
+                    else "N/A"
+                )
+                p2_rel = (
+                    get_relative_path(collision.path2.resolve(), project_root.resolve())
+                    if collision.path2
+                    else "N/A"
+                )
+            except ValueError:
+                p1_rel = collision.path1 or "N/A"
+                p2_rel = collision.path2 or "N/A"
+            loc1 = f":{collision.lineno1}" if collision.lineno1 else ""
+            loc2 = f":{collision.lineno2}" if collision.lineno2 else ""
+            details = (
+                "Intra-file duplicate"
+                if str(p1_rel) == str(p2_rel)
+                else "Module/Member clash"
+            )
+            f.write(
+                f"| `{collision.name}` | `{p1_rel}{loc1}` | `{p2_rel}{loc2}` | {details} |\n"
+            )
+        f.write("\n")
+
+    f.write("### Definition & Export Collisions (Soft)\n\n")
+    if not soft_coll:
+        f.write("*No definition or export collisions detected.*\n\n")
+    else:
+        f.write(
+            "These names are defined/exported in multiple files, which may confuse humans and LLMs:\n\n"
+        )
+        f.write("| Name | Type | Files Involved |\n")
+        f.write("|------|------|----------------|\n")
+        grouped_soft = defaultdict(lambda: {"paths": set(), "types": set()})
+        for collision in soft_coll:
+            all_paths = collision.definition_paths or [collision.path1, collision.path2]
+            grouped_soft[collision.name]["paths"].update(p for p in all_paths if p)
+            grouped_soft[collision.name]["types"].add(collision.collision_type)
+
+        for name, data in sorted(grouped_soft.items()):
+            paths_str_list = []
+            for p in sorted(list(data["paths"]), key=str):
                 try:
-                    content = file_path.read_text(encoding='utf-8')
-                    f.write("```python\n")
-                    f.write(content)
-                    if not content.endswith('\n'):
-                        f.write('\n')
-                    f.write("```\n\n")
-                except Exception as e:
-                    f.write(f"*Error reading file: {e}*\n\n")
-    
-    console.print(f"Report generated: [bold green]{report_path}[/bold green]")
-    return report_path
+                    paths_str_list.append(
+                        f"`{get_relative_path(p.resolve(), project_root.resolve())}`"
+                    )
+                except ValueError:
+                    paths_str_list.append(f"`{p}`")
+            type_str = (
+                " & ".join(
+                    sorted([t.replace("_soft", "").upper() for t in data["types"]])
+                )
+                or "Unknown"
+            )
+            f.write(f"| `{name}` | {type_str} | {', '.join(paths_str_list)} |\n")
+        f.write("\n")
+
+    f.write("## File Contents\n\n")
+    f.write("Files are ordered alphabetically by path.\n\n")
+
+    collected_files_set: Set[Path] = set()
+    try:
+        _get_files_in_namespace_order(
+            root_node, collected_files_set, project_root.resolve()
+        )
+
+        python_files_abs = sorted(list(collected_files_set), key=lambda p: str(p))
+        logger.info(f"Report: Found {len(python_files_abs)} files for content section.")
+    except Exception as e:
+        logger.error(
+            f"Report: Error collecting files for content section: {e}", exc_info=True
+        )
+        python_files_abs = []
+
+    if not python_files_abs:
+        f.write("*No Python files found in the namespace tree to display.*\n\n")
+    else:
+        for abs_file_path in python_files_abs:
+
+            if abs_file_path and abs_file_path.is_file():
+                try:
+
+                    rel_path = get_relative_path(abs_file_path, project_root.resolve())
+                    f.write(f"### {rel_path}\n\n")
+
+                    try:
+                        lang = "python"
+                        content = abs_file_path.read_text(
+                            encoding="utf-8", errors="ignore"
+                        )
+                        f.write(f"```{lang}\n")
+                        f.write(content)
+
+                        if not content.endswith("\n"):
+                            f.write("\n")
+                        f.write("```\n\n")
+                    except Exception as read_e:
+                        logger.warning(
+                            f"Report: Error reading file content for {rel_path}: {read_e}"
+                        )
+                        f.write(f"*Error reading file content: {read_e}*\n\n")
+
+                except ValueError:
+
+                    logger.warning(
+                        f"Report: Skipping file outside project root in content section: {abs_file_path}"
+                    )
+                    f.write(f"### {abs_file_path} (Outside Project Root)\n\n")
+                    f.write(
+                        "*Skipping content as file is outside the detected project root.*\n\n"
+                    )
+                except Exception as e_outer:
+                    logger.error(
+                        f"Report: Error processing file entry for {abs_file_path}: {e_outer}",
+                        exc_info=True,
+                    )
+                    f.write(f"### Error Processing Entry for {abs_file_path}\n\n")
+                    f.write(f"*An unexpected error occurred: {e_outer}*\n\n")
+            elif abs_file_path:
+                logger.warning(
+                    f"Report: Skipping non-file path found during content writing: {abs_file_path}"
+                )
+                f.write(f"### {abs_file_path} (Not a File)\n\n")
+                f.write("*Skipping entry as it is not a file.*\n\n")
+
+            f.write("---\n\n")

@@ -1,7 +1,7 @@
 """
 vibelint package initialization module.
 
-src/vibelint/__init__.py
+vibelint/__init__.py
 """
 
 from importlib.metadata import version, PackageNotFoundError

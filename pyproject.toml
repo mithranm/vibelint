@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vibelint"
-version = "0.1.0"
+version = "0.1.1"
 description = "Suite of linting tools to enhance the vibe coding process."
 authors = [
   { name = "Mithran Mohanraj", email = "mithran.mohanraj@gmail.com" }
@@ -28,6 +28,8 @@ dependencies = [
     "tomli>=2.0.0; python_version < '3.11'",
     "colorama>=0.4.0",
     "rich>=12.0.0",
+    "docformatter>=1.7.0",
+    "libcst"
 ]
 
 [project.scripts]
@@ -42,9 +44,19 @@ where = ["src"]
 include = ["vibelint*"]
 
 [tool.vibelint]
-package_root = ""
 allowed_shebangs = ["#!/usr/bin/env python3"]
-docstring_regex = "^[A-Z].+\\.$"
-include_globs = ["**/*.py"]
-exclude_globs = ["**/tests/**", "**/migrations/**", "**/site-packages/**", "**/dist-packages/**"]
+include_globs = ["**/*"]
+exclude_globs = [
+    ".git/**",
+    ".pytest_cache/**",
+    ".ruff_cache/**",
+    ".tox/**",
+    "*.egg-info/**",
+    "*.env*",
+    "**/__pycache__/**",
+    "**/.DS_Store",
+    ".DS_Store",
+    "debug.txt"
+]
 large_dir_threshold = 500
+error_on_missing_all_in_init = false
