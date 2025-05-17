@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vibelint"
-version = "0.1.1"
+version = "0.1.2"
 description = "Suite of tools to enhance the vibe coding process."
 authors = [
   { name = "Mithran Mohanraj", email = "mithran.mohanraj@gmail.com" }

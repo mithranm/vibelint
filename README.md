@@ -6,7 +6,7 @@
 
 **Enhance your Python codebase's "vibe" for better maintainability and LLM interaction.**
 
-`vibelint` is a suite of tools designed to identify and help resolve common Python code smells and anti-patterns that can hinder developer understanding and confuse Large Language Models (LLMs) used in AI-assisted coding. It helps you visualize your project's structure, detect naming conflicts, and enforce coding conventions that promote clarity.
+`vibelint` is a suite of tools designed to identify and help resolve common Python code smells and anti-patterns that can hinder developer understanding and confuse Large Language Models (LLMs) used in AI-assisted coding. It helps you visualize your project's structure, detect naming conflicts, and enforce coding conventions that promote clarity. It also helps you take flat snapshots of your entire codebase to feed into large-context LLM chat interfaces.
 
 ## Table of Contents
 
