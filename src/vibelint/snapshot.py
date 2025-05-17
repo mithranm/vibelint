@@ -70,7 +70,7 @@ def create_snapshot(
     for abs_file_path in discovered_files:
         try:
             rel_path_obj = get_relative_path(abs_file_path, project_root)
-            rel_path_str = str(rel_path_obj) # Still useful for fnmatch below
+            rel_path_str = str(rel_path_obj)  # Still useful for fnmatch below
         except ValueError:
             logger.warning(
                 f"Skipping file outside project root during snapshot categorization: {abs_file_path}"
@@ -118,7 +118,7 @@ def create_snapshot(
             if not part:
                 continue
 
-            is_last_part = (i == len(relative_parts) - 1)
+            is_last_part = i == len(relative_parts) - 1
 
             if is_last_part:
                 # This is the filename part
@@ -129,7 +129,7 @@ def create_snapshot(
             else:
                 # This is a directory part
                 if part not in node:
-                    node[part] = {} # Create a new dictionary for the subdirectory
+                    node[part] = {}  # Create a new dictionary for the subdirectory
                 # Move deeper into the tree structure
                 node = node[part]
 
@@ -145,13 +145,13 @@ def create_snapshot(
             # Use project root name for the tree root display
             tree_root_name = project_root.name if project_root.name else str(project_root)
             outfile.write(f"{tree_root_name}/\n")
-            _write_tree(outfile, tree, "") # Pass the populated tree dictionary
+            _write_tree(outfile, tree, "")  # Pass the populated tree dictionary
             outfile.write("```\n\n")
 
             # Write File Contents section
             outfile.write("## File Contents\n\n")
             outfile.write("Files are ordered alphabetically by path.\n\n")
-            for f, cat in file_infos: # Iterate through the sorted list again
+            for f, cat in file_infos:  # Iterate through the sorted list again
                 try:
                     relpath_header = get_relative_path(f, project_root)
                     outfile.write(f"### File: {relpath_header}\n\n")
@@ -168,7 +168,7 @@ def create_snapshot(
                             with open(f, "r", encoding="utf-8", errors="ignore") as infile:
                                 lines_read = 0
                                 for line in infile:
-                                    if lines_read >= 10: # Peek limit (e.g., 10 lines)
+                                    if lines_read >= 10:  # Peek limit (e.g., 10 lines)
                                         outfile.write("...\n")
                                         break
                                     outfile.write(line)
@@ -177,7 +177,7 @@ def create_snapshot(
                             logger.warning(f"Error reading file for peek {relpath_header}: {e}")
                             outfile.write(f"[Error reading file for peek: {e}]\n")
                         outfile.write("```\n\n---\n")
-                    else: # cat == "FULL"
+                    else:  # cat == "FULL"
                         lang = _get_language(f)
                         outfile.write(f"```{lang}\n")
                         try:
@@ -197,7 +197,7 @@ def create_snapshot(
                     try:
                         relpath_header_err = get_relative_path(f, project_root)
                     except Exception:
-                        relpath_header_err = str(f) # Fallback to absolute path if rel path fails
+                        relpath_header_err = str(f)  # Fallback to absolute path if rel path fails
 
                     logger.error(
                         f"Error processing file entry for {relpath_header_err} in snapshot: {e}",
@@ -212,11 +212,11 @@ def create_snapshot(
     except IOError as e:
         # Error writing the main output file
         logger.error(f"Failed to write snapshot file {absolute_output_path}: {e}", exc_info=True)
-        raise # Re-raise IOErrors
+        raise  # Re-raise IOErrors
     except Exception as e:
         # Catch-all for other unexpected errors during writing
         logger.error(f"An unexpected error occurred during snapshot writing: {e}", exc_info=True)
-        raise # Re-raise other critical exceptions
+        raise  # Re-raise other critical exceptions
 
 
 def _write_tree(outfile, node: Dict, prefix=""):
@@ -247,13 +247,13 @@ def _write_tree(outfile, node: Dict, prefix=""):
             # It's a directory - write its name and recurse
             outfile.write(f"{name}/\n")
             new_prefix = prefix + ("    " if is_last else "│   ")
-            _write_tree(outfile, node[name], new_prefix) # Recurse into the sub-dictionary
+            _write_tree(outfile, node[name], new_prefix)  # Recurse into the sub-dictionary
         else:
             # It's a file - find its category and write name with indicators
             file_info_tuple = next((info for info in files_data if info[0].name == name), None)
-            file_cat = "FULL" # Default category
+            file_cat = "FULL"  # Default category
             if file_info_tuple:
-                file_cat = file_info_tuple[1] # Get category ('FULL', 'PEEK', 'BINARY')
+                file_cat = file_info_tuple[1]  # Get category ('FULL', 'PEEK', 'BINARY')
 
             # Add indicators for non-full content files
             peek_indicator = " (PEEK)" if file_cat == "PEEK" else ""
@@ -310,7 +310,7 @@ def _get_language(file_path: Path) -> str:
         ".ini": "ini",
         ".cfg": "ini",
         ".gitignore": "gitignore",
-        ".env": "bash", # Treat .env like bash for highlighting often
+        ".env": "bash",  # Treat .env like bash for highlighting often
         ".tf": "terraform",
         ".hcl": "terraform",
         ".lua": "lua",
@@ -321,11 +321,11 @@ def _get_language(file_path: Path) -> str:
         ".exs": "elixir",
         ".dart": "dart",
         ".groovy": "groovy",
-        ".gradle": "groovy", # Gradle files often use groovy
+        ".gradle": "groovy",  # Gradle files often use groovy
         ".vb": "vbnet",
         ".fs": "fsharp",
         ".fsi": "fsharp",
         ".fsx": "fsharp",
         ".fsscript": "fsharp",
     }
-    return mapping.get(ext, "") # Return the mapped language or empty string
+    return mapping.get(ext, "")  # Return the mapped language or empty string
