@@ -5,7 +5,8 @@ Handles rule configuration, severity overrides, and policy management.
 """
 
 from typing import Dict, List, Optional, Set
-from .plugin_system import Severity, BaseValidator, plugin_manager
+
+from .plugin_system import BaseValidator, Severity, plugin_manager
 
 __all__ = ["RuleEngine", "create_default_rule_config"]
 
@@ -93,7 +94,7 @@ class RuleEngine:
         validators = []
         all_validators = plugin_manager.get_all_validators()
 
-        for rule_id, validator_class in all_validators.items():
+        for _, validator_class in all_validators.items():
             instance = self.create_validator_instance(validator_class)
             if instance:
                 validators.append(instance)
@@ -117,9 +118,10 @@ class RuleEngine:
 
         if model_key not in self._shared_models:
             try:
-                from sentence_transformers import SentenceTransformer
                 import logging
                 import os
+
+                from sentence_transformers import SentenceTransformer
 
                 logger = logging.getLogger(__name__)
 
@@ -136,13 +138,13 @@ class RuleEngine:
                 hf_token = embedding_config.get("hf_token")
                 if not hf_token:
                     # Try to load from .env file
-                    env_file = getattr(self.config, 'project_root', None)
+                    env_file = getattr(self.config, "project_root", None)
                     if env_file:
                         env_file = env_file / ".env"
                         if env_file and env_file.exists():
                             for line in env_file.read_text().splitlines():
                                 if line.startswith("HF_TOKEN="):
-                                    hf_token = line.split("=", 1)[1].strip().strip('"\'')
+                                    hf_token = line.split("=", 1)[1].strip().strip("\"'")
                                     break
                     # Fallback to environment variable
                     if not hf_token:
@@ -157,7 +159,9 @@ class RuleEngine:
                 logger.info("Shared embedding model loaded successfully")
 
             except ImportError:
-                logger.debug("Semantic similarity analysis disabled: sentence-transformers not available")
+                logger.debug(
+                    "Semantic similarity analysis disabled: sentence-transformers not available"
+                )
                 self._shared_models[model_key] = None
             except Exception as e:
                 logger.warning(f"Failed to load embedding model: {e}")

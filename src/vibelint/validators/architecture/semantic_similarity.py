@@ -9,19 +9,21 @@ vibelint/validators/semantic_similarity.py
 
 import logging
 from pathlib import Path
-from typing import Iterator, Optional, List, Tuple, Dict
-import hashlib
+from typing import Dict, Iterator, List, Optional, Tuple
 
 try:
-    from sentence_transformers import SentenceTransformer
     import numpy as np
+    from sentence_transformers import SentenceTransformer
+
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
+
     # Create dummy np module for type hints
     class DummyNumpy:
         class ndarray:
             pass
+
     np = DummyNumpy()
 
 from ...config import Config
@@ -43,7 +45,12 @@ class SemanticSimilarityValidator(BaseValidator):
 
     rule_id = "SEMANTIC-SIMILARITY"
 
-    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None, shared_model: Optional[SentenceTransformer] = None):
+    def __init__(
+        self,
+        severity: Optional[Severity] = None,
+        config: Optional[Dict] = None,
+        shared_model: Optional[SentenceTransformer] = None,
+    ):
         super().__init__(severity, config)
         self._model: Optional[SentenceTransformer] = shared_model
         self._code_cache: Dict[str, List[Tuple[Path, str, str, np.ndarray]]] = {}
@@ -69,7 +76,9 @@ class SemanticSimilarityValidator(BaseValidator):
             return True
 
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
-            logger.debug("Semantic similarity analysis disabled: sentence-transformers not available")
+            logger.debug(
+                "Semantic similarity analysis disabled: sentence-transformers not available"
+            )
             return False
 
         # Check configuration
@@ -87,12 +96,13 @@ class SemanticSimilarityValidator(BaseValidator):
             hf_token = embedding_config.get("hf_token")
             if not hf_token:
                 import os
+
                 # Try to load from .env file
                 env_file = config.project_root / ".env" if config.project_root else None
                 if env_file and env_file.exists():
                     for line in env_file.read_text().splitlines():
                         if line.startswith("HF_TOKEN="):
-                            hf_token = line.split("=", 1)[1].strip().strip('"\'')
+                            hf_token = line.split("=", 1)[1].strip().strip("\"'")
                             break
                 # Fallback to environment variable
                 if not hf_token:
@@ -126,9 +136,15 @@ class SemanticSimilarityValidator(BaseValidator):
             line = lines[i].strip()
 
             # Check for function or class definition
-            if line.startswith('def ') or line.startswith('class '):
-                element_type = 'function' if line.startswith('def ') else 'class'
-                name = line.split('(')[0].split(':')[0].replace('def ', '').replace('class ', '').strip()
+            if line.startswith("def ") or line.startswith("class "):
+                element_type = "function" if line.startswith("def ") else "class"
+                name = (
+                    line.split("(")[0]
+                    .split(":")[0]
+                    .replace("def ", "")
+                    .replace("class ", "")
+                    .strip()
+                )
 
                 # Extract the full definition including docstring
                 element_lines = [lines[i]]
@@ -144,24 +160,30 @@ class SemanticSimilarityValidator(BaseValidator):
                     element_lines.append(lines[i])
 
                     # Detect docstring start
-                    if not in_docstring and (current_line.startswith('"""') or current_line.startswith("'''")):
+                    if not in_docstring and (
+                        current_line.startswith('"""') or current_line.startswith("'''")
+                    ):
                         in_docstring = True
                         docstring_delimiter = '"""' if current_line.startswith('"""') else "'''"
                         if current_line.count(docstring_delimiter) >= 2:  # Single line docstring
                             in_docstring = False
                     elif in_docstring and docstring_delimiter in current_line:
                         in_docstring = False
-                    elif not in_docstring and current_line and not current_line.startswith('#'):
+                    elif not in_docstring and current_line and not current_line.startswith("#"):
                         implementation_lines += 1
 
                     i += 1
 
                     # Stop if we hit another function/class or unindented content
-                    if i < len(lines) and not lines[i].startswith(' ') and not lines[i].startswith('\t'):
-                        if lines[i].strip() and not lines[i].strip().startswith('#'):
+                    if (
+                        i < len(lines)
+                        and not lines[i].startswith(" ")
+                        and not lines[i].startswith("\t")
+                    ):
+                        if lines[i].strip() and not lines[i].strip().startswith("#"):
                             break
 
-                element_content = '\n'.join(element_lines)
+                element_content = "\n".join(element_lines)
                 elements.append((element_type, name, element_content))
             else:
                 i += 1
@@ -190,7 +212,9 @@ class SemanticSimilarityValidator(BaseValidator):
             logger.debug(f"Failed to generate embedding: {e}")
             return None
 
-    def _get_embeddings_batch(self, texts: List[str], task_type: str = "clustering") -> Optional[np.ndarray]:
+    def _get_embeddings_batch(
+        self, texts: List[str], task_type: str = "clustering"
+    ) -> Optional[np.ndarray]:
         """Generate embeddings for multiple texts using batch processing for efficiency."""
         if not self._model or not texts:
             return None
@@ -249,7 +273,9 @@ class SemanticSimilarityValidator(BaseValidator):
                 self._code_cache[cache_key] = []
 
             # Compare against existing elements
-            for cached_file, cached_name, cached_content, cached_embedding in self._code_cache[cache_key]:
+            for cached_file, cached_name, cached_content, cached_embedding in self._code_cache[
+                cache_key
+            ]:
                 # Skip if same file and same name
                 if cached_file == file_path and cached_name == name:
                     continue
@@ -274,7 +300,7 @@ class SemanticSimilarityValidator(BaseValidator):
                         message=f"{message}. Recommendation: {recommendation}",
                         file_path=file_path,
                         line=1,  # Could be enhanced to find actual line number
-                        severity=self.severity
+                        severity=self.severity,
                     )
 
             # Add current element to cache for future comparisons

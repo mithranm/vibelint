@@ -7,12 +7,12 @@ to run validators and format output according to user configuration.
 
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
+from .discovery import discover_files
+from .formatters import BUILTIN_FORMATTERS
 from .plugin_system import Finding, Severity, plugin_manager
 from .rules import RuleEngine
-from .formatters import BUILTIN_FORMATTERS
-from .discovery import discover_files
 
 # Note: No longer importing BUILTIN_VALIDATORS - using plugin discovery instead
 

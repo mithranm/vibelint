@@ -14,7 +14,7 @@ vibelint/validators/fallback_analyzer.py
 import ast
 import logging
 from pathlib import Path
-from typing import Iterator, List, Set, Optional, Dict
+from typing import Dict, Iterator, List, Optional
 
 from ...config import Config
 from ...plugin_system import BaseValidator, Finding, Severity
@@ -56,34 +56,40 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
         for handler in node.handlers:
             if handler.type is None:  # bare except:
                 if self._handler_returns_default(handler):
-                    self.findings.append(Finding(
-                        rule_id=f"{self.rule_id}-BARE-EXCEPT-DEFAULT",
-                        message="Bare except block returns default value, potentially masking important errors. Consider catching specific exceptions or at least logging the error.",
-                        file_path=self.current_file,
-                        line=node.lineno,
-                        severity=self.severity
-                    ))
+                    self.findings.append(
+                        Finding(
+                            rule_id=f"{self.rule_id}-BARE-EXCEPT-DEFAULT",
+                            message="Bare except block returns default value, potentially masking important errors. Consider catching specific exceptions or at least logging the error.",
+                            file_path=self.current_file,
+                            line=node.lineno,
+                            severity=self.severity,
+                        )
+                    )
 
             # Pattern 2: Exception handler that swallows exceptions silently
             elif self._handler_is_silent(handler):
                 exception_type = "Exception" if handler.type is None else ast.unparse(handler.type)
-                self.findings.append(Finding(
-                    rule_id=f"{self.rule_id}-SILENT-EXCEPTION",
-                    message=f"Exception handler for {exception_type} swallows errors silently. Consider logging the error or re-raising if appropriate.",
-                    file_path=self.current_file,
-                    line=node.lineno,
-                    severity=self.severity
-                ))
+                self.findings.append(
+                    Finding(
+                        rule_id=f"{self.rule_id}-SILENT-EXCEPTION",
+                        message=f"Exception handler for {exception_type} swallows errors silently. Consider logging the error or re-raising if appropriate.",
+                        file_path=self.current_file,
+                        line=node.lineno,
+                        severity=self.severity,
+                    )
+                )
 
             # Pattern 3: Too broad exception catching
             elif self._handler_too_broad(handler):
-                self.findings.append(Finding(
-                    rule_id=f"{self.rule_id}-TOO-BROAD-EXCEPT",
-                    message="Catching 'Exception' or 'BaseException' is too broad and may hide programming errors. Catch specific exception types instead.",
-                    file_path=self.current_file,
-                    line=node.lineno,
-                    severity=Severity.INFO
-                ))
+                self.findings.append(
+                    Finding(
+                        rule_id=f"{self.rule_id}-TOO-BROAD-EXCEPT",
+                        message="Catching 'Exception' or 'BaseException' is too broad and may hide programming errors. Catch specific exception types instead.",
+                        file_path=self.current_file,
+                        line=node.lineno,
+                        severity=Severity.INFO,
+                    )
+                )
 
         self.generic_visit(node)
 
@@ -92,23 +98,27 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
 
         # Pattern 4: dict.get() chains that might hide config issues
         if self._is_chained_dict_get(node):
-            self.findings.append(Finding(
-                rule_id=f"{self.rule_id}-DICT-GET-CHAIN",
-                message="Chained dict.get() calls with defaults may hide missing configuration. Consider validating required configuration explicitly.",
-                file_path=self.current_file,
-                line=node.lineno,
-                severity=Severity.INFO
-            ))
+            self.findings.append(
+                Finding(
+                    rule_id=f"{self.rule_id}-DICT-GET-CHAIN",
+                    message="Chained dict.get() calls with defaults may hide missing configuration. Consider validating required configuration explicitly.",
+                    file_path=self.current_file,
+                    line=node.lineno,
+                    severity=Severity.INFO,
+                )
+            )
 
         # Pattern 5: getattr with default that might hide attribute errors
         if self._is_problematic_getattr(node):
-            self.findings.append(Finding(
-                rule_id=f"{self.rule_id}-GETATTR-DEFAULT",
-                message="getattr() with default value may hide missing attributes. Consider checking if attribute should exist before accessing.",
-                file_path=self.current_file,
-                line=node.lineno,
-                severity=Severity.INFO
-            ))
+            self.findings.append(
+                Finding(
+                    rule_id=f"{self.rule_id}-GETATTR-DEFAULT",
+                    message="getattr() with default value may hide missing attributes. Consider checking if attribute should exist before accessing.",
+                    file_path=self.current_file,
+                    line=node.lineno,
+                    severity=Severity.INFO,
+                )
+            )
 
         self.generic_visit(node)
 
@@ -120,13 +130,15 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
         none_returns = [r for r in return_statements if self._returns_none_or_empty(r)]
 
         if len(none_returns) >= 2 and len(return_statements) >= 3:
-            self.findings.append(Finding(
-                rule_id=f"{self.rule_id}-MULTIPLE-NONE-RETURNS",
-                message=f"Function '{node.name}' has multiple return paths that return None/empty values. This may indicate error conditions being masked as normal returns.",
-                file_path=self.current_file,
-                line=node.lineno,
-                severity=Severity.INFO
-            ))
+            self.findings.append(
+                Finding(
+                    rule_id=f"{self.rule_id}-MULTIPLE-NONE-RETURNS",
+                    message=f"Function '{node.name}' has multiple return paths that return None/empty values. This may indicate error conditions being masked as normal returns.",
+                    file_path=self.current_file,
+                    line=node.lineno,
+                    severity=Severity.INFO,
+                )
+            )
 
         self.generic_visit(node)
 
@@ -166,35 +178,33 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
             return True  # bare except
 
         if isinstance(handler.type, ast.Name):
-            return handler.type.id in ['Exception', 'BaseException']
+            return handler.type.id in ["Exception", "BaseException"]
 
         return False
 
     def _is_chained_dict_get(self, node: ast.Call) -> bool:
         """Check for chained dict.get() calls like config.get('a', {}).get('b', default)."""
-        if (isinstance(node.func, ast.Attribute) and
-            node.func.attr == 'get' and
-            len(node.args) >= 2):
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "get" and len(node.args) >= 2:
 
             # Check if this is called on another .get() call
             if isinstance(node.func.value, ast.Call):
                 inner_call = node.func.value
-                if (isinstance(inner_call.func, ast.Attribute) and
-                    inner_call.func.attr == 'get'):
+                if isinstance(inner_call.func, ast.Attribute) and inner_call.func.attr == "get":
                     return True
 
         return False
 
     def _is_problematic_getattr(self, node: ast.Call) -> bool:
         """Check for getattr calls with defaults that might hide real issues."""
-        if (isinstance(node.func, ast.Name) and
-            node.func.id == 'getattr' and
-            len(node.args) >= 3):  # getattr(obj, name, default)
+        if (
+            isinstance(node.func, ast.Name) and node.func.id == "getattr" and len(node.args) >= 3
+        ):  # getattr(obj, name, default)
 
             # If the default is None or a simple literal, it might be problematic
             default_arg = node.args[2]
-            return isinstance(default_arg, (ast.Constant, ast.NameConstant)) or \
-                   (isinstance(default_arg, ast.Name) and default_arg.id == 'None')
+            return isinstance(default_arg, (ast.Constant, ast.NameConstant)) or (
+                isinstance(default_arg, ast.Name) and default_arg.id == "None"
+            )
 
         return False
 
@@ -218,10 +228,16 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
             return return_node.value.value is None
 
         if isinstance(return_node.value, ast.Name):
-            return return_node.value.id == 'None'
+            return return_node.value.id == "None"
 
         if isinstance(return_node.value, (ast.List, ast.Dict, ast.Set, ast.Tuple)):
-            return len(return_node.value.elts if hasattr(return_node.value, 'elts') else
-                      return_node.value.keys if hasattr(return_node.value, 'keys') else []) == 0
+            return (
+                len(
+                    return_node.value.elts
+                    if hasattr(return_node.value, "elts")
+                    else return_node.value.keys if hasattr(return_node.value, "keys") else []
+                )
+                == 0
+            )
 
         return False

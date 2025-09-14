@@ -573,10 +573,12 @@ class NamespaceNode:
                         child.members
                         and any(
                             m_path.resolve() == (child.path.resolve() if child.path else None)
-                            for m, (m_path, _) in child.members.items()
+                            for _, (m_path, _) in child.members.items()
                         )
                     ):
-                        build_tree_lines(child, next_level_prefix, base)
+                        lines.extend(build_tree_lines(child, next_level_prefix, base))
+
+            return lines
 
         root_path_str = ""
         root_indicator = ""
@@ -603,7 +605,7 @@ class NamespaceNode:
             root_path_str = "  [No Path]"
 
         lines.append(f"{self.name}{root_path_str}")
-        build_tree_lines(self, prefix="", base=base_path_for_display)
+        lines.extend(build_tree_lines(self, prefix="", base=base_path_for_display))
         return "\n".join(lines)
 
 

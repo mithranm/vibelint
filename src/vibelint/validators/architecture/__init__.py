@@ -11,13 +11,13 @@ vibelint/src/vibelint/validators/architecture/__init__.py
 """
 
 from .basic_patterns import ArchitectureValidator
+from .fallback_patterns import FallbackAnalyzer
 from .llm_analysis import ArchitectureLLMValidator
 from .semantic_similarity import SemanticSimilarityValidator
-from .fallback_patterns import FallbackAnalyzer
 
 __all__ = [
     "ArchitectureValidator",
     "ArchitectureLLMValidator",
     "SemanticSimilarityValidator",
-    "FallbackAnalyzer"
+    "FallbackAnalyzer",
 ]

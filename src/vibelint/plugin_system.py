@@ -5,12 +5,12 @@ This module provides the core interfaces and discovery mechanisms for
 extending vibelint with custom validators and output formatters.
 """
 
+import importlib.metadata
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Iterator, Dict, List, Optional, Any
-import importlib.metadata
+from typing import Any, Dict, Iterator, List, Optional
 
 __all__ = [
     "Severity",
@@ -122,7 +122,9 @@ class BaseFormatter(ABC):
     description: str = ""
 
     @abstractmethod
-    def format_results(self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None) -> str:
+    def format_results(
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+    ) -> str:
         """
         Format validation results for output.
 

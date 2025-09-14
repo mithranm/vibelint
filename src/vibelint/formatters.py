@@ -7,6 +7,7 @@ human-readable, JSON, SARIF, and LLM-optimized formats.
 
 import json
 from typing import Dict, List
+
 from .plugin_system import BaseFormatter, Finding, Severity
 
 __all__ = [
@@ -32,9 +33,9 @@ class NaturalLanguageFormatter(BaseFormatter):
 
         # Get max display limit from config
         max_displayed = 0  # 0 means no limit
-        if config and hasattr(config, 'get'):
+        if config and hasattr(config, "get"):
             max_displayed = config.get("max_displayed_issues", 0)
-        elif config and hasattr(config, '__getitem__'):
+        elif config and hasattr(config, "__getitem__"):
             max_displayed = config.get("max_displayed_issues", 0)
 
         # Group findings by severity
@@ -56,9 +57,11 @@ class NaturalLanguageFormatter(BaseFormatter):
                 severity_findings = by_severity[severity]
                 for i, finding in enumerate(severity_findings):
                     if max_displayed > 0 and displayed_count >= max_displayed:
-                        remaining_in_severity = len(severity_findings) - i
+                        len(severity_findings) - i
                         remaining_total = total_count - displayed_count
-                        lines.append(f"  ... and {remaining_total} more issues (showing first {max_displayed})")
+                        lines.append(
+                            f"  ... and {remaining_total} more issues (showing first {max_displayed})"
+                        )
                         break
 
                     location = (
@@ -80,7 +83,9 @@ class NaturalLanguageFormatter(BaseFormatter):
         total_warnings = sum(1 for f in findings if f.severity == Severity.WARN)
         total_info = sum(1 for f in findings if f.severity == Severity.INFO)
 
-        summary_line = f"\nSummary: {total_errors} errors, {total_warnings} warnings, {total_info} info"
+        summary_line = (
+            f"\nSummary: {total_errors} errors, {total_warnings} warnings, {total_info} info"
+        )
         if max_displayed > 0 and total_count > max_displayed:
             summary_line += f" (showing first {min(max_displayed, total_count)} of {total_count})"
 
@@ -183,7 +188,7 @@ BUILTIN_FORMATTERS = {
     "natural": NaturalLanguageFormatter,
     "human": NaturalLanguageFormatter,  # Keep human as alias for backward compatibility
     "json": JsonFormatter,
-    "sarif": SarifFormatter
+    "sarif": SarifFormatter,
 }
 
 # Format choices for CLI - single source of truth

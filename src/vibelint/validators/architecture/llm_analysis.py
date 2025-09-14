@@ -11,7 +11,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Iterator, Optional, Dict
+from typing import Dict, Iterator, Optional
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -72,20 +72,21 @@ class ArchitectureLLMValidator(BaseValidator):
             return False
 
         # Check if we're running in CI and if LLM analysis is explicitly enabled
-        is_ci = any(ci_var in os.environ for ci_var in [
-            'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_URL', 'TRAVIS', 'CIRCLECI'
-        ])
+        is_ci = any(
+            ci_var in os.environ
+            for ci_var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "TRAVIS", "CIRCLECI"]
+        )
 
         if is_ci and not llm_config.get("enable_in_ci", False):
-            logger.debug("LLM analysis disabled: running in CI environment and enable_in_ci is not set")
+            logger.debug(
+                "LLM analysis disabled: running in CI environment and enable_in_ci is not set"
+            )
             return False
 
         # Setup requests session with retry strategy
         self._session = requests.Session()
         retry_strategy = Retry(
-            total=2,
-            status_forcelist=[429, 500, 502, 503, 504],
-            backoff_factor=1
+            total=2, status_forcelist=[429, 500, 502, 503, 504], backoff_factor=1
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self._session.mount("http://", adapter)
@@ -118,11 +119,7 @@ class ArchitectureLLMValidator(BaseValidator):
         Returns:
             Dictionary containing structural analysis data
         """
-        structure = {
-            "files": [],
-            "modules": {},
-            "potential_issues": []
-        }
+        structure = {"files": [], "modules": {}, "potential_issues": []}
 
         # Collect Python files and their basic info
         for py_file in project_root.rglob("*.py"):
@@ -131,7 +128,7 @@ class ArchitectureLLMValidator(BaseValidator):
                 file_info = {
                     "path": str(rel_path),
                     "size": py_file.stat().st_size,
-                    "lines": len(py_file.read_text(encoding="utf-8", errors="ignore").splitlines())
+                    "lines": len(py_file.read_text(encoding="utf-8", errors="ignore").splitlines()),
                 }
 
                 # Analyze imports and basic structure
@@ -205,22 +202,20 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
         try:
             payload = {
                 "model": self._model_name,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
+                "messages": [{"role": "user", "content": prompt}],
                 "temperature": self._temperature,
                 "max_tokens": self._max_tokens,
                 "top_p": self._top_p,
                 "top_k": self._top_k,
                 "frequency_penalty": self._frequency_penalty,
                 "presence_penalty": self._presence_penalty,
-                "response_format": {"type": "json_object"}
+                "response_format": {"type": "json_object"},
             }
 
             response = self._session.post(
                 f"{self._api_base_url}/v1/chat/completions",
                 json=payload,
-                timeout=self._timeout_seconds
+                timeout=self._timeout_seconds,
             )
 
             if response.status_code == 200:
@@ -231,7 +226,9 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
                 if "<|message|>" in response_text:
                     # Look for final channel content
                     if "<|channel|>final<|message|>" in response_text:
-                        final_start = response_text.find("<|channel|>final<|message|>") + len("<|channel|>final<|message|>")
+                        final_start = response_text.find("<|channel|>final<|message|>") + len(
+                            "<|channel|>final<|message|>"
+                        )
                         content = response_text[final_start:].split("<|end|>")[0].strip()
                     else:
                         # Fallback to any message content
@@ -270,7 +267,7 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
         - Files that are thin wrappers around other modules
         """
         # Skip if LLM is not available or not configured
-        if not hasattr(self, '_llm_setup_attempted'):
+        if not hasattr(self, "_llm_setup_attempted"):
             self._llm_setup_attempted = True
             self._llm_available = self._setup_llm_client(config)
 
@@ -308,7 +305,7 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
                 message=message,
                 file_path=file_path,
                 line=1,
-                severity=self.severity
+                severity=self.severity,
             )
 
     def _should_analyze_file(self, file_path: Path, content: str) -> bool:
@@ -323,7 +320,15 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
         filename = file_path.name.lower()
 
         # Check for suspicious filename patterns
-        suspicious_patterns = ['runner', 'manager', 'system', 'wrapper', 'facade', 'handler', 'controller']
+        suspicious_patterns = [
+            "runner",
+            "manager",
+            "system",
+            "wrapper",
+            "facade",
+            "handler",
+            "controller",
+        ]
         if any(pattern in filename for pattern in suspicious_patterns):
             logger.debug(f"Analyzing {file_path} due to suspicious filename pattern")
             return True
@@ -336,9 +341,11 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
             return False  # Too small to have architectural issues
 
         # Count imports, classes, functions
-        import_count = len([line for line in lines if line.strip().startswith(('import ', 'from '))])
-        class_count = len([line for line in lines if line.strip().startswith('class ')])
-        function_count = len([line for line in lines if line.strip().startswith('def ')])
+        import_count = len(
+            [line for line in lines if line.strip().startswith(("import ", "from "))]
+        )
+        class_count = len([line for line in lines if line.strip().startswith("class ")])
+        len([line for line in lines if line.strip().startswith("def ")])
 
         # High import-to-code ratio might indicate a thin wrapper
         if import_count > 5 and total_lines < 150 and import_count / total_lines > 0.1:
@@ -357,7 +364,9 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
         # Truncate content if too long
         lines = content.splitlines()
         if len(lines) > 200:
-            content_preview = '\n'.join(lines[:100]) + '\n\n... [truncated] ...\n\n' + '\n'.join(lines[-50:])
+            content_preview = (
+                "\n".join(lines[:100]) + "\n\n... [truncated] ...\n\n" + "\n".join(lines[-50:])
+            )
         else:
             content_preview = content
 
