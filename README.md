@@ -158,6 +158,110 @@ The `vibelint check` command might report namespace collisions. Here’s a sugge
 
 5.  **Iterate:** Don't try to fix everything at once. Start with hard collisions, then local soft, then global soft. Rerun `vibelint check` after making changes.
 
+## Plugin System
+
+vibelint now supports a plugin architecture that allows teams to write custom validators and output formatters for their specific needs.
+
+### JSON Output
+
+Get machine-readable output for CI/tooling integration:
+
+```bash
+vibelint check --format json > results.json
+```
+
+The JSON output includes a summary of issues by severity level and detailed findings:
+
+```json
+{
+  "summary": {
+    "BLOCK": 0,
+    "WARN": 2,
+    "INFO": 5
+  },
+  "findings": [
+    {
+      "rule": "VBL301",
+      "level": "INFO",
+      "path": "src/mymodule.py",
+      "line": 1,
+      "msg": "Module has public functions but no __all__ definition",
+      "suggestion": "Add __all__ = [...] to explicitly define public API"
+    }
+  ]
+}
+```
+
+### SARIF Output
+
+For GitHub integration and code scanning:
+
+```bash
+vibelint check --format sarif > results.sarif
+```
+
+### Gate Script
+
+Use the included gate script to fail CI builds based on issue counts:
+
+```bash
+# Fail if any blocking issues or >10 warnings
+python tools/gate.py results.json --warn-budget 10
+
+# Custom budgets for different severity levels
+python tools/gate.py results.json --warn-budget 5 --info-budget 20 --verbose
+```
+
+### Creating Custom Validators
+
+Create your own validators by extending `BaseValidator`:
+
+```python
+from vibelint.plugin_system import BaseValidator, Severity, Finding
+from pathlib import Path
+from typing import Iterator
+
+class NoTodoValidator(BaseValidator):
+    rule_id = "MYTEAM001"
+    name = "No TODO Comments"
+    description = "Prevents TODO comments in main branch"
+    default_severity = Severity.WARN
+
+    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+        for line_num, line in enumerate(content.splitlines(), 1):
+            if "TODO" in line:
+                yield self.create_finding(
+                    message="TODO comment found",
+                    file_path=file_path,
+                    line=line_num,
+                    suggestion="Complete the TODO or create a ticket"
+                )
+```
+
+Register your validator as a plugin in `pyproject.toml`:
+
+```toml
+[project.entry-points."vibelint.validators"]
+MYTEAM001 = "mypackage.validators:NoTodoValidator"
+```
+
+### Rule Configuration
+
+Configure which rules are enabled and their severity levels:
+
+```toml
+[tool.vibelint.rules]
+"VBL301" = "OFF"        # Disable __all__ checking
+"VBL701" = "WARN"       # Print statements as warnings
+"MYTEAM001" = "BLOCK"   # Custom rule blocks CI
+
+[tool.vibelint.plugins]
+enabled = [
+    "vibelint.core",           # Built-in validators
+    "myteam-python-standards"  # Custom plugin package
+]
+```
+
 ## Configuration
 
 Configure `vibelint` by adding a `[tool.vibelint]` section to your `pyproject.toml` file.

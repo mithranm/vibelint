@@ -14,6 +14,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from .utils import find_package_root
+
+logger = logging.getLogger(__name__)
+
 if sys.version_info >= (3, 11):
 
     import tomllib
@@ -24,17 +28,12 @@ else:
         import tomli as tomllib
     except ImportError:
 
-        print(
-            "Error: vibelint requires Python 3.11+ or the 'tomli' package "
-            "to parse pyproject.toml on Python 3.10."
-            "\nHint: Try running: pip install tomli"
+        logger.error(
+            "vibelint requires Python 3.11+ or the 'tomli' package "
+            "to parse pyproject.toml on Python 3.10. "
+            "Hint: Try running: pip install tomli"
         )
         sys.exit(1)
-
-
-from .utils import find_package_root
-
-logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -179,7 +178,7 @@ def load_config(start_path: Path) -> Config:
         if isinstance(vibelint_config, dict):
             loaded_settings = vibelint_config
             if loaded_settings:
-                logger.info(f"Loaded [tool.vibelint] settings from {pyproject_path}")
+                logger.debug(f"Loaded [tool.vibelint] settings from {pyproject_path}")
                 logger.debug(f"Loaded settings: {loaded_settings}")
             else:
                 logger.info(

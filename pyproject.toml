@@ -35,6 +35,16 @@ dependencies = [
 [project.scripts]
 vibelint = "vibelint.cli:main"
 
+[project.entry-points."vibelint.validators"]
+VBL101 = "vibelint.builtin_validators:MissingDocstringValidator"
+VBL301 = "vibelint.builtin_validators:MissingAllValidator"
+VBL701 = "vibelint.builtin_validators:PrintStatementValidator"
+
+[project.entry-points."vibelint.formatters"]
+human = "vibelint.formatters:HumanFormatter"
+json = "vibelint.formatters:JsonFormatter"
+sarif = "vibelint.formatters:SarifFormatter"
+
 [project.urls]
 "Homepage" = "https://github.com/mithranm/vibelint"
 "Bug Tracker" = "https://github.com/mithranm/vibelint/issues"

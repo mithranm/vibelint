@@ -574,3 +574,82 @@ def test_snapshot_exclude_output_file(runner: CliRunner, setup_test_project: Pat
     assert "### File: src/mypkg/__init__.py" in cleaned_content_files.replace("\\", "/")
     assert "module.py" in cleaned_content_tree, "module.py missing from tree (run 2)"
     assert "### File: src/mypkg/module.py" in cleaned_content_files.replace("\\", "/")
+
+
+# --- Output Format Tests ---
+
+
+@pytest.mark.parametrize("setup_test_project", ["check_success"], indirect=True)
+def test_check_json_output_format(runner: CliRunner, setup_test_project: Path):
+    """Test `vibelint check --format json` produces clean JSON output to stdout."""
+    modify_pyproject(setup_test_project, {"include_globs": ["src/**/*.py", "pyproject.toml"]})
+
+    result = runner.invoke(cli, ["check", "--format", "json"], catch_exceptions=False)
+    print(f"JSON Output:\n{result.output}")
+
+    # Should exit cleanly
+    assert result.exit_code in [0, 1], f"Expected exit code 0 or 1, got {result.exit_code}"
+
+    # Output should be valid JSON
+    import json
+    try:
+        data = json.loads(result.output)
+        assert "summary" in data, "JSON output missing 'summary' key"
+        assert "findings" in data, "JSON output missing 'findings' key"
+        assert isinstance(data["summary"], dict), "summary should be a dictionary"
+        assert isinstance(data["findings"], list), "findings should be a list"
+    except json.JSONDecodeError as e:
+        pytest.fail(f"Invalid JSON output: {e}\nOutput:\n{result.output}")
+
+    # Output should not contain ANSI codes or log messages
+    assert "\x1b[" not in result.output, "JSON output contains ANSI escape codes"
+    assert "Loaded" not in result.output, "JSON output contaminated with log messages"
+    assert "settings" not in result.output, "JSON output contaminated with log messages"
+
+
+@pytest.mark.parametrize("setup_test_project", ["check_success"], indirect=True)
+def test_check_sarif_output_format(runner: CliRunner, setup_test_project: Path):
+    """Test `vibelint check --format sarif` produces clean SARIF output to stdout."""
+    modify_pyproject(setup_test_project, {"include_globs": ["src/**/*.py", "pyproject.toml"]})
+
+    result = runner.invoke(cli, ["check", "--format", "sarif"], catch_exceptions=False)
+    print(f"SARIF Output:\n{result.output}")
+
+    # Should exit cleanly
+    assert result.exit_code in [0, 1], f"Expected exit code 0 or 1, got {result.exit_code}"
+
+    # Output should be valid JSON with SARIF structure
+    import json
+    try:
+        data = json.loads(result.output)
+        assert "version" in data, "SARIF output missing 'version' key"
+        assert "$schema" in data, "SARIF output missing '$schema' key"
+        assert "runs" in data, "SARIF output missing 'runs' key"
+        assert isinstance(data["runs"], list), "runs should be a list"
+        assert data["version"] == "2.1.0", f"Expected SARIF version 2.1.0, got {data.get('version')}"
+    except json.JSONDecodeError as e:
+        pytest.fail(f"Invalid JSON output: {e}\nOutput:\n{result.output}")
+
+    # Output should not contain ANSI codes or log messages
+    assert "\x1b[" not in result.output, "SARIF output contains ANSI escape codes"
+    assert "Loaded" not in result.output, "SARIF output contaminated with log messages"
+    assert "settings" not in result.output, "SARIF output contaminated with log messages"
+
+
+@pytest.mark.parametrize("setup_test_project", ["check_success"], indirect=True)
+def test_check_human_output_format_default(runner: CliRunner, setup_test_project: Path):
+    """Test `vibelint check` (default human format) includes UI messages."""
+    modify_pyproject(setup_test_project, {"include_globs": ["src/**/*.py", "pyproject.toml"]})
+
+    result = runner.invoke(cli, ["check"], catch_exceptions=False)
+    print(f"Human Output:\n{result.output}")
+
+    # Should exit cleanly
+    assert result.exit_code in [0, 1], f"Expected exit code 0 or 1, got {result.exit_code}"
+
+    # Human format should contain UI messages
+    cleaned_output = clean_output(result.output)
+    assert "Initiating Vibe Check" in cleaned_output, "Human output missing UI messages"
+
+    # Should contain vibe check results
+    assert any(word in cleaned_output for word in ["vibes", "Vibe", "Check"]), "Human output missing vibe terminology"

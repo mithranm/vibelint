@@ -40,6 +40,7 @@ from .report import write_report_content
 from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .snapshot import create_snapshot
 from .utils import find_project_root, get_relative_path
+from .plugin_runner import run_plugin_validation
 
 ValidationIssue = tuple[str, str]
 
@@ -477,8 +478,15 @@ def cli(ctx: click.Context, debug: bool):
     type=click.Path(dir_okay=False, writable=True, path_type=Path),
     help="Save a comprehensive Vibe Report (Markdown) to the specified file.",
 )
+@click.option(
+    "--format",
+    "output_format",
+    default="human",
+    type=click.Choice(["human", "json", "sarif"]),
+    help="Output format: human (default), json, or sarif.",
+)
 @click.pass_context
-def check(ctx: click.Context, yes: bool, output_report: Path | None):
+def check(ctx: click.Context, yes: bool, output_report: Path | None, output_format: str):
     """
     Run a Vibe Check: Lint rules and namespace collision detection.
 
@@ -491,13 +499,30 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None):
     project_root = vibelint_ctx.project_root
     assert project_root is not None, "Project root missing in check command"
 
-    console.print("\n[bold magenta]Initiating Vibe Check...[/bold magenta]\n")
+    # Don't show UI messages for machine-readable formats
+    if output_format == "human":
+        console.print("\n[bold magenta]Initiating Vibe Check...[/bold magenta]\n")
+
     logger_cli.debug(f"Running 'check' command (yes={yes}, report={output_report})")
 
     config: Config = load_config(project_root)
     if config.project_root is None:
         logger_cli.error("Project root lost after config load. Aborting Vibe Check.")
         ctx.exit(1)
+
+    # Use plugin system for validation if JSON/SARIF output requested
+    if output_format != "human":
+        # Temporarily disable logging for clean JSON/SARIF output
+        original_level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.ERROR)
+
+        try:
+            plugin_runner = run_plugin_validation(dict(config.settings), project_root)
+            output = plugin_runner.format_output(output_format)
+            print(output)
+            ctx.exit(plugin_runner.get_exit_code())
+        finally:
+            logging.getLogger().setLevel(original_level)
 
     result_data = CheckResult()
     runner: LintRunner | None = None
