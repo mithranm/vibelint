@@ -8,6 +8,8 @@ Categories:
 3xx: Exports (__all__)
 4xx: Shebang
 5xx: Namespace (Reserved for future use if needed for collision reporting)
+6xx: Emoji Usage
+7xx: Print Statements
 9xx: Internal/Processing Errors
 
 vibelint/error_codes.py
@@ -32,6 +34,20 @@ VBL402 = "VBL402"
 VBL403 = "VBL403"
 
 
+VBL601 = "VBL601"
+VBL602 = "VBL602"
+VBL603 = "VBL603"
+
+
+VBL701 = "VBL701"
+VBL702 = "VBL702"
+VBL703 = "VBL703"
+
+
+VBL801 = "VBL801"
+VBL802 = "VBL802"
+
+
 VBL901 = "VBL901"
 VBL902 = "VBL902"
 VBL903 = "VBL903"
@@ -50,6 +66,14 @@ CODE_DESCRIPTIONS = {
     VBL401: "File has a shebang line (`#!...`) but no `if __name__ == '__main__'` block.",
     VBL402: "Shebang line value is not in the list of allowed shebangs (check config).",
     VBL403: "File contains `if __name__ == '__main__'` block but lacks a shebang line.",
+    VBL601: "Error processing file for emoji detection (permissions, encoding, etc.).",
+    VBL602: "Emoji found in string literal or comment (compatibility concern).",
+    VBL603: "Emoji found in code (serious compatibility and encoding issue).",
+    VBL701: "Error processing file for print statement detection (permissions, parsing, etc.).",
+    VBL702: "Print statement found in __main__ block (consider using logging for consistency).",
+    VBL703: "Print statement found (should be replaced with proper logging).",
+    VBL801: "Orphaned Python script found outside include patterns (opinionated: prefers organized project structure).",
+    VBL802: "Python file found outside project root during orphaned script detection.",
     VBL901: "Error reading file content (permissions, encoding, etc.).",
     VBL902: "SyntaxError parsing file during validation.",
     VBL903: "Internal error during validation phase for a file.",
@@ -69,6 +93,14 @@ __all__ = [
     "VBL401",
     "VBL402",
     "VBL403",
+    "VBL601",
+    "VBL602",
+    "VBL603",
+    "VBL701",
+    "VBL702",
+    "VBL703",
+    "VBL801",
+    "VBL802",
     "VBL901",
     "VBL902",
     "VBL903",

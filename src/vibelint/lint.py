@@ -206,6 +206,29 @@ class LintRunner:
         processing_time = time.time() - processing_start
         logger.debug(f"File processing took {processing_time:.4f} seconds.")
 
+        # Run project-level validators
+        logger.debug("LintRunner.run: Running project-level validators...")
+        project_start = time.time()
+
+        # Orphaned Scripts Validation (VBL8xx)
+        from .validators.orphaned_scripts import validate_orphaned_scripts
+        orphaned_res = validate_orphaned_scripts(
+            self.config.project_root,
+            self.config.get("include_globs", []),
+            self.config.get("exclude_globs", [])
+        )
+
+        # Add orphaned script issues as a special "project-level" result
+        if orphaned_res.warnings or orphaned_res.errors:
+            lr_project = LintResult()
+            lr_project.file_path = self.config.project_root / "PROJECT_LEVEL"
+            lr_project.errors.extend(orphaned_res.errors)
+            lr_project.warnings.extend(orphaned_res.warnings)
+            self.results.append(lr_project)
+
+        project_time = time.time() - project_start
+        logger.debug(f"Project-level validation took {project_time:.4f} seconds.")
+
         # Determine exit code based *only* on the presence of errors in the results
         files_with_errors = sum(1 for r in self.results if r.errors)
         self._final_exit_code = 1 if files_with_errors > 0 else 0
@@ -295,6 +318,18 @@ class LintRunner:
                 export_res = validate_exports(original_content, relative_path_str, self.config)
                 collected_errors.extend(export_res.errors)
                 collected_warnings.extend(export_res.warnings)
+
+                # Emoji Validation (VBL6xx)
+                from .validators.emoji import validate_emoji_usage
+                emoji_res = validate_emoji_usage(file_path, original_content)
+                collected_errors.extend(emoji_res.errors)
+                collected_warnings.extend(emoji_res.warnings)
+
+                # Print Statement Validation (VBL7xx)
+                from .validators.print_statements import validate_print_statements
+                print_res = validate_print_statements(file_path, original_content)
+                collected_errors.extend(print_res.errors)
+                collected_warnings.extend(print_res.warnings)
 
                 logger.debug(
                     f"{log_prefix} Validation Complete. Found E={len(collected_errors)}, W={len(collected_warnings)} (before filtering)"
