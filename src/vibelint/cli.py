@@ -520,6 +520,7 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
                 print(output)
                 # Use sys.exit instead of ctx.exit to avoid Rich traceback
                 import sys
+
                 sys.exit(plugin_runner.get_exit_code())
             finally:
                 logging.getLogger().setLevel(original_level)

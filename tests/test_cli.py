@@ -324,7 +324,9 @@ def test_check_failure(runner: CliRunner, setup_test_project: Path):
     assert_output_contains(result, "Function 'func_one' is missing docstring")
     # Check for modern docstring path reference findings
     assert_output_matches(
-        result, r"DOCSTRING-PATH-REFERENCE.*another\.py", msg="Missing path reference detection for another.py"
+        result,
+        r"DOCSTRING-PATH-REFERENCE.*another\.py",
+        msg="Missing path reference detection for another.py",
     )
     assert_output_matches(
         result,
