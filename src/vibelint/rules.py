@@ -4,9 +4,15 @@ Rule management system for vibelint.
 Handles rule configuration, severity overrides, and policy management.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from .plugin_system import BaseValidator, Severity, plugin_manager
+
+if TYPE_CHECKING:
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        SentenceTransformer = None  # type: ignore
 
 __all__ = ["RuleEngine", "create_default_rule_config"]
 
@@ -169,7 +175,7 @@ class RuleEngine:
 
         return self._shared_models[model_key]
 
-    def get_rule_summary(self) -> Dict[str, any]:
+    def get_rule_summary(self) -> Dict[str, Any]:
         """Get summary of rule configuration."""
         all_validators = plugin_manager.get_all_validators()
         enabled_count = sum(1 for rule_id in all_validators.keys() if self.is_rule_enabled(rule_id))
@@ -183,7 +189,7 @@ class RuleEngine:
         }
 
 
-def create_default_rule_config() -> Dict[str, any]:
+def create_default_rule_config() -> Dict[str, Any]:
     """Create default rule configuration for new projects."""
     return {
         "rules": {

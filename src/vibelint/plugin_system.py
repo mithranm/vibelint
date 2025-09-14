@@ -1,24 +1,28 @@
 """
-Plugin system for vibelint validators and formatters.
+Core types and validation system for vibelint.
 
-This module provides the core interfaces and discovery mechanisms for
-extending vibelint with custom validators and output formatters.
+Simplified from the original over-engineered plugin system to focus on
+essential functionality without unnecessary abstractions.
+
+vibelint/src/vibelint/plugin_system.py
 """
 
-import importlib.metadata
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Protocol
 
 __all__ = [
     "Severity",
     "Finding",
+    "Validator",
+    "Formatter", 
     "BaseValidator",
     "BaseFormatter",
-    "PluginManager",
-    "plugin_manager",
+    "get_all_validators",
+    "get_all_formatters",
+    "get_validator",
+    "get_formatter",
 ]
 
 
@@ -63,34 +67,19 @@ class Finding:
         }
 
 
-class BaseValidator(ABC):
-    """Abstract base class for all vibelint validators."""
+class Validator(Protocol):
+    """Protocol for validator classes - simpler than abstract base class."""
 
-    rule_id: str = ""
-    name: str = ""
-    description: str = ""
-    default_severity: Severity = Severity.WARN
+    rule_id: str
+    default_severity: Severity
 
-    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None):
-        """Initialize validator with optional severity override and configuration."""
-        self.severity = severity or self.default_severity
-        self.config = config or {}
-        if not self.rule_id:
-            raise ValueError(f"Validator {self.__class__.__name__} must define rule_id")
+    def __init__(
+        self, severity: Optional[Severity] = None, config: Optional[Dict] = None
+    ) -> None: ...
 
-    @abstractmethod
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
-        """
-        Validate a file and yield findings.
-
-        Args:
-            file_path: Path to the file being validated
-            content: File content as string
-
-        Yields:
-            Finding objects for any issues found
-        """
-        pass
+    def validate(self, file_path: Path, content: str, config: Any) -> Iterator[Finding]:
+        """Validate a file and yield findings."""
+        ...
 
     def create_finding(
         self,
@@ -100,100 +89,172 @@ class BaseValidator(ABC):
         column: int = 0,
         context: str = "",
         suggestion: Optional[str] = None,
-        severity: Optional[Severity] = None,
     ) -> Finding:
-        """Helper method to create a finding with this validator's rule_id."""
-        return Finding(
-            rule_id=self.rule_id,
-            message=message,
-            file_path=file_path,
-            line=line,
-            column=column,
-            severity=severity or self.severity,
-            context=context,
-            suggestion=suggestion,
-        )
+        """Create a Finding object with this validator's rule_id and severity."""
+        ...
 
 
-class BaseFormatter(ABC):
-    """Abstract base class for output formatters."""
+class Formatter(Protocol):
+    """Protocol for formatter classes - simpler than abstract base class."""
 
-    name: str = ""
-    description: str = ""
+    name: str
 
-    @abstractmethod
     def format_results(
         self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
     ) -> str:
-        """
-        Format validation results for output.
-
-        Args:
-            findings: List of all findings from validation
-            summary: Summary counts by severity level
-            config: Optional configuration object for formatter settings
-
-        Returns:
-            Formatted output string
-        """
-        pass
+        """Format validation results for output."""
+        ...
 
 
-class PluginManager:
-    """Manages discovery and loading of validator and formatter plugins."""
+# Simple registry - no complex plugin discovery needed
+_VALIDATORS: Dict[str, type] = {}
+_FORMATTERS: Dict[str, type] = {}
 
-    def __init__(self):
-        self._validators: Dict[str, type[BaseValidator]] = {}
-        self._formatters: Dict[str, type[BaseFormatter]] = {}
-        self._loaded = False
+
+def register_validator(validator_class: type) -> None:
+    """Register a validator class."""
+    _VALIDATORS[validator_class.rule_id] = validator_class
+
+
+def register_formatter(formatter_class: type) -> None:
+    """Register a formatter class."""
+    _FORMATTERS[formatter_class.name] = formatter_class
+
+
+def get_validator(rule_id: str) -> Optional[type]:
+    """Get validator class by rule ID."""
+    return _VALIDATORS.get(rule_id)
+
+
+def get_all_validators() -> Dict[str, type]:
+    """Get all registered validator classes."""
+    # Lazy load validators from entry points on first access
+    if not _VALIDATORS:
+        _load_builtin_validators()
+    return _VALIDATORS.copy()
+
+
+def get_formatter(name: str) -> Optional[type]:
+    """Get formatter class by name."""
+    return _FORMATTERS.get(name)
+
+
+def get_all_formatters() -> Dict[str, type]:
+    """Get all registered formatter classes."""
+    # Lazy load formatters from entry points on first access
+    if not _FORMATTERS:
+        _load_builtin_formatters()
+    return _FORMATTERS.copy()
+
+
+def _load_builtin_validators() -> None:
+    """Load built-in validators from entry points."""
+    import importlib.metadata
+
+    for entry_point in importlib.metadata.entry_points(group="vibelint.validators"):
+        try:
+            validator_class = entry_point.load()
+            if hasattr(validator_class, "rule_id"):
+                _VALIDATORS[validator_class.rule_id] = validator_class
+        except Exception:
+            # Skip invalid validators silently
+            pass
+
+
+def _load_builtin_formatters() -> None:
+    """Load built-in formatters from entry points."""
+    import importlib.metadata
+
+    for entry_point in importlib.metadata.entry_points(group="vibelint.formatters"):
+        try:
+            formatter_class = entry_point.load()
+            if hasattr(formatter_class, "name"):
+                _FORMATTERS[formatter_class.name] = formatter_class
+        except Exception:
+            # Skip invalid formatters silently
+            pass
+
+
+# Legacy compatibility - for transition period
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    BaseValidator = Validator
+    BaseFormatter = Formatter
+else:
+    # Runtime base classes for backward compatibility
+    class BaseValidator:
+        """Legacy base class for validators."""
+        rule_id: str = ""
+        default_severity: Severity = Severity.WARN
+        
+        def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None) -> None:
+            self.severity = severity or self.default_severity
+            self.config = config or {}
+        
+        def validate(self, file_path: Path, content: str, config: Any) -> Iterator[Finding]:
+            """Validate a file and yield findings."""
+            raise NotImplementedError
+        
+        def create_finding(
+            self,
+            message: str,
+            file_path: Path,
+            line: int = 0,
+            column: int = 0,
+            context: str = "",
+            suggestion: Optional[str] = None,
+        ) -> Finding:
+            """Create a Finding object with this validator's rule_id and severity."""
+            return Finding(
+                rule_id=self.rule_id,
+                message=message,
+                file_path=file_path,
+                line=line,
+                column=column,
+                severity=self.severity,
+                context=context,
+                suggestion=suggestion,
+            )
+
+    class BaseFormatter(ABC):
+        """Legacy base class for formatters."""
+        name: str = ""
+        description: str = ""
+
+        @abstractmethod
+        def format_results(
+            self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+        ) -> str:
+            """Format validation results for output."""
+            pass
+
+
+# Legacy global manager for backward compatibility
+class _LegacyPluginManager:
+    """Legacy compatibility wrapper."""
 
     def load_plugins(self):
-        """Load all available plugins via entry points."""
-        if self._loaded:
-            return
+        """Load plugins - delegated to new system."""
+        get_all_validators()
+        get_all_formatters()
 
-        # Load validators
-        for entry_point in importlib.metadata.entry_points(group="vibelint.validators"):
-            try:
-                validator_class = entry_point.load()
-                if issubclass(validator_class, BaseValidator):
-                    self._validators[validator_class.rule_id] = validator_class
-            except Exception:
-                # Skip invalid plugins silently
-                pass
+    def get_validator(self, rule_id: str):
+        """Get validator by rule ID."""
+        return get_validator(rule_id)
 
-        # Load formatters
-        for entry_point in importlib.metadata.entry_points(group="vibelint.formatters"):
-            try:
-                formatter_class = entry_point.load()
-                if issubclass(formatter_class, BaseFormatter):
-                    self._formatters[formatter_class.name] = formatter_class
-            except Exception:
-                # Skip invalid plugins silently
-                pass
+    def get_all_validators(self):
+        """Get all validators."""
+        return get_all_validators()
 
-        self._loaded = True
+    def get_formatter(self, name: str):
+        """Get formatter by name."""
+        return get_formatter(name)
 
-    def get_validator(self, rule_id: str) -> Optional[type[BaseValidator]]:
-        """Get validator class by rule ID."""
-        self.load_plugins()
-        return self._validators.get(rule_id)
-
-    def get_all_validators(self) -> Dict[str, type[BaseValidator]]:
-        """Get all available validator classes."""
-        self.load_plugins()
-        return self._validators.copy()
-
-    def get_formatter(self, name: str) -> Optional[type[BaseFormatter]]:
-        """Get formatter class by name."""
-        self.load_plugins()
-        return self._formatters.get(name)
-
-    def get_all_formatters(self) -> Dict[str, type[BaseFormatter]]:
-        """Get all available formatter classes."""
-        self.load_plugins()
-        return self._formatters.copy()
+    def get_all_formatters(self):
+        """Get all formatters."""
+        return get_all_formatters()
 
 
-# Global plugin manager instance
-plugin_manager = PluginManager()
+plugin_manager = _LegacyPluginManager()

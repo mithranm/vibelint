@@ -9,12 +9,10 @@ vibelint/validators/semantic_similarity.py
 
 import logging
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
 
 try:
     import numpy as np
-    from sentence_transformers import SentenceTransformer
-
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
@@ -25,6 +23,12 @@ except ImportError:
             pass
 
     np = DummyNumpy()
+
+if TYPE_CHECKING or SENTENCE_TRANSFORMERS_AVAILABLE:
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        SentenceTransformer = None  # type: ignore
 
 from ...config import Config
 from ...plugin_system import BaseValidator, Finding, Severity
