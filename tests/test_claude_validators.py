@@ -5,6 +5,7 @@ Tests for Claude Code-specific validators.
 from pathlib import Path
 
 from vibelint.validators.emoji import EmojiUsageValidator
+
 # Import validators from their individual modules
 from vibelint.validators.print_statements import PrintStatementValidator
 from vibelint.validators.typing_quality import TypingQualityValidator

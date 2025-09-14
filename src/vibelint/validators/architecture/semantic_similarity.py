@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
 try:
     import importlib.util
+
     SENTENCE_TRANSFORMERS_AVAILABLE = importlib.util.find_spec("numpy") is not None
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False

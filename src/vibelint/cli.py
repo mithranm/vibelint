@@ -29,13 +29,16 @@ from .ascii import scale_to_terminal_by_height
 from .config import Config, load_config
 from .console_utils import console
 from .formatters import DEFAULT_FORMAT, FORMAT_CHOICES
-from .namespace import (NamespaceCollision, build_namespace_tree,
-                        detect_global_definition_collisions,
-                        detect_hard_collisions, detect_local_export_collisions)
+from .namespace import (
+    NamespaceCollision,
+    build_namespace_tree,
+    detect_global_definition_collisions,
+    detect_hard_collisions,
+    detect_local_export_collisions,
+)
 from .plugin_runner import run_plugin_validation
 from .report import write_report_content
-from .results import (CheckResult, CommandResult, NamespaceResult,
-                      SnapshotResult)
+from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .snapshot import create_snapshot
 from .utils import find_project_root, get_relative_path
 
