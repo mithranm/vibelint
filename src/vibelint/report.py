@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import TextIO
 
 from .config import Config
-from .lint import LintResult
 from .namespace import NamespaceCollision, NamespaceNode
 from .utils import get_relative_path
 
@@ -85,7 +84,7 @@ def write_report_content(
     f: TextIO,
     project_root: Path,
     target_paths: list[Path],
-    lint_results: list[LintResult],
+    findings: list,  # List of Finding objects from plugin system
     hard_coll: list[NamespaceCollision],
     soft_coll: list[NamespaceCollision],
     root_node: NamespaceNode,
@@ -98,7 +97,7 @@ def write_report_content(
     f: The text file handle to write the report to.
     project_root: The root directory of the project.
     target_paths: List of paths that were analyzed.
-    lint_results: List of LintResult objects from the linting phase.
+    findings: List of Finding objects from the plugin validation phase.
     hard_coll: List of hard NamespaceCollision objects.
     soft_coll: List of definition/export (soft) NamespaceCollision objects.
     root_node: The root NamespaceNode of the project structure.
@@ -127,45 +126,46 @@ def write_report_content(
     f.write("| Metric | Count |\n")
     f.write("|--------|-------|\n")
 
-    files_analyzed_count = len(lint_results)
+    # Get unique files from findings
+    analyzed_files = set(f.file_path for f in findings)
+    files_analyzed_count = len(analyzed_files)
     f.write(f"| Files analyzed | {files_analyzed_count} |\n")
-    f.write(f"| Files with errors | {sum(1 for r in lint_results if r.errors)} |\n")
-    f.write(
-        f"| Files with warnings only | {sum(1 for r in lint_results if r.warnings and not r.errors)} |\n"
-    )
+
+    # Count findings by severity
+    from .plugin_system import Severity
+    error_findings = [f for f in findings if f.severity == Severity.BLOCK]
+    warn_findings = [f for f in findings if f.severity == Severity.WARN]
+
+    f.write(f"| Findings with errors | {len(error_findings)} |\n")
+    f.write(f"| Findings with warnings | {len(warn_findings)} |\n")
     f.write(f"| Hard namespace collisions | {len(hard_coll)} |\n")
     total_soft_collisions = len(soft_coll)
     f.write(f"| Definition/Export namespace collisions | {total_soft_collisions} |\n\n")
 
     f.write("## Linting Results\n\n")
 
-    sorted_lint_results = sorted(lint_results, key=lambda r: r.file_path)
-    files_with_issues = [r for r in sorted_lint_results if r.has_issues]
-
-    if not files_with_issues:
-        f.write("*No linting issues found.*\n\n")
+    if not findings:
+        f.write("*No validation issues found.*\n\n")
     else:
-        f.write("| File | Errors | Warnings |\n")
-        f.write("|------|--------|----------|\n")
-        for result in files_with_issues:
+        # Group findings by file for better reporting
+        from collections import defaultdict
+        files_with_findings = defaultdict(list)
+        for finding in findings:
+            files_with_findings[finding.file_path].append(finding)
 
-            errors_str = (
-                "; ".join(f"`[{code}]` {msg}" for code, msg in result.errors)
-                if result.errors
-                else "None"
-            )
-            warnings_str = (
-                "; ".join(f"`[{code}]` {msg}" for code, msg in result.warnings)
-                if result.warnings
-                else "None"
-            )
+        f.write("| File | Rule | Severity | Message |\n")
+        f.write("|------|------|----------|---------|\n")
+
+        for file_path in sorted(files_with_findings.keys(), key=str):
+            file_findings = files_with_findings[file_path]
             try:
-
-                rel_path = get_relative_path(result.file_path.resolve(), project_root.resolve())
+                rel_path = get_relative_path(file_path.resolve(), project_root.resolve())
             except ValueError:
-                rel_path = result.file_path
+                rel_path = file_path
 
-            f.write(f"| `{rel_path}` | {errors_str} | {warnings_str} |\n")
+            for finding in sorted(file_findings, key=lambda f: f.line):
+                location = f":{finding.line}" if finding.line > 0 else ""
+                f.write(f"| `{rel_path}{location}` | `{finding.rule_id}` | {finding.severity.value} | {finding.message} |\n")
         f.write("\n")
 
     f.write("## Namespace Structure\n\n")

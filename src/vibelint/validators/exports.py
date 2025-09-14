@@ -1,121 +1,119 @@
 """
-Validator for __all__ exports in Python modules.
+__all__ exports validator using BaseValidator plugin system.
 
-Checks for presence (optional for __init__.py) and correct format.
+Checks for presence and correct format of __all__ definitions in Python modules.
 
 vibelint/validators/exports.py
 """
 
 import ast
 from pathlib import Path
+from typing import Iterator
 
-from ..config import Config
-from ..error_codes import VBL301, VBL302, VBL303, VBL304
+from ..plugin_system import BaseValidator, Finding, Severity
 
-__all__ = ["ExportValidationResult", "validate_exports"]
-
-ValidationIssue = tuple[str, str]
+__all__ = ["MissingAllValidator"]
 
 
-class ExportValidationResult:
-    """
-    Stores the result of __all__ validation for a single file.
+class MissingAllValidator(BaseValidator):
+    """Validator for missing __all__ definitions."""
 
-    vibelint/validators/exports.py
-    """
-
-    def __init__(self, file_path: str) -> None:
-        """
-        Initializes ExportValidationResult.
-
-        vibelint/validators/exports.py
-        """
-        self.file_path = file_path
-        self.errors: list[ValidationIssue] = []
-        self.warnings: list[ValidationIssue] = []
-        self.has_all: bool = False
-
-        self.all_lineno: int | None = None
-
-    def has_issues(self) -> bool:
-        """
-        Returns True if there are any errors or warnings.
-
-        vibelint/validators/exports.py
-        """
-        return bool(self.errors or self.warnings)
-
-    def add_error(self, code: str, message: str):
-        """
-        Adds an error with its code.
-
-        vibelint/validators/exports.py
-        """
-        self.errors.append((code, message))
-
-    def add_warning(self, code: str, message: str):
-        """
-        Adds a warning with its code.
-
-        vibelint/validators/exports.py
-        """
-        self.warnings.append((code, message))
+    rule_id = "EXPORTS-MISSING-ALL"
+    name = "Missing __all__ Checker"
+    description = "Checks for missing __all__ definitions in modules"
+    default_severity = Severity.INFO
 
 
-def validate_exports(
-    source_code: str, file_path_str: str, config: Config
-) -> ExportValidationResult:
-    """
-    Validates the presence and format of __all__ in the source code.
+    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+        """Check for missing __all__ definition."""
+        # Skip if it's __init__.py or private module
+        if file_path.name.startswith("_"):
+            return
 
-    Args:
-    source_code: The source code of the Python file as a string.
-    file_path_str: The path to the file (used for context, e.g., __init__.py).
-    config: The loaded vibelint configuration.
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            yield self.create_finding(
+                message="SyntaxError parsing file during __all__ validation",
+                file_path=file_path,
+                line=1,
+                suggestion="Fix Python syntax errors in the file",
+                severity=Severity.BLOCK
+            )
+            return
 
-    Returns:
-    An ExportValidationResult object.
+        # Look for __all__ definition
+        has_all = False
+        has_exports = False
 
-    vibelint/validators/exports.py
-    """
-    result = ExportValidationResult(file_path_str)
-    file_path = Path(file_path_str)
-    is_init_py = file_path.name == "__init__.py"
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "__all__":
+                        has_all = True
+                        # Check if __all__ is properly formatted
+                        if not self._is_valid_all_format(node.value):
+                            yield self.create_finding(
+                                message="__all__ is not assigned a list or tuple value",
+                                file_path=file_path,
+                                line=node.lineno,
+                                suggestion="Ensure __all__ = [\"item1\", \"item2\"] or __all__ = (\"item1\", \"item2\")",
+                                severity=Severity.WARN
+                            )
+                        break
+            elif isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith("_"):
+                has_exports = True
 
-    try:
-        tree = ast.parse(source_code, filename=file_path_str)
-    except SyntaxError as e:
-        result.add_error(VBL304, f"SyntaxError parsing file: {e}")
-        return result
+        if has_exports and not has_all:
+            yield self.create_finding(
+                message="Module has public functions/classes but no __all__ definition",
+                file_path=file_path,
+                line=1,
+                suggestion="Add __all__ = [...] to explicitly define public API",
+            )
 
-    found_all = False
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            if (
-                len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and node.targets[0].id == "__all__"
-            ):
-                found_all = True
-                result.has_all = True
-                result.all_lineno = node.lineno
+    def _is_valid_all_format(self, node: ast.AST) -> bool:
+        """Check if __all__ assignment value is a valid list or tuple."""
+        if isinstance(node, (ast.List, ast.Tuple)):
+            # Check that all elements are strings
+            return all(isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                      for elt in node.elts)
+        return False
 
-                if not isinstance(node.value, (ast.List, ast.Tuple)):
-                    msg = f"__all__ is not assigned a List or Tuple (assigned {type(node.value).__name__}) near line {node.lineno}."
-                    result.add_error(VBL303, msg)
 
-                break
+class InitAllValidator(BaseValidator):
+    """Validator for missing __all__ in __init__.py files."""
 
-    if not found_all:
-        error_on_init = config.get("error_on_missing_all_in_init", False)
-        if is_init_py and not error_on_init:
-            msg = f"Optional: __all__ definition not found in {file_path.name}."
-            result.add_warning(VBL302, msg)
-        elif not is_init_py:
-            msg = f"__all__ definition not found in {file_path.name}."
-            result.add_error(VBL301, msg)
-        elif is_init_py and error_on_init:
-            msg = f"__all__ definition not found in {file_path.name} (required by config)."
-            result.add_error(VBL301, msg)
+    rule_id = "EXPORTS-MISSING-ALL-INIT"
+    name = "Missing __all__ in __init__.py"
+    description = "__init__.py file is missing __all__ definition (optional based on config)"
+    default_severity = Severity.INFO
 
-    return result
+
+    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+        """Check for missing __all__ in __init__.py files."""
+        # Only check __init__.py files
+        if file_path.name != "__init__.py":
+            return
+
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            return
+
+        # Look for __all__ definition
+        has_all = False
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "__all__":
+                        has_all = True
+                        break
+
+        if not has_all:
+            yield self.create_finding(
+                message="__init__.py file is missing __all__ definition",
+                file_path=file_path,
+                line=1,
+                suggestion="Add __all__ = [...] to control package imports"
+            )

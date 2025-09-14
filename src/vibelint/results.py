@@ -7,7 +7,7 @@ vibelint/results.py
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .lint import LintResult
+from .plugin_system import Finding
 from .namespace import NamespaceCollision, NamespaceNode
 
 __all__ = ["CheckResult", "CommandResult", "NamespaceResult", "SnapshotResult"]
@@ -44,7 +44,7 @@ class CheckResult(CommandResult):
     vibelint/results.py
     """
 
-    lint_results: list[LintResult] = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
     hard_collisions: list[NamespaceCollision] = field(default_factory=list)
     global_soft_collisions: list[NamespaceCollision] = field(default_factory=list)
     local_soft_collisions: list[NamespaceCollision] = field(default_factory=list)

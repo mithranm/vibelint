@@ -317,7 +317,7 @@ class NamespaceNode:
 
         self.exported_names: list[str] | None = None
 
-    def set_exported_names(self, names: list[str]):
+    def set_exported_names(self, names: list[str]) -> None:
         """
         Sets the list of names found in __all__.
 
@@ -385,7 +385,7 @@ class NamespaceNode:
             collisions.extend(cnode.get_hard_collisions())
         return collisions
 
-    def collect_defined_members(self, all_dict: dict[str, list[tuple[Path, int | None]]]):
+    def collect_defined_members(self, all_dict: dict[str, list[tuple[Path, int | None]]]) -> None:
         """
         Recursively collects defined members (path, lineno) for global definition collision check.
 
@@ -436,7 +436,7 @@ class NamespaceNode:
                 )
         return collisions
 
-    def find_local_export_collisions(self, collisions_list: list[NamespaceCollision]):
+    def find_local_export_collisions(self, collisions_list: list[NamespaceCollision]) -> None:
         """
         Recursively finds LOCAL SOFT collisions (__all__) within packages.
 
@@ -500,7 +500,7 @@ class NamespaceNode:
         proj_root = find_project_root(Path(".").resolve())
         base_path_for_display = proj_root if proj_root else Path(".")
 
-        def build_tree_lines(node: "NamespaceNode", prefix: str = "", base: Path = Path(".")):
+        def build_tree_lines(node: "NamespaceNode", prefix: str = "", base: Path = Path(".")) -> list[str]:
             """
             Docstring for function 'build_tree_lines'.
 

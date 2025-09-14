@@ -56,7 +56,14 @@ class RuleEngine:
 
     def get_rule_severity(self, rule_id: str, default: Severity = Severity.WARN) -> Severity:
         """Get effective severity for a rule."""
-        return self._rule_overrides.get(rule_id, default)
+        # Primary: semantic rule IDs
+        severity = self._rule_overrides.get(rule_id)
+        if severity is not None:
+            return severity
+
+
+        return default
+
 
     def create_validator_instance(
         self, validator_class: type[BaseValidator]
@@ -74,7 +81,7 @@ class RuleEngine:
             return None
 
         severity = self.get_rule_severity(validator_class.rule_id, validator_class.default_severity)
-        return validator_class(severity=severity)
+        return validator_class(severity=severity, config=self.config)
 
     def get_enabled_validators(self) -> List[BaseValidator]:
         """Get all enabled validator instances."""
@@ -117,10 +124,14 @@ def create_default_rule_config() -> Dict[str, any]:
     """Create default rule configuration for new projects."""
     return {
         "rules": {
-            # Core rules with sensible defaults
-            "VBL101": "INFO",  # Missing docstring is just info
-            "VBL301": "WARN",  # Missing __all__ is warning
-            "VBL701": "WARN",  # Print statements are warnings
+            # Semantic rule IDs (primary system)
+            "DOCSTRING-MISSING": "INFO",           # Missing docstring is just info
+            "EXPORTS-MISSING-ALL": "WARN",         # Missing __all__ is warning
+            "PRINT-STATEMENT": "WARN",             # Print statements are warnings
+            "EMOJI-IN-STRING": "WARN",             # Emojis can cause encoding issues
+            "TODO-FOUND": "INFO",                  # TODOs are informational
+            "PARAMETERS-KEYWORD-ONLY": "INFO",     # Parameter suggestions are info
+
         },
         "plugins": {"enabled": ["vibelint.core"]},
     }

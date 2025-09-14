@@ -71,9 +71,10 @@ class BaseValidator(ABC):
     description: str = ""
     default_severity: Severity = Severity.WARN
 
-    def __init__(self, severity: Optional[Severity] = None):
-        """Initialize validator with optional severity override."""
+    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None):
+        """Initialize validator with optional severity override and configuration."""
         self.severity = severity or self.default_severity
+        self.config = config or {}
         if not self.rule_id:
             raise ValueError(f"Validator {self.__class__.__name__} must define rule_id")
 

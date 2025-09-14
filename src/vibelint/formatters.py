@@ -1,15 +1,15 @@
 """
-Output formatters for vibelint results.
+Report formatters for vibelint validation results.
 
-Provides pluggable formatters for different output formats including
-human-readable, JSON, and extensible custom formats.
+Provides pluggable report formatters for different output formats including
+human-readable, JSON, SARIF, and LLM-optimized formats.
 """
 
 import json
 from typing import Dict, List
 from .plugin_system import BaseFormatter, Finding, Severity
 
-__all__ = ["HumanFormatter", "JsonFormatter", "SarifFormatter", "BUILTIN_FORMATTERS"]
+__all__ = ["HumanFormatter", "JsonFormatter", "SarifFormatter", "LLMFormatter", "BUILTIN_FORMATTERS"]
 
 
 class HumanFormatter(BaseFormatter):
@@ -21,7 +21,7 @@ class HumanFormatter(BaseFormatter):
     def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
         """Format results for human reading."""
         if not findings:
-            return "All checks passed! ✨"
+            return "All checks passed!"
 
         # Group findings by severity
         by_severity = {Severity.BLOCK: [], Severity.WARN: [], Severity.INFO: []}
@@ -143,5 +143,77 @@ class SarifFormatter(BaseFormatter):
         return mapping.get(severity, "warning")
 
 
-# Built-in formatters
-BUILTIN_FORMATTERS = {"human": HumanFormatter, "json": JsonFormatter, "sarif": SarifFormatter}
+class LLMFormatter(BaseFormatter):
+    """LLM-optimized report formatter with actionable suggestions for AI-generated code."""
+
+    name = "llm"
+    description = "LLM-optimized report format for AI development workflows"
+
+    def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
+        """Format validation results optimized for LLM workflows."""
+        if not findings:
+            return "All checks passed! Code is ready for use."
+
+        # Group by rule type for better AI understanding
+        ai_patterns = []
+        standard_issues = []
+
+        for finding in findings:
+            # Check for AI development patterns (TODO, PARAMETERS, etc.)
+            if finding.rule_id in ['TODO-FOUND', 'PARAMETERS-KEYWORD-ONLY']:
+                ai_patterns.append(finding)
+            else:
+                standard_issues.append(finding)
+
+        lines = []
+        lines.append("## Code Analysis Results")
+
+        if ai_patterns:
+            lines.append("\n### AI Development Patterns")
+            lines.append("Issues common in AI-generated code:")
+            for finding in ai_patterns:
+                lines.append(f"- **{finding.rule_id}**: {finding.message}")
+                lines.append(f"  Location: `{finding.file_path}:{finding.line}`")
+                if finding.suggestion:
+                    lines.append(f"  **Suggestion**: {finding.suggestion}")
+                lines.append("")
+
+        if standard_issues:
+            lines.append("\n### Standard Issues")
+            for finding in standard_issues:
+                marker = "ERROR" if finding.severity == Severity.BLOCK else "WARN" if finding.severity == Severity.WARN else "INFO"
+                lines.append(f"- [{marker}] **{finding.rule_id}**: {finding.message}")
+                lines.append(f"  Location: `{finding.file_path}:{finding.line}`")
+                if finding.suggestion:
+                    lines.append(f"  Suggestion: {finding.suggestion}")
+                lines.append("")
+
+        # Add actionable summary
+        lines.append("### Summary")
+        total_issues = sum(summary.values())
+        lines.append(f"Found {total_issues} issues total:")
+
+        for severity, count in summary.items():
+            if count > 0:
+                lines.append(f"- {count} {severity.lower()} level")
+
+        # Add workflow suggestions
+        if any(f.rule_id in ['TODO-FOUND', 'PARAMETERS-KEYWORD-ONLY'] for f in findings):
+            lines.append("\n### LLM Development Workflow")
+            lines.append("Recommendations for AI-assisted development:")
+            lines.append("1. Address these patterns before committing code")
+            lines.append("2. Consider adding these checks to your development workflow")
+            lines.append("3. Use vibelint regularly to maintain code quality standards")
+
+        return "\n".join(lines)
+
+
+# Built-in report formatters
+BUILTIN_FORMATTERS = {
+    "human": HumanFormatter,
+    "json": JsonFormatter,
+    "sarif": SarifFormatter,
+    "llm": LLMFormatter,
+    # Keep "claude" as alias for backward compatibility during transition
+    "claude": LLMFormatter
+}

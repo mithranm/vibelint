@@ -12,7 +12,7 @@ import logging
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 from .utils import find_package_root
 
@@ -73,7 +73,7 @@ class Config:
         return self._project_root
 
     @property
-    def settings(self) -> Mapping[str, Any]:
+    def settings(self) -> Mapping[str, Union[str, bool, int, list, dict]]:
         """
         Read-only view of the settings loaded from [tool.vibelint].
 
@@ -99,7 +99,7 @@ class Config:
         else:
             return []
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: Union[str, bool, int, list, dict, None] = None) -> Union[str, bool, int, list, dict, None]:
         """
         Gets a value from the loaded settings, returning default if not found.
 
@@ -107,7 +107,7 @@ class Config:
         """
         return self._config_dict.get(key, default)
 
-    def __getitem__(self, key: str) -> Any:
+    def __getitem__(self, key: str) -> Union[str, bool, int, list, dict]:
         """
         Gets a value, raising KeyError if the key is not found.
 

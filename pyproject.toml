@@ -36,9 +36,17 @@ dependencies = [
 vibelint = "vibelint.cli:main"
 
 [project.entry-points."vibelint.validators"]
-VBL101 = "vibelint.builtin_validators:MissingDocstringValidator"
-VBL301 = "vibelint.builtin_validators:MissingAllValidator"
-VBL701 = "vibelint.builtin_validators:PrintStatementValidator"
+# New semantic rule IDs (preferred) - now pointing to individual files
+"DOCSTRING-MISSING" = "vibelint.validators.docstring:MissingDocstringValidator"
+"DOCSTRING-PATH-REFERENCE" = "vibelint.validators.docstring:DocstringPathValidator"
+"EXPORTS-MISSING-ALL" = "vibelint.validators.exports:MissingAllValidator"
+"EXPORTS-MISSING-ALL-INIT" = "vibelint.validators.exports:InitAllValidator"
+"PRINT-STATEMENT" = "vibelint.validators.print_statements:PrintStatementValidator"
+"EMOJI-IN-STRING" = "vibelint.validators.emoji:EmojiUsageValidator"
+"DEAD-CODE-FOUND" = "vibelint.validators.dead_code:DeadCodeValidator"
+"ARCHITECTURE-INCONSISTENT" = "vibelint.validators.architecture:ArchitectureValidator"
+"TYPING-POOR-PRACTICE" = "vibelint.validators.typing_quality:TypingQualityValidator"
+
 
 [project.entry-points."vibelint.formatters"]
 human = "vibelint.formatters:HumanFormatter"
@@ -67,6 +75,45 @@ peek_globs = ["coverage.xml"]
 allowed_shebangs = ["#!/usr/bin/env python3"]
 large_dir_threshold = 500
 error_on_missing_all_in_init = false
+
+# Rule configuration - can disable or change severity
+# Values: "OFF" (disabled), "INFO", "WARN", "BLOCK"
+[tool.vibelint.rules]
+# Core validators (using new semantic rule IDs)
+"DOCSTRING-MISSING" = "INFO"           # Missing docstrings
+"DOCSTRING-PATH-REFERENCE" = "INFO"    # Missing path reference in docstrings
+"EXPORTS-MISSING-ALL" = "INFO"         # Missing __all__
+"EXPORTS-MISSING-ALL-INIT" = "INFO"    # Missing __all__ in __init__.py
+"PRINT-STATEMENT" = "WARN"             # Print statements
+"EMOJI-IN-STRING" = "WARN"             # Emoji usage - important for MCP compatibility
+
+# Advanced validators
+"DEAD-CODE-FOUND" = "INFO"             # Dead code detection - unused imports, unreferenced functions
+"ARCHITECTURE-INCONSISTENT" = "WARN"   # Architectural inconsistency detection
+"TYPING-POOR-PRACTICE" = "WARN"        # Poor typing practices - tuples instead of dataclasses, etc.
+
+
+# Configurable thresholds for rules
+[tool.vibelint.thresholds]
+max_function_parameters = 7        # Functions with more parameters get warnings
+keyword_only_parameter_count = 4   # Functions with this many params should use keyword-only
+positional_call_argument_limit = 3 # Function calls with more positional args get suggestions
+large_dir_file_count = 500         # General: Directory size threshold
+
+# Print statement validation configuration
+[tool.vibelint.print_validation]
+# Files matching these patterns are exempt from print statement validation
+exclude_globs = [
+    "test_*.py",
+    "*_test.py",
+    "conftest.py",
+    "tests/**/*.py",
+    "cli.py",
+    "main.py",
+    "__main__.py",
+    "*_cli.py",
+    "*_cmd.py"
+]
 
 [tool.black]
 target-version = ["py310", "py311", "py312"]

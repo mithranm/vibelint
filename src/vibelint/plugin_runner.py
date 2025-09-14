@@ -12,8 +12,9 @@ from typing import List, Dict, Any
 from .plugin_system import Finding, Severity, plugin_manager
 from .rules import RuleEngine
 from .formatters import BUILTIN_FORMATTERS
-from .builtin_validators import BUILTIN_VALIDATORS
 from .discovery import discover_files
+
+# Note: No longer importing BUILTIN_VALIDATORS - using plugin discovery instead
 
 __all__ = ["PluginValidationRunner", "run_plugin_validation"]
 
@@ -32,9 +33,9 @@ class PluginValidationRunner:
         self._register_builtin_validators()
 
     def _register_builtin_validators(self):
-        """Register built-in validators with the plugin manager."""
-        for validator_class in BUILTIN_VALIDATORS:
-            plugin_manager._validators[validator_class.rule_id] = validator_class
+        """Register built-in validators with the plugin manager via entry point discovery."""
+        # Built-in validators are now discovered automatically via entry points
+        plugin_manager.load_plugins()
 
     def run_validation(self, file_paths: List[Path]) -> List[Finding]:
         """Run validation on the specified files."""

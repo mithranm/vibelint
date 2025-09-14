@@ -21,14 +21,13 @@ else:
     import importlib_resources as pkg_resources
 
 import click
-from rich.console import Console
 from rich.logging import RichHandler
 from rich.table import Table
 
 # Import necessary functions for ASCII art
 from .ascii import scale_to_terminal_by_height
 from .config import Config, load_config
-from .lint import LintRunner
+from .console_utils import console
 from .namespace import (
     NamespaceCollision,
     build_namespace_tree,
@@ -41,8 +40,6 @@ from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .snapshot import create_snapshot
 from .utils import find_project_root, get_relative_path
 from .plugin_runner import run_plugin_validation
-
-ValidationIssue = tuple[str, str]
 
 
 class VibelintContext:
@@ -59,33 +56,30 @@ class VibelintContext:
         vibelint/cli.py
         """
         self.command_result: CommandResult | None = None
-        self.lint_runner: LintRunner | None = None
         self.project_root: Path | None = None
 
 
 __all__ = ["snapshot", "check", "cli", "namespace", "main", "VibelintContext"]
 
-
-console = Console()
 logger_cli = logging.getLogger("vibelint")
 
 # --- Helper messages ---
 VIBE_CHECK_PASS_MESSAGES = [
-    "Immaculate vibes. 💆",
-    "Vibes confirmed ✅",
-    "Vibe on brother. 🧘",
+    "Immaculate vibes.",
+    "Vibes confirmed",
+    "Vibe on brother.",
 ]
 
 VIBE_CHECK_FAIL_MESSAGES = [
-    "Vibe Check Failed. 📉",
-    "Vibe Check Failed. 💥",
+    "Vibe Check Failed.",
+    "Vibe Check Failed.",
 ]
 
 
 # (Keep _present_check_results, _present_namespace_results,
 # _present_snapshot_results, and _display_collisions as they were in the
 # last correct version - no changes needed there based on these errors)
-def _present_check_results(result: CheckResult, runner: LintRunner, console: Console):
+def _present_check_results(result: CheckResult, runner):
     """
     Presents the results of the 'check' command (the Vibe Check™).
 
@@ -97,7 +91,7 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
     )
 
     if files_with_issues:
-        console.print("\n[bold yellow]🤔 Vibe Check:[/bold yellow]")
+        console.print("\n[bold yellow]Vibe Check:[/bold yellow]")
         for lr in files_with_issues:
             try:
                 # Ensure config.project_root exists before using get_relative_path
@@ -117,9 +111,9 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
                 )
 
             for code, error_msg in lr.errors:
-                console.print(f"  [red]✗[{code}] {error_msg}[/red]")
+                console.print(f"  [red]ERROR[{code}] {error_msg}[/red]")
             for code, warning_msg in lr.warnings:
-                console.print(f"  [yellow]▲[{code}] {warning_msg}[/yellow]")
+                console.print(f"  [yellow]WARN[{code}] {warning_msg}[/yellow]")
 
     has_collisions = bool(
         result.hard_collisions or result.global_soft_collisions or result.local_soft_collisions
@@ -130,7 +124,6 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
             result.hard_collisions,
             result.global_soft_collisions,
             result.local_soft_collisions,
-            console,
         )
     else:
         logger_cli.debug("No namespace collisions detected.")
@@ -139,7 +132,7 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
         console.print()
         if result.report_generated:
             console.print(
-                f"[green]✓ Detailed Vibe Report generated at {result.report_path}[/green]"
+                f"[green]SUCCESS: Detailed Vibe Report generated at {result.report_path}[/green]"
             )
         elif result.report_error:
             console.print(
@@ -178,7 +171,7 @@ def _present_check_results(result: CheckResult, runner: LintRunner, console: Con
             console.print(f"[bold green]{pass_message}[/bold green]")
 
 
-def _present_namespace_results(result: NamespaceResult, console: Console):
+def _present_namespace_results(result: NamespaceResult):
     """
     Presents the results of the 'namespace' command.
 
@@ -190,7 +183,7 @@ def _present_namespace_results(result: NamespaceResult, console: Console):
 
     if result.intra_file_collisions:
         console.print(
-            "\n[bold yellow]🤔 Intra-file Collisions Found (Duplicate members within one file):[/bold yellow]"
+            "\n[bold yellow]Intra-file Collisions Found (Duplicate members within one file):[/bold yellow]"
         )
         ctx = click.get_current_context(silent=True)
         project_root = (
@@ -218,7 +211,7 @@ def _present_namespace_results(result: NamespaceResult, console: Console):
         if result.intra_file_collisions:
             console.print()  # Add space
         if result.output_saved:
-            console.print(f"\n[green]✓ Namespace tree saved to {result.output_path}[/green]")
+            console.print(f"\n[green]SUCCESS: Namespace tree saved to {result.output_path}[/green]")
         elif result.output_error:
             console.print(
                 f"[bold red]Error saving namespace tree:[/bold red] {result.output_error}"
@@ -229,18 +222,18 @@ def _present_namespace_results(result: NamespaceResult, console: Console):
     elif result.root_node and result.success:
         if result.intra_file_collisions:
             console.print()  # Add space
-        console.print("\n[bold blue]👀 Namespace Structure Visualization:[/bold blue]")
+        console.print("\n[bold blue]Namespace Structure Visualization:[/bold blue]")
         console.print(str(result.root_node))
 
 
-def _present_snapshot_results(result: SnapshotResult, console: Console):
+def _present_snapshot_results(result: SnapshotResult):
     """
     Presents the results of the 'snapshot' command. (Keep factual)
 
     vibelint/cli.py
     """
     if result.success and result.output_path:
-        console.print(f"[green]✓ Codebase snapshot created at {result.output_path}[/green]")
+        console.print(f"[green]SUCCESS: Codebase snapshot created at {result.output_path}[/green]")
     elif not result.success and result.error_message:
         console.print(f"[bold red]Error creating snapshot:[/bold red] {result.error_message}")
 
@@ -249,7 +242,6 @@ def _display_collisions(
     hard_coll: list[NamespaceCollision],
     global_soft_coll: list[NamespaceCollision],
     local_soft_coll: list[NamespaceCollision],
-    console: Console,
 ) -> int:
     """
     Displays collision results in tables and returns an exit code indicating if hard collisions were found.
@@ -283,7 +275,7 @@ def _display_collisions(
     table.add_column("Type", style="cyan")
     table.add_column("Count", style="magenta")
 
-    hard_label = "Hard Collisions (🚨)"
+    hard_label = "Hard Collisions (CRITICAL)"
     global_soft_label = "Global Soft Collision (Defs)"
     local_soft_label = "Local Soft Collision (__all__)"
 
@@ -297,7 +289,7 @@ def _display_collisions(
     console.print(table)
 
     if hard_coll:
-        hard_header = "[bold red]🚨 Hard Collision Details:[/bold red]"
+        hard_header = "[bold red]CRITICAL: Hard Collision Details:[/bold red]"
         console.print(f"\n{hard_header}")
         console.print(
             "These can break imports or indicate unexpected duplicates (Bad Vibes! Fix these!):"
@@ -336,7 +328,7 @@ def _display_collisions(
                 )
 
     if local_soft_coll:
-        local_soft_header = "[bold yellow]🤔 Local Soft Collision (__all__) Details:[/bold yellow]"
+        local_soft_header = "[bold yellow]Local Soft Collision (__all__) Details:[/bold yellow]"
         console.print(f"\n{local_soft_header}")
         console.print(
             "These names are exported via __all__ in multiple sibling modules (Confusing for `import *`):"
@@ -358,7 +350,7 @@ def _display_collisions(
 
     if global_soft_coll:
         global_soft_header = (
-            "[bold yellow]🤔 Global Namespace Collision (Definition) Details:[/bold yellow]"
+            "[bold yellow]Global Namespace Collision (Definition) Details:[/bold yellow]"
         )
         console.print(f"\n{global_soft_header}")
         console.print(
@@ -388,7 +380,7 @@ def _display_collisions(
 @click.pass_context
 def cli(ctx: click.Context, debug: bool):
     """
-    vibelint - Check the vibe ✨, visualize namespaces, and snapshot Python codebases.
+    vibelint - Check the vibe, visualize namespaces, and snapshot Python codebases.
 
     Run commands from the root of your project (where pyproject.toml or .git is located).
 
@@ -443,7 +435,7 @@ def cli(ctx: click.Context, debug: bool):
                     art = vibechecker_ref.read_text(encoding="utf-8")
                     scaled_art = scale_to_terminal_by_height(art)
                     console.print(scaled_art, style="bright_yellow", highlight=False)
-                    console.print("\n✨ How's the vibe? ✨", justify="center")
+                    console.print("\nHow's the vibe?", justify="center")
                 except Exception as e:
                     logger_cli.warning(
                         f"Could not load or display VIBECHECKER.txt from package data: {e}",
@@ -482,8 +474,8 @@ def cli(ctx: click.Context, debug: bool):
     "--format",
     "output_format",
     default="human",
-    type=click.Choice(["human", "json", "sarif"]),
-    help="Output format: human (default), json, or sarif.",
+    type=click.Choice(["human", "json", "sarif", "llm", "claude"]),
+    help="Report format: human (default), json, sarif, llm (AI-optimized), or claude (alias for llm).",
 )
 @click.pass_context
 def check(ctx: click.Context, yes: bool, output_report: Path | None, output_format: str):
@@ -510,38 +502,50 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
         logger_cli.error("Project root lost after config load. Aborting Vibe Check.")
         ctx.exit(1)
 
-    # Use plugin system for validation if JSON/SARIF output requested
-    if output_format != "human":
-        # Temporarily disable logging for clean JSON/SARIF output
-        original_level = logging.getLogger().level
-        logging.getLogger().setLevel(logging.ERROR)
-
-        try:
-            plugin_runner = run_plugin_validation(dict(config.settings), project_root)
-            output = plugin_runner.format_output(output_format)
-            print(output)
-            ctx.exit(plugin_runner.get_exit_code())
-        finally:
-            logging.getLogger().setLevel(original_level)
-
+    # Use plugin system for validation combined with namespace collision detection
     result_data = CheckResult()
-    runner: LintRunner | None = None
 
     try:
-        # Use the non-None project_root for target_paths
-        target_paths: list[Path] = [project_root]
-        runner = LintRunner(config=config, skip_confirmation=yes)
-        lint_exit_code = runner.run(target_paths)
-        result_data.lint_results = runner.results
-        vibelint_ctx.lint_runner = runner
+        # Run plugin-based validation
+        logger_cli.debug("Running plugin-based validation...")
+        plugin_runner = run_plugin_validation(dict(config.settings), project_root)
 
-        logger_cli.debug("Linting finished. Checking for namespace vibe collisions...")
-        # Pass the non-None target_paths here too
+        # For non-human formats, output just the validation results and exit
+        if output_format != "human":
+            # Temporarily disable logging for clean JSON/SARIF output
+            original_level = logging.getLogger().level
+            logging.getLogger().setLevel(logging.ERROR)
+            try:
+                output = plugin_runner.format_output(output_format)
+                print(output)
+                ctx.exit(plugin_runner.get_exit_code())
+            finally:
+                logging.getLogger().setLevel(original_level)
+
+        # For human format, display validation results first
+        validation_output = plugin_runner.format_output("human")
+        print(validation_output, end="")
+
+        # Then check for namespace collisions
+        logger_cli.debug("Checking for namespace vibe collisions...")
+        target_paths: list[Path] = [project_root]
         result_data.hard_collisions = detect_hard_collisions(target_paths, config)
         result_data.global_soft_collisions = detect_global_definition_collisions(
             target_paths, config
         )
         result_data.local_soft_collisions = detect_local_export_collisions(target_paths, config)
+
+        # Display namespace collision results if any were found
+        has_collisions = (
+            result_data.hard_collisions or result_data.global_soft_collisions or result_data.local_soft_collisions
+        )
+        if has_collisions:
+            console.print()
+            _display_collisions(
+                result_data.hard_collisions,
+                result_data.global_soft_collisions,
+                result_data.local_soft_collisions,
+            )
 
         collision_exit_code = 1 if result_data.hard_collisions else 0
         report_failed = False
@@ -562,7 +566,7 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
                         f=f,
                         project_root=config.project_root,
                         target_paths=target_paths,
-                        lint_results=result_data.lint_results,
+                        findings=result_data.findings,
                         hard_coll=result_data.hard_collisions,
                         soft_coll=result_data.global_soft_collisions
                         + result_data.local_soft_collisions,
@@ -577,7 +581,8 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
                 report_failed = True
 
         report_failed_code = 1 if report_failed else 0
-        final_exit_code = lint_exit_code or collision_exit_code or report_failed_code
+        plugin_exit_code = plugin_runner.get_exit_code()
+        final_exit_code = plugin_exit_code or collision_exit_code or report_failed_code
         result_data.exit_code = final_exit_code
         result_data.success = final_exit_code == 0
         logger_cli.debug(f"Vibe Check command finished. Final Exit Code: {final_exit_code}")
@@ -589,16 +594,6 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
         result_data.exit_code = 1
 
     vibelint_ctx.command_result = result_data
-
-    if runner:
-        _present_check_results(result_data, runner, console)
-    else:
-        console.print(
-            "[bold red]Vibe Check failed critically before linting could start.[/bold red]"
-        )
-        if result_data.error_message:
-            console.print(f"[red]Error: {result_data.error_message}[/red]")
-
     ctx.exit(result_data.exit_code)
 
 
@@ -671,7 +666,7 @@ def namespace(ctx: click.Context, output: Path | None):
         result_data.exit_code = 1
 
     vibelint_ctx.command_result = result_data
-    _present_namespace_results(result_data, console)
+    _present_namespace_results(result_data)
     ctx.exit(result_data.exit_code)
 
 
@@ -723,7 +718,7 @@ def snapshot(ctx: click.Context, output: Path):
         result_data.exit_code = 1
 
     vibelint_ctx.command_result = result_data
-    _present_snapshot_results(result_data, console)
+    _present_snapshot_results(result_data)
     ctx.exit(result_data.exit_code)
 
 
