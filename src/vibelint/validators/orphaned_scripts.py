@@ -53,9 +53,7 @@ class OrphanedScriptValidationResult:
 
 
 def validate_orphaned_scripts(
-    project_root: Path,
-    include_globs: list[str],
-    exclude_globs: list[str] | None = None
+    project_root: Path, include_globs: list[str], exclude_globs: list[str] | None = None
 ) -> OrphanedScriptValidationResult:
     """
     Find Python scripts that exist outside the configured include patterns.
@@ -74,7 +72,8 @@ def validate_orphaned_scripts(
         result.add_orphaned_script(
             VBL801,
             f"Project root {project_root} does not exist or is not a directory",
-            str(project_root), "invalid_project_root"
+            str(project_root),
+            "invalid_project_root",
         )
         return result
 
@@ -118,7 +117,8 @@ def validate_orphaned_scripts(
             result.add_orphaned_script(
                 VBL802,
                 f"Python file {py_file} is outside project root {project_root}",
-                str(py_file), "outside_project_root"
+                str(py_file),
+                "outside_project_root",
             )
 
     # Report orphaned files
@@ -150,7 +150,12 @@ def _determine_orphan_reason(py_file: Path, relative_path: str, include_globs: l
     if py_file.name in ["scratch.py", "temp.py", "test.py", "debug.py", "example.py"]:
         return "common one-off script name"
 
-    if py_file.parent.name in ["scratch", "temp", "debug", "examples"] and "examples" not in " ".join(include_globs):
+    if py_file.parent.name in [
+        "scratch",
+        "temp",
+        "debug",
+        "examples",
+    ] and "examples" not in " ".join(include_globs):
         return f"in '{py_file.parent.name}' directory not covered by include patterns"
 
     # Check if it's in the project root (often indicates a one-off script)

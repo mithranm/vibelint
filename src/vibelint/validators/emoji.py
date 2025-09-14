@@ -37,7 +37,9 @@ class EmojiValidationResult:
         self.emoji_count: int = 0
         self.emoji_locations: list[tuple[int, str, str]] = []  # (line_num, line_text, emoji)
 
-    def add_emoji_issue(self, code: str, message: str, line_num: int, line_text: str, emoji: str) -> None:
+    def add_emoji_issue(
+        self, code: str, message: str, line_num: int, line_text: str, emoji: str
+    ) -> None:
         """Add an emoji-related issue to the result."""
         self.issues.append((code, message))
 
@@ -60,28 +62,28 @@ def detect_emoji_in_text(text: str) -> list[tuple[str, int, int]]:
     """
     # Comprehensive emoji regex pattern covering most Unicode emoji ranges
     emoji_pattern = re.compile(
-        r'[\U0001F600-\U0001F64F]|'  # Emoticons
-        r'[\U0001F300-\U0001F5FF]|'  # Misc Symbols and Pictographs
-        r'[\U0001F680-\U0001F6FF]|'  # Transport and Map Symbols
-        r'[\U0001F1E0-\U0001F1FF]|'  # Regional Indicator Symbols (flags)
-        r'[\U00002600-\U000026FF]|'  # Miscellaneous Symbols
-        r'[\U00002700-\U000027BF]|'  # Dingbats
-        r'[\U0001F900-\U0001F9FF]|'  # Supplemental Symbols and Pictographs
-        r'[\U0001FA70-\U0001FAFF]|'  # Symbols and Pictographs Extended-A
-        r'[\U00002B50]|'             # Star
-        r'[\U000023CF]|'             # Eject symbol
-        r'[\U000023E9-\U000023F3]|'  # Play/pause symbols
-        r'[\U000025AA-\U000025AB]|'  # Small squares
-        r'[\U000025B6]|'             # Play button
-        r'[\U000025C0]|'             # Reverse button
-        r'[\U000025FB-\U000025FE]|'  # Squares
-        r'[\U00002B05-\U00002B07]|'  # Arrows
-        r'[\U00002B1B-\U00002B1C]|'  # Squares
-        r'[\U00002B55]|'             # Circle
-        r'[\U00003030]|'             # Wavy dash
-        r'[\U0000303D]|'             # Part alternation mark
-        r'[\U00003297]|'             # Congratulations symbol
-        r'[\U00003299]'              # Secret symbol
+        r"[\U0001F600-\U0001F64F]|"  # Emoticons
+        r"[\U0001F300-\U0001F5FF]|"  # Misc Symbols and Pictographs
+        r"[\U0001F680-\U0001F6FF]|"  # Transport and Map Symbols
+        r"[\U0001F1E0-\U0001F1FF]|"  # Regional Indicator Symbols (flags)
+        r"[\U00002600-\U000026FF]|"  # Miscellaneous Symbols
+        r"[\U00002700-\U000027BF]|"  # Dingbats
+        r"[\U0001F900-\U0001F9FF]|"  # Supplemental Symbols and Pictographs
+        r"[\U0001FA70-\U0001FAFF]|"  # Symbols and Pictographs Extended-A
+        r"[\U00002B50]|"  # Star
+        r"[\U000023CF]|"  # Eject symbol
+        r"[\U000023E9-\U000023F3]|"  # Play/pause symbols
+        r"[\U000025AA-\U000025AB]|"  # Small squares
+        r"[\U000025B6]|"  # Play button
+        r"[\U000025C0]|"  # Reverse button
+        r"[\U000025FB-\U000025FE]|"  # Squares
+        r"[\U00002B05-\U00002B07]|"  # Arrows
+        r"[\U00002B1B-\U00002B1C]|"  # Squares
+        r"[\U00002B55]|"  # Circle
+        r"[\U00003030]|"  # Wavy dash
+        r"[\U0000303D]|"  # Part alternation mark
+        r"[\U00003297]|"  # Congratulations symbol
+        r"[\U00003299]"  # Secret symbol
     )
 
     results = []
@@ -106,24 +108,18 @@ def validate_emoji_usage(file_path: Path, content: str | None = None) -> EmojiVa
 
     try:
         if content is None:
-            content = file_path.read_text(encoding='utf-8')
+            content = file_path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         # Handle encoding issues
         try:
-            content = file_path.read_text(encoding='latin1')
+            content = file_path.read_text(encoding="latin1")
         except Exception:
             result.add_emoji_issue(
-                VBL601,
-                f"Could not read file {file_path} to check for emojis",
-                0, "", ""
+                VBL601, f"Could not read file {file_path} to check for emojis", 0, "", ""
             )
             return result
     except Exception:
-        result.add_emoji_issue(
-            VBL601,
-            f"Could not access file {file_path}",
-            0, "", ""
-        )
+        result.add_emoji_issue(VBL601, f"Could not access file {file_path}", 0, "", "")
         return result
 
     lines = content.splitlines()
@@ -140,21 +136,27 @@ def validate_emoji_usage(file_path: Path, content: str | None = None) -> EmojiVa
                     VBL602,
                     f"Emoji '{emoji}' found in string literal at line {line_num}. "
                     f"Consider using text description instead for better compatibility.",
-                    line_num, line, emoji
+                    line_num,
+                    line,
+                    emoji,
                 )
             elif context == "comment":
                 result.add_emoji_issue(
                     VBL602,
                     f"Emoji '{emoji}' found in comment at line {line_num}. "
                     f"Consider using text description instead for better readability.",
-                    line_num, line, emoji
+                    line_num,
+                    line,
+                    emoji,
                 )
             else:
                 result.add_emoji_issue(
                     VBL603,
                     f"Emoji '{emoji}' found in code at line {line_num}. "
                     f"This can cause encoding and compatibility issues.",
-                    line_num, line, emoji
+                    line_num,
+                    line,
+                    emoji,
                 )
 
     return result
@@ -174,7 +176,7 @@ def _determine_emoji_context(line: str, emoji_pos: int) -> str:
     # Simple heuristic - could be improved with AST parsing
 
     # Check if it's in a comment (after #)
-    comment_pos = line.find('#')
+    comment_pos = line.find("#")
     if comment_pos != -1 and comment_pos < emoji_pos:
         return "comment"
 

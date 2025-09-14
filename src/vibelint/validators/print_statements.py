@@ -36,7 +36,9 @@ class PrintValidationResult:
         self.print_count: int = 0
         self.print_locations: list[tuple[int, str, str]] = []  # (line_num, context, suggestion)
 
-    def add_print_issue(self, code: str, message: str, line_num: int, context: str, suggestion: str) -> None:
+    def add_print_issue(
+        self, code: str, message: str, line_num: int, context: str, suggestion: str
+    ) -> None:
         """Add a print statement issue to the result."""
         self.issues.append((code, message))
 
@@ -65,7 +67,7 @@ class PrintStatementVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         """Visit function call nodes to detect print() calls."""
-        if isinstance(node.func, ast.Name) and node.func.id == 'print':
+        if isinstance(node.func, ast.Name) and node.func.id == "print":
             context = self._get_context()
             call_type = "print_function"
 
@@ -118,11 +120,11 @@ class PrintStatementVisitor(ast.NodeVisitor):
             # Try to extract string content for analysis
             if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
                 content = first_arg.value.lower()
-                if any(word in content for word in ['error', 'fail', 'exception', 'critical']):
+                if any(word in content for word in ["error", "fail", "exception", "critical"]):
                     return "logger.error()"
-                elif any(word in content for word in ['warn', 'warning']):
+                elif any(word in content for word in ["warn", "warning"]):
                     return "logger.warning()"
-                elif any(word in content for word in ['debug', 'trace']):
+                elif any(word in content for word in ["debug", "trace"]):
                     return "logger.debug()"
                 else:
                     return "logger.info()"
@@ -140,7 +142,7 @@ def validate_print_statements(
     content: str | None = None,
     ignore_test_files: bool = True,
     ignore_cli_files: bool = True,
-    allowed_patterns: set[str] | None = None
+    allowed_patterns: set[str] | None = None,
 ) -> PrintValidationResult:
     """
     Validate print statement usage in a Python file.
@@ -166,19 +168,19 @@ def validate_print_statements(
 
     try:
         if content is None:
-            content = file_path.read_text(encoding='utf-8')
+            content = file_path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         result.add_print_issue(
             VBL701,
             f"Could not read file {file_path} due to encoding issues",
-            0, "", "Fix file encoding"
+            0,
+            "",
+            "Fix file encoding",
         )
         return result
     except Exception:
         result.add_print_issue(
-            VBL701,
-            f"Could not access file {file_path}",
-            0, "", "Check file permissions"
+            VBL701, f"Could not access file {file_path}", 0, "", "Check file permissions"
         )
         return result
 
@@ -188,7 +190,9 @@ def validate_print_statements(
         result.add_print_issue(
             VBL701,
             f"Could not parse {file_path}: {e}",
-            getattr(e, 'lineno', 0), "", "Fix syntax errors"
+            getattr(e, "lineno", 0),
+            "",
+            "Fix syntax errors",
         )
         return result
 
@@ -209,7 +213,9 @@ def validate_print_statements(
                 VBL702,
                 f"Print statement found in __main__ block at line {line_num}{context}. "
                 f"Consider using {suggestion} for consistency.",
-                line_num, context, suggestion
+                line_num,
+                context,
+                suggestion,
             )
         else:
             severity = VBL703 if has_logging_import else VBL702
@@ -232,35 +238,31 @@ def _is_test_file(file_path: Path) -> bool:
     parent_names = [p.name.lower() for p in file_path.parents]
 
     return (
-        name.startswith('test_')
-        or name.endswith('_test.py')
-        or name == 'conftest.py'
-        or 'test' in parent_names
-        or 'tests' in parent_names
+        name.startswith("test_")
+        or name.endswith("_test.py")
+        or name == "conftest.py"
+        or "test" in parent_names
+        or "tests" in parent_names
     )
 
 
 def _is_cli_file(file_path: Path) -> bool:
     """Check if file appears to be a CLI script."""
     name = file_path.name.lower()
-    cli_indicators = ['cli.py', 'main.py', '__main__.py', 'command.py', 'cmd.py']
+    cli_indicators = ["cli.py", "main.py", "__main__.py", "command.py", "cmd.py"]
 
-    return (
-        name in cli_indicators
-        or name.endswith('_cli.py')
-        or name.endswith('_cmd.py')
-    )
+    return name in cli_indicators or name.endswith("_cli.py") or name.endswith("_cmd.py")
 
 
 def _has_logging_import(content: str) -> bool:
     """Check if file has logging import."""
-    lines = content.lower().split('\n')
+    lines = content.lower().split("\n")
     for line in lines:
         line = line.strip()
         if (
-            line.startswith('import logging')
-            or line.startswith('from logging')
-            or 'import logging' in line
+            line.startswith("import logging")
+            or line.startswith("from logging")
+            or "import logging" in line
         ):
             return True
     return False
@@ -268,12 +270,12 @@ def _has_logging_import(content: str) -> bool:
 
 def _in_main_block(content: str, line_num: int) -> bool:
     """Check if line is inside a if __name__ == "__main__" block."""
-    lines = content.split('\n')
+    lines = content.split("\n")
     main_line = -1
 
     # Find the __main__ block
     for i, line in enumerate(lines):
-        if '__name__' in line and '__main__' in line:
+        if "__name__" in line and "__main__" in line:
             main_line = i + 1  # Convert to 1-based indexing
             break
 
@@ -286,7 +288,7 @@ def _in_main_block(content: str, line_num: int) -> bool:
 
 def _matches_allowed_patterns(content: str, line_num: int, allowed_patterns: set[str]) -> bool:
     """Check if print statement matches any allowed patterns."""
-    lines = content.split('\n')
+    lines = content.split("\n")
     if line_num > len(lines):
         return False
 

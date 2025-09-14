@@ -217,10 +217,11 @@ class LintRunner:
 
         # Orphaned Scripts Validation (VBL8xx)
         from .validators.orphaned_scripts import validate_orphaned_scripts
+
         orphaned_res = validate_orphaned_scripts(
             self.config.project_root,
             self.config.get("include_globs", []),
-            self.config.get("exclude_globs", [])
+            self.config.get("exclude_globs", []),
         )
 
         # Add orphaned script issues as a special "project-level" result
@@ -326,12 +327,14 @@ class LintRunner:
 
                 # Emoji Validation (VBL6xx)
                 from .validators.emoji import validate_emoji_usage
+
                 emoji_res = validate_emoji_usage(file_path, original_content)
                 collected_errors.extend(emoji_res.errors)
                 collected_warnings.extend(emoji_res.warnings)
 
                 # Print Statement Validation (VBL7xx)
                 from .validators.print_statements import validate_print_statements
+
                 print_res = validate_print_statements(file_path, original_content)
                 collected_errors.extend(print_res.errors)
                 collected_warnings.extend(print_res.warnings)
