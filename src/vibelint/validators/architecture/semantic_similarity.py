@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
 
 try:
     import numpy as np
+
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False

@@ -7,16 +7,17 @@ essential functionality without unnecessary abstractions.
 vibelint/src/vibelint/plugin_system.py
 """
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Protocol
 
 __all__ = [
     "Severity",
     "Finding",
     "Validator",
-    "Formatter", 
+    "Formatter",
     "BaseValidator",
     "BaseFormatter",
     "get_all_validators",
@@ -176,9 +177,6 @@ def _load_builtin_formatters() -> None:
 
 
 # Legacy compatibility - for transition period
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
     BaseValidator = Validator
     BaseFormatter = Formatter
@@ -186,17 +184,20 @@ else:
     # Runtime base classes for backward compatibility
     class BaseValidator:
         """Legacy base class for validators."""
+
         rule_id: str = ""
         default_severity: Severity = Severity.WARN
-        
-        def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None) -> None:
+
+        def __init__(
+            self, severity: Optional[Severity] = None, config: Optional[Dict] = None
+        ) -> None:
             self.severity = severity or self.default_severity
             self.config = config or {}
-        
+
         def validate(self, file_path: Path, content: str, config: Any) -> Iterator[Finding]:
             """Validate a file and yield findings."""
             raise NotImplementedError
-        
+
         def create_finding(
             self,
             message: str,
@@ -220,6 +221,7 @@ else:
 
     class BaseFormatter(ABC):
         """Legacy base class for formatters."""
+
         name: str = ""
         description: str = ""
 
