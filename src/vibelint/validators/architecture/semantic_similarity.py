@@ -128,10 +128,13 @@ class SemanticSimilarityValidator(BaseValidator):
 
     def _extract_code_elements(self, file_path: Path, content: str) -> List[Tuple[str, str, str]]:
         """
-        Extract functions and classes with their docstrings for analysis.
+        Extract functions and classes with ONLY their docstrings for analysis.
+
+        This focuses on semantic intent rather than implementation details,
+        making it much more effective at finding truly redundant code.
 
         Returns:
-            List of (element_type, name, content) tuples where content includes docstring
+            List of (element_type, name, docstring_content) tuples
         """
         elements = []
         lines = content.splitlines()
@@ -151,47 +154,54 @@ class SemanticSimilarityValidator(BaseValidator):
                     .strip()
                 )
 
-                # Extract the full definition including docstring
-                element_lines = [lines[i]]
+                # Look for docstring only - skip implementation entirely
                 i += 1
+                docstring_content = ""
 
-                # Find the docstring (if any) and some implementation
-                in_docstring = False
-                docstring_delimiter = None
-                implementation_lines = 0
-
-                while i < len(lines) and implementation_lines < 10:  # Limit to avoid huge extracts
+                # Skip until we find the first non-empty, non-comment line
+                while i < len(lines):
                     current_line = lines[i].strip()
-                    element_lines.append(lines[i])
-
-                    # Detect docstring start
-                    if not in_docstring and (
-                        current_line.startswith('"""') or current_line.startswith("'''")
-                    ):
-                        in_docstring = True
-                        docstring_delimiter = '"""' if current_line.startswith('"""') else "'''"
-                        if current_line.count(docstring_delimiter) >= 2:  # Single line docstring
-                            in_docstring = False
-                    elif in_docstring and docstring_delimiter in current_line:
-                        in_docstring = False
-                    elif not in_docstring and current_line and not current_line.startswith("#"):
-                        implementation_lines += 1
-
+                    if current_line and not current_line.startswith("#"):
+                        break
                     i += 1
 
-                    # Stop if we hit another function/class or unindented content
-                    if (
-                        i < len(lines)
-                        and not lines[i].startswith(" ")
-                        and not lines[i].startswith("\t")
-                    ):
-                        if lines[i].strip() and not lines[i].strip().startswith("#"):
-                            break
+                # Check if it's a docstring
+                if i < len(lines):
+                    current_line = lines[i].strip()
+                    if current_line.startswith('"""') or current_line.startswith("'''"):
+                        docstring_delimiter = '"""' if current_line.startswith('"""') else "'''"
 
-                element_content = "\n".join(element_lines)
-                elements.append((element_type, name, element_content))
-            else:
-                i += 1
+                        # Handle single-line docstring
+                        if current_line.count(docstring_delimiter) >= 2:
+                            docstring_content = current_line.strip(docstring_delimiter).strip()
+                        else:
+                            # Multi-line docstring
+                            docstring_lines = []
+                            if len(current_line) > 3:  # Content on same line as opening quotes
+                                docstring_lines.append(current_line[3:])
+
+                            i += 1
+                            while i < len(lines):
+                                line_content = lines[i].rstrip()
+                                if docstring_delimiter in line_content:
+                                    # End of docstring
+                                    final_content = line_content.split(docstring_delimiter)[0]
+                                    if final_content.strip():
+                                        docstring_lines.append(final_content)
+                                    break
+                                docstring_lines.append(line_content)
+                                i += 1
+
+                            docstring_content = "\n".join(docstring_lines).strip()
+
+                # Only include elements that have substantial docstrings
+                if (
+                    docstring_content and len(docstring_content.strip()) > 20
+                ):  # Meaningful docstring
+                    elements.append((element_type, name, docstring_content))
+                # Elements without docstrings will be caught by DOCSTRING-MISSING rule
+
+            i += 1
 
         return elements
 

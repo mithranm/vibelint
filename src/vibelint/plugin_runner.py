@@ -3,6 +3,8 @@ Plugin-aware validation runner for vibelint.
 
 This module provides the PluginValidationRunner that uses the new plugin system
 to run validators and format output according to user configuration.
+
+vibelint/src/vibelint/plugin_runner.py
 """
 
 from collections import defaultdict
@@ -60,7 +62,7 @@ class PluginValidationRunner:
             # Run all validators on this file
             for validator in validators:
                 try:
-                    for finding in validator.validate(file_path, content):
+                    for finding in validator.validate(file_path, content, self.config):
                         # Make path relative to project root
                         relative_path = file_path.relative_to(self.project_root)
                         finding.file_path = relative_path

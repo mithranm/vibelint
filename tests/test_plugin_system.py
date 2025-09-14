@@ -8,7 +8,7 @@ from typing import Iterator
 
 import pytest
 
-from vibelint.plugin_system import BaseValidator, BaseFormatter, Finding, Severity, PluginManager
+from vibelint.plugin_system import BaseValidator, BaseFormatter, Finding, Severity, plugin_manager
 from vibelint.rules import RuleEngine
 from vibelint.formatters import HumanFormatter, JsonFormatter
 
@@ -91,17 +91,21 @@ def test_severity_override():
     assert findings[0].severity == Severity.BLOCK
 
 
-def test_plugin_manager():
-    """Test PluginManager functionality."""
-    manager = PluginManager()
-
-    # Test validator registration
-    manager._validators["TEST001"] = TestValidator
-    assert manager.get_validator("TEST001") == TestValidator
-
-    # Test formatter registration
-    manager._formatters["test"] = TestFormatter
-    assert manager.get_formatter("test") == TestFormatter
+def test_plugin_manager_loads_formatters():
+    """Test that plugin manager can load and retrieve formatters."""
+    manager = plugin_manager
+    
+    # The plugin manager loads formatters from entry points  
+    manager.load_plugins()
+    
+    # Test getting all formatters
+    formatters = manager.get_all_formatters()
+    assert isinstance(formatters, dict)
+    assert len(formatters) > 0
+    
+    # Test getting specific formatter
+    formatter_class = manager.get_formatter("human")
+    assert formatter_class is not None
 
 
 def test_rule_engine():

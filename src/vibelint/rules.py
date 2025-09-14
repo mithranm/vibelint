@@ -2,6 +2,8 @@
 Rule management system for vibelint.
 
 Handles rule configuration, severity overrides, and policy management.
+
+vibelint/src/vibelint/rules.py
 """
 
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set

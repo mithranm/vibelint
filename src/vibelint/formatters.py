@@ -3,6 +3,8 @@ Report formatters for vibelint validation results.
 
 Provides pluggable report formatters for different output formats including
 human-readable, JSON, SARIF, and LLM-optimized formats.
+
+vibelint/src/vibelint/formatters.py
 """
 
 import json
