@@ -8,13 +8,7 @@ from typing import Iterator
 
 import pytest
 
-from vibelint.plugin_system import (
-    BaseValidator,
-    BaseFormatter,
-    Finding,
-    Severity,
-    PluginManager
-)
+from vibelint.plugin_system import BaseValidator, BaseFormatter, Finding, Severity, PluginManager
 from vibelint.rules import RuleEngine
 from vibelint.formatters import HumanFormatter, JsonFormatter
 
@@ -33,7 +27,7 @@ class TestValidator(BaseValidator):
                 message="Found test issue",
                 file_path=file_path,
                 line=1,
-                suggestion="Remove test_issue"
+                suggestion="Remove test_issue",
             )
 
 
@@ -54,7 +48,7 @@ def test_finding_creation():
         message="Test message",
         file_path=Path("test.py"),
         line=10,
-        severity=Severity.WARN
+        severity=Severity.WARN,
     )
 
     assert finding.rule_id == "VBL001"
@@ -112,12 +106,7 @@ def test_plugin_manager():
 
 def test_rule_engine():
     """Test RuleEngine functionality."""
-    config = {
-        "rules": {
-            "TEST001": "BLOCK",
-            "TEST002": "OFF"
-        }
-    }
+    config = {"rules": {"TEST001": "BLOCK", "TEST002": "OFF"}}
 
     engine = RuleEngine(config)
 
@@ -141,15 +130,15 @@ def test_human_formatter():
             message="Test error",
             file_path=Path("test.py"),
             line=10,
-            severity=Severity.BLOCK
+            severity=Severity.BLOCK,
         ),
         Finding(
             rule_id="VBL002",
             message="Test warning",
             file_path=Path("other.py"),
             line=5,
-            severity=Severity.WARN
-        )
+            severity=Severity.WARN,
+        ),
     ]
 
     summary = {"BLOCK": 1, "WARN": 1, "INFO": 0}
@@ -172,7 +161,7 @@ def test_json_formatter():
             message="Test issue",
             file_path=Path("test.py"),
             line=10,
-            severity=Severity.WARN
+            severity=Severity.WARN,
         )
     ]
 

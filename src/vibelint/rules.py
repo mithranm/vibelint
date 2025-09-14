@@ -58,7 +58,9 @@ class RuleEngine:
         """Get effective severity for a rule."""
         return self._rule_overrides.get(rule_id, default)
 
-    def create_validator_instance(self, validator_class: type[BaseValidator]) -> Optional[BaseValidator]:
+    def create_validator_instance(
+        self, validator_class: type[BaseValidator]
+    ) -> Optional[BaseValidator]:
         """
         Create validator instance with configured severity.
 
@@ -86,7 +88,9 @@ class RuleEngine:
 
         return validators
 
-    def filter_enabled_validators(self, validator_classes: List[type[BaseValidator]]) -> List[BaseValidator]:
+    def filter_enabled_validators(
+        self, validator_classes: List[type[BaseValidator]]
+    ) -> List[BaseValidator]:
         """Filter and instantiate only enabled validators from a list."""
         validators = []
         for validator_class in validator_classes:
@@ -105,7 +109,7 @@ class RuleEngine:
             "enabled_rules": enabled_count,
             "disabled_rules": len(all_validators) - enabled_count,
             "overrides": len(self._rule_overrides),
-            "plugins": list(self._enabled_plugins)
+            "plugins": list(self._enabled_plugins),
         }
 
 
@@ -114,11 +118,9 @@ def create_default_rule_config() -> Dict[str, any]:
     return {
         "rules": {
             # Core rules with sensible defaults
-            "VBL101": "INFO",    # Missing docstring is just info
-            "VBL301": "WARN",    # Missing __all__ is warning
-            "VBL701": "WARN",    # Print statements are warnings
+            "VBL101": "INFO",  # Missing docstring is just info
+            "VBL301": "WARN",  # Missing __all__ is warning
+            "VBL701": "WARN",  # Print statements are warnings
         },
-        "plugins": {
-            "enabled": ["vibelint.core"]
-        }
+        "plugins": {"enabled": ["vibelint.core"]},
     }

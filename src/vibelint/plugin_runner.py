@@ -47,11 +47,11 @@ class PluginValidationRunner:
             if not file_path.exists() or not file_path.is_file():
                 continue
 
-            if file_path.suffix != '.py':
+            if file_path.suffix != ".py":
                 continue
 
             try:
-                content = file_path.read_text(encoding='utf-8')
+                content = file_path.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
 
@@ -105,7 +105,9 @@ class PluginValidationRunner:
         return 0
 
 
-def run_plugin_validation(config_dict: Dict[str, Any], project_root: Path) -> PluginValidationRunner:
+def run_plugin_validation(
+    config_dict: Dict[str, Any], project_root: Path
+) -> PluginValidationRunner:
     """
     Run validation using the plugin system.
 
@@ -124,11 +126,7 @@ def run_plugin_validation(config_dict: Dict[str, Any], project_root: Path) -> Pl
     fake_config = Config(project_root, config_dict)
 
     # Use discovery API properly
-    files = discover_files(
-        paths=[project_root],
-        config=fake_config,
-        explicit_exclude_paths=set()
-    )
+    files = discover_files(paths=[project_root], config=fake_config, explicit_exclude_paths=set())
 
     # Run validation
     runner.run_validation(files)

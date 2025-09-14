@@ -11,7 +11,12 @@ from typing import Iterator
 
 from .plugin_system import BaseValidator, Finding, Severity
 
-__all__ = ["PrintStatementValidator", "MissingAllValidator", "MissingDocstringValidator", "BUILTIN_VALIDATORS"]
+__all__ = [
+    "PrintStatementValidator",
+    "MissingAllValidator",
+    "MissingDocstringValidator",
+    "BUILTIN_VALIDATORS",
+]
 
 
 class PrintStatementValidator(BaseValidator):
@@ -41,14 +46,13 @@ class PrintStatementValidator(BaseValidator):
         visitor.visit(tree)
 
         for line_num, context in visitor.print_calls:
-            message = f"Print statement found{context}. Replace with logging for better maintainability."
+            message = (
+                f"Print statement found{context}. Replace with logging for better maintainability."
+            )
             suggestion = "Use logger.info(), logger.debug(), or logger.error() instead"
 
             yield self.create_finding(
-                message=message,
-                file_path=file_path,
-                line=line_num,
-                suggestion=suggestion
+                message=message, file_path=file_path, line=line_num, suggestion=suggestion
             )
 
     def _is_test_file(self, file_path: Path) -> bool:
@@ -100,7 +104,9 @@ class MissingAllValidator(BaseValidator):
                     if isinstance(target, ast.Name) and target.id == "__all__":
                         has_all = True
                         break
-            elif isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith("_"):
+            elif isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith(
+                "_"
+            ):
                 has_exports = True
 
         if has_exports and not has_all:
@@ -108,7 +114,7 @@ class MissingAllValidator(BaseValidator):
                 message="Module has public functions/classes but no __all__ definition",
                 file_path=file_path,
                 line=1,
-                suggestion="Add __all__ = [...] to explicitly define public API"
+                suggestion="Add __all__ = [...] to explicitly define public API",
             )
 
 
@@ -133,7 +139,7 @@ class MissingDocstringValidator(BaseValidator):
                 message="Module is missing docstring",
                 file_path=file_path,
                 line=1,
-                suggestion="Add a module-level docstring explaining the module's purpose"
+                suggestion="Add a module-level docstring explaining the module's purpose",
             )
 
         # Check classes and functions
@@ -145,7 +151,7 @@ class MissingDocstringValidator(BaseValidator):
                         message=f"{node_type} '{node.name}' is missing docstring",
                         file_path=file_path,
                         line=node.lineno,
-                        suggestion=f"Add docstring to {node.name}() explaining its purpose"
+                        suggestion=f"Add docstring to {node.name}() explaining its purpose",
                     )
 
 
@@ -172,8 +178,4 @@ class _PrintVisitor(ast.NodeVisitor):
 
 
 # Registry of built-in validators
-BUILTIN_VALIDATORS = [
-    PrintStatementValidator,
-    MissingAllValidator,
-    MissingDocstringValidator
-]
+BUILTIN_VALIDATORS = [PrintStatementValidator, MissingAllValidator, MissingDocstringValidator]

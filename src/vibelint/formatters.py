@@ -24,11 +24,7 @@ class HumanFormatter(BaseFormatter):
             return "All checks passed! ✨"
 
         # Group findings by severity
-        by_severity = {
-            Severity.BLOCK: [],
-            Severity.WARN: [],
-            Severity.INFO: []
-        }
+        by_severity = {Severity.BLOCK: [], Severity.WARN: [], Severity.INFO: []}
 
         for finding in findings:
             if finding.severity in by_severity:
@@ -41,13 +37,19 @@ class HumanFormatter(BaseFormatter):
             if by_severity[severity]:
                 lines.append(f"\n{severity.value}:")
                 for finding in by_severity[severity]:
-                    location = f"{finding.file_path}:{finding.line}" if finding.line > 0 else str(finding.file_path)
+                    location = (
+                        f"{finding.file_path}:{finding.line}"
+                        if finding.line > 0
+                        else str(finding.file_path)
+                    )
                     lines.append(f"  {finding.rule_id}: {finding.message} ({location})")
                     if finding.suggestion:
                         lines.append(f"    → {finding.suggestion}")
 
         # Add summary
-        lines.append(f"\nSummary: {summary.get('BLOCK', 0)} errors, {summary.get('WARN', 0)} warnings, {summary.get('INFO', 0)} info")
+        lines.append(
+            f"\nSummary: {summary.get('BLOCK', 0)} errors, {summary.get('WARN', 0)} warnings, {summary.get('INFO', 0)} info"
+        )
 
         return "\n".join(lines)
 
@@ -60,10 +62,7 @@ class JsonFormatter(BaseFormatter):
 
     def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
         """Format results as JSON."""
-        result = {
-            "summary": summary,
-            "findings": [finding.to_dict() for finding in findings]
-        }
+        result = {"summary": summary, "findings": [finding.to_dict() for finding in findings]}
         return json.dumps(result, indent=2, default=str)
 
 
@@ -87,7 +86,7 @@ class SarifFormatter(BaseFormatter):
                     "shortDescription": {"text": finding.message},
                     "defaultConfiguration": {
                         "level": self._severity_to_sarif_level(finding.severity)
-                    }
+                    },
                 }
 
             # Add result
@@ -95,41 +94,43 @@ class SarifFormatter(BaseFormatter):
                 "ruleId": finding.rule_id,
                 "level": self._severity_to_sarif_level(finding.severity),
                 "message": {"text": finding.message},
-                "locations": [{
-                    "physicalLocation": {
-                        "artifactLocation": {"uri": str(finding.file_path)},
-                        "region": {
-                            "startLine": max(1, finding.line),
-                            "startColumn": max(1, finding.column)
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": str(finding.file_path)},
+                            "region": {
+                                "startLine": max(1, finding.line),
+                                "startColumn": max(1, finding.column),
+                            },
                         }
                     }
-                }]
+                ],
             }
 
             if finding.suggestion:
-                result["fixes"] = [{
-                    "description": {"text": finding.suggestion}
-                }]
+                result["fixes"] = [{"description": {"text": finding.suggestion}}]
 
             results.append(result)
 
         sarif_output = {
             "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
             "version": "2.1.0",
-            "runs": [{
-                "tool": {
-                    "driver": {
-                        "name": "vibelint",
-                        "version": "0.1.2",
-                        "informationUri": "https://github.com/mithranm/vibelint",
-                        "rules": list(rules.values())
-                    }
-                },
-                "results": results
-            }]
+            "runs": [
+                {
+                    "tool": {
+                        "driver": {
+                            "name": "vibelint",
+                            "version": "0.1.2",
+                            "informationUri": "https://github.com/mithranm/vibelint",
+                            "rules": list(rules.values()),
+                        }
+                    },
+                    "results": results,
+                }
+            ],
         }
 
-        return json.dumps(sarif_output, separators=(',', ':'))
+        return json.dumps(sarif_output, separators=(",", ":"))
 
     def _severity_to_sarif_level(self, severity: Severity) -> str:
         """Convert vibelint severity to SARIF level."""
@@ -137,14 +138,10 @@ class SarifFormatter(BaseFormatter):
             Severity.BLOCK: "error",
             Severity.WARN: "warning",
             Severity.INFO: "note",
-            Severity.OFF: "none"
+            Severity.OFF: "none",
         }
         return mapping.get(severity, "warning")
 
 
 # Built-in formatters
-BUILTIN_FORMATTERS = {
-    "human": HumanFormatter,
-    "json": JsonFormatter,
-    "sarif": SarifFormatter
-}
+BUILTIN_FORMATTERS = {"human": HumanFormatter, "json": JsonFormatter, "sarif": SarifFormatter}

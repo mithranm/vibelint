@@ -592,6 +592,7 @@ def test_check_json_output_format(runner: CliRunner, setup_test_project: Path):
 
     # Output should be valid JSON
     import json
+
     try:
         data = json.loads(result.output)
         assert "summary" in data, "JSON output missing 'summary' key"
@@ -620,13 +621,16 @@ def test_check_sarif_output_format(runner: CliRunner, setup_test_project: Path):
 
     # Output should be valid JSON with SARIF structure
     import json
+
     try:
         data = json.loads(result.output)
         assert "version" in data, "SARIF output missing 'version' key"
         assert "$schema" in data, "SARIF output missing '$schema' key"
         assert "runs" in data, "SARIF output missing 'runs' key"
         assert isinstance(data["runs"], list), "runs should be a list"
-        assert data["version"] == "2.1.0", f"Expected SARIF version 2.1.0, got {data.get('version')}"
+        assert (
+            data["version"] == "2.1.0"
+        ), f"Expected SARIF version 2.1.0, got {data.get('version')}"
     except json.JSONDecodeError as e:
         pytest.fail(f"Invalid JSON output: {e}\nOutput:\n{result.output}")
 
@@ -652,4 +656,6 @@ def test_check_human_output_format_default(runner: CliRunner, setup_test_project
     assert "Initiating Vibe Check" in cleaned_output, "Human output missing UI messages"
 
     # Should contain vibe check results
-    assert any(word in cleaned_output for word in ["vibes", "Vibe", "Check"]), "Human output missing vibe terminology"
+    assert any(
+        word in cleaned_output for word in ["vibes", "Vibe", "Check"]
+    ), "Human output missing vibe terminology"

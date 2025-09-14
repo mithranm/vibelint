@@ -12,11 +12,19 @@ from pathlib import Path
 from typing import Iterator, Dict, List, Optional, Any
 import importlib.metadata
 
-__all__ = ["Severity", "Finding", "BaseValidator", "BaseFormatter", "PluginManager", "plugin_manager"]
+__all__ = [
+    "Severity",
+    "Finding",
+    "BaseValidator",
+    "BaseFormatter",
+    "PluginManager",
+    "plugin_manager",
+]
 
 
 class Severity(Enum):
     """Severity levels for validation findings."""
+
     OFF = "OFF"
     INFO = "INFO"
     WARN = "WARN"
@@ -31,6 +39,7 @@ class Severity(Enum):
 @dataclass
 class Finding:
     """A validation finding from a validator."""
+
     rule_id: str
     message: str
     file_path: Path
@@ -50,7 +59,7 @@ class Finding:
             "column": self.column,
             "msg": self.message,
             "context": self.context,
-            "suggestion": self.suggestion
+            "suggestion": self.suggestion,
         }
 
 
@@ -90,7 +99,7 @@ class BaseValidator(ABC):
         column: int = 0,
         context: str = "",
         suggestion: Optional[str] = None,
-        severity: Optional[Severity] = None
+        severity: Optional[Severity] = None,
     ) -> Finding:
         """Helper method to create a finding with this validator's rule_id."""
         return Finding(
@@ -101,7 +110,7 @@ class BaseValidator(ABC):
             column=column,
             severity=severity or self.severity,
             context=context,
-            suggestion=suggestion
+            suggestion=suggestion,
         )
 
 
