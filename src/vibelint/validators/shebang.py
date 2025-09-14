@@ -6,7 +6,6 @@ vibelint/validators/shebang.py
 
 import ast
 from pathlib import Path
-from typing import List, Tuple
 
 from ..error_codes import VBL401, VBL402, VBL403
 
@@ -16,7 +15,7 @@ __all__ = [
     "file_contains_top_level_main_block",
 ]
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class ShebangValidationResult:
@@ -32,8 +31,8 @@ class ShebangValidationResult:
 
         vibelint/validators/shebang.py
         """
-        self.errors: List[ValidationIssue] = []
-        self.warnings: List[ValidationIssue] = []
+        self.errors: list[ValidationIssue] = []
+        self.warnings: list[ValidationIssue] = []
         self.line_number: int = 0
 
     def has_issues(self) -> bool:
@@ -62,7 +61,7 @@ class ShebangValidationResult:
 
 
 def validate_shebang(
-    content: str, is_script: bool, allowed_shebangs: List[str]
+    content: str, is_script: bool, allowed_shebangs: list[str]
 ) -> ShebangValidationResult:
     """
     Validate the shebang line if present; ensure it's correct for scripts with __main__.

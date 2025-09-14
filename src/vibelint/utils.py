@@ -6,7 +6,6 @@ vibelint/utils.py
 
 import os
 from pathlib import Path
-from typing import List, Optional
 
 __all__ = [
     "ensure_directory",
@@ -23,7 +22,7 @@ __all__ = [
 ]
 
 
-def find_project_root(start_path: Path) -> Optional[Path]:
+def find_project_root(start_path: Path) -> Path | None:
     """
     Find the root directory of a project containing the given path.
 
@@ -51,7 +50,7 @@ def find_project_root(start_path: Path) -> Optional[Path]:
         current_path = current_path.parent
 
 
-def find_package_root(start_path: Path) -> Optional[Path]:
+def find_package_root(start_path: Path) -> Path | None:
     """
     Find the root directory of a Python package containing the given path.
 
@@ -132,7 +131,7 @@ def get_relative_path(path: Path, base: Path) -> Path:
         return path.resolve()
 
 
-def get_import_path(file_path: Path, package_root: Optional[Path] = None) -> str:
+def get_import_path(file_path: Path, package_root: Path | None = None) -> str:
     """
     Get the import path for a Python file.
 
@@ -181,9 +180,9 @@ def get_module_name(file_path: Path) -> str:
 def find_files_by_extension(
     root_path: Path,
     extension: str = ".py",
-    exclude_globs: List[str] = [],
+    exclude_globs: list[str] = [],
     include_vcs_hooks: bool = False,
-) -> List[Path]:
+) -> list[Path]:
     """
     Find all files with a specific extension in a directory and its subdirectories.
 
@@ -238,7 +237,7 @@ def ensure_directory(path: Path) -> Path:
     return path
 
 
-def read_file_safe(file_path: Path, encoding: str = "utf-8") -> Optional[str]:
+def read_file_safe(file_path: Path, encoding: str = "utf-8") -> str | None:
     """
     Safely read a file, returning None if any errors occur.
 

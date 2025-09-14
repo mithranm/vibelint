@@ -12,7 +12,6 @@ import random
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # Add this import
 if sys.version_info >= (3, 7):
@@ -42,7 +41,7 @@ from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .snapshot import create_snapshot
 from .utils import find_project_root, get_relative_path
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class VibelintContext:
@@ -58,9 +57,9 @@ class VibelintContext:
 
         vibelint/cli.py
         """
-        self.command_result: Optional[CommandResult] = None
-        self.lint_runner: Optional[LintRunner] = None
-        self.project_root: Optional[Path] = None
+        self.command_result: CommandResult | None = None
+        self.lint_runner: LintRunner | None = None
+        self.project_root: Path | None = None
 
 
 __all__ = ["snapshot", "check", "cli", "namespace", "main", "VibelintContext"]
@@ -246,9 +245,9 @@ def _present_snapshot_results(result: SnapshotResult, console: Console):
 
 
 def _display_collisions(
-    hard_coll: List[NamespaceCollision],
-    global_soft_coll: List[NamespaceCollision],
-    local_soft_coll: List[NamespaceCollision],
+    hard_coll: list[NamespaceCollision],
+    global_soft_coll: list[NamespaceCollision],
+    local_soft_coll: list[NamespaceCollision],
     console: Console,
 ) -> int:
     """
@@ -479,7 +478,7 @@ def cli(ctx: click.Context, debug: bool):
     help="Save a comprehensive Vibe Report (Markdown) to the specified file.",
 )
 @click.pass_context
-def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
+def check(ctx: click.Context, yes: bool, output_report: Path | None):
     """
     Run a Vibe Check: Lint rules and namespace collision detection.
 
@@ -501,11 +500,11 @@ def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
         ctx.exit(1)
 
     result_data = CheckResult()
-    runner: Optional[LintRunner] = None
+    runner: LintRunner | None = None
 
     try:
         # Use the non-None project_root for target_paths
-        target_paths: List[Path] = [project_root]
+        target_paths: list[Path] = [project_root]
         runner = LintRunner(config=config, skip_confirmation=yes)
         lint_exit_code = runner.run(target_paths)
         result_data.lint_results = runner.results
@@ -587,7 +586,7 @@ def check(ctx: click.Context, yes: bool, output_report: Optional[Path]):
     help="Save the namespace tree visualization to the specified file.",
 )
 @click.pass_context
-def namespace(ctx: click.Context, output: Optional[Path]):
+def namespace(ctx: click.Context, output: Path | None):
     """
     Visualize the project's Python namespace structure (how things import).
 
@@ -609,7 +608,7 @@ def namespace(ctx: click.Context, output: Optional[Path]):
 
     try:
         # Use the non-None project_root for target_paths
-        target_paths: List[Path] = [project_root]
+        target_paths: list[Path] = [project_root]
         logger_cli.info("Building namespace tree...")
         # Pass the non-None target_paths here too
         root_node, intra_file_collisions = build_namespace_tree(target_paths, config)
@@ -684,7 +683,7 @@ def snapshot(ctx: click.Context, output: Path):
 
     try:
         # Use the non-None project_root for target_paths
-        target_paths: List[Path] = [project_root]
+        target_paths: list[Path] = [project_root]
         logger_cli.info(f"Creating codebase snapshot at {output_path}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         # Pass the non-None target_paths here too

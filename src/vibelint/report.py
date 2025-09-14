@@ -8,7 +8,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import List, Set, TextIO
+from typing import TextIO
 
 from .config import Config
 from .lint import LintResult
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_files_in_namespace_order(
-    node: NamespaceNode, collected_files: Set[Path], project_root: Path
+    node: NamespaceNode, collected_files: set[Path], project_root: Path
 ) -> None:
     """
     Recursively collects file paths from the namespace tree in DFS order,
@@ -84,10 +84,10 @@ def _get_files_in_namespace_order(
 def write_report_content(
     f: TextIO,
     project_root: Path,
-    target_paths: List[Path],
-    lint_results: List[LintResult],
-    hard_coll: List[NamespaceCollision],
-    soft_coll: List[NamespaceCollision],
+    target_paths: list[Path],
+    lint_results: list[LintResult],
+    hard_coll: list[NamespaceCollision],
+    soft_coll: list[NamespaceCollision],
     root_node: NamespaceNode,
     config: Config,
 ) -> None:
@@ -244,7 +244,7 @@ def write_report_content(
     f.write("## File Contents\n\n")
     f.write("Files are ordered alphabetically by path.\n\n")
 
-    collected_files_set: Set[Path] = set()
+    collected_files_set: set[Path] = set()
     try:
         _get_files_in_namespace_order(root_node, collected_files_set, project_root.resolve())
 

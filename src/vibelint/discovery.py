@@ -20,8 +20,8 @@ import fnmatch
 import logging
 import os
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, List, Optional, Set
 
 from .config import Config
 from .utils import get_relative_path
@@ -35,8 +35,8 @@ _VCS_DIRS = {".git", ".hg", ".svn"}
 def _is_excluded(
     path_abs: Path,
     project_root: Path,
-    exclude_globs: List[str],
-    explicit_exclude_paths: Set[Path],
+    exclude_globs: list[str],
+    explicit_exclude_paths: set[Path],
     is_checking_directory_for_prune: bool = False,
 ) -> bool:
     """
@@ -141,8 +141,8 @@ def _recursive_glob_with_pruning(
     search_root_abs: Path,
     glob_suffix_pattern: str,  # e.g., "*.py" or "data/*.json"
     project_root: Path,
-    config_exclude_globs: List[str],
-    explicit_exclude_paths: Set[Path],
+    config_exclude_globs: list[str],
+    explicit_exclude_paths: set[Path],
 ) -> Iterator[Path]:
     """
     Recursively walks a directory, prunes excluded subdirectories, and yields files
@@ -212,11 +212,11 @@ def _recursive_glob_with_pruning(
 
 
 def discover_files(
-    paths: List[Path],
+    paths: list[Path],
     config: Config,
-    default_includes_if_missing: Optional[List[str]] = None,
-    explicit_exclude_paths: Optional[Set[Path]] = None,
-) -> List[Path]:
+    default_includes_if_missing: list[str] | None = None,
+    explicit_exclude_paths: set[Path] | None = None,
+) -> list[Path]:
     """
     Discovers files based on include/exclude patterns from configuration.
     Uses a custom walker for recursive globs (**) to enable directory pruning.
@@ -238,7 +238,7 @@ def discover_files(
         raise ValueError("Cannot discover files without a project root defined in Config.")
 
     project_root = config.project_root.resolve()
-    candidate_files: Set[Path] = set()
+    candidate_files: set[Path] = set()
     _explicit_excludes = {p.resolve() for p in (explicit_exclude_paths or set())}
 
     include_globs_config = config.get("include_globs")
@@ -355,7 +355,7 @@ def discover_files(
     final_files_set = candidate_files
 
     # VCS Warning Logic
-    vcs_warnings: Set[Path] = set()
+    vcs_warnings: set[Path] = set()
     if final_files_set:
         for file_path in final_files_set:
             try:

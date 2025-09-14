@@ -8,7 +8,6 @@ vibelint/snapshot.py
 import fnmatch
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 from .config import Config
 from .discovery import discover_files
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def create_snapshot(
     output_path: Path,
-    target_paths: List[Path],
+    target_paths: list[Path],
     config: Config,
 ):
     """
@@ -55,12 +54,10 @@ def create_snapshot(
     for excluded_pattern_root in [".pytest_cache", ".ruff_cache", ".git"]:
         present = any(excluded_pattern_root in str(f) for f in discovered_files)
         logger.debug(
-            "!!! Check @ start of create_snapshot: '{}' presence in list: {}".format(
-                excluded_pattern_root, present
-            )
+            f"!!! Check @ start of create_snapshot: '{excluded_pattern_root}' presence in list: {present}"
         )
 
-    file_infos: List[Tuple[Path, str]] = []
+    file_infos: list[tuple[Path, str]] = []
 
     peek_globs = config.get("peek_globs", [])
     if not isinstance(peek_globs, list):
@@ -95,7 +92,7 @@ def create_snapshot(
     logger.debug(f"Sorted {len(file_infos)} files for snapshot.")
 
     # Build the tree structure using a dictionary
-    tree: Dict = {}
+    tree: dict = {}
     for f_path, f_cat in file_infos:
         try:
             # --- FIX START ---
@@ -165,7 +162,7 @@ def create_snapshot(
                         outfile.write("```\n")
                         outfile.write("[PEEK - Content truncated]\n")
                         try:
-                            with open(f, "r", encoding="utf-8", errors="ignore") as infile:
+                            with open(f, encoding="utf-8", errors="ignore") as infile:
                                 lines_read = 0
                                 for line in infile:
                                     if lines_read >= 10:  # Peek limit (e.g., 10 lines)
@@ -181,7 +178,7 @@ def create_snapshot(
                         lang = _get_language(f)
                         outfile.write(f"```{lang}\n")
                         try:
-                            with open(f, "r", encoding="utf-8", errors="ignore") as infile:
+                            with open(f, encoding="utf-8", errors="ignore") as infile:
                                 content = infile.read()
                                 # Ensure final newline for cleaner markdown rendering
                                 if not content.endswith("\n"):
@@ -209,7 +206,7 @@ def create_snapshot(
             # Add a final newline for good measure
             outfile.write("\n")
 
-    except IOError as e:
+    except OSError as e:
         # Error writing the main output file
         logger.error(f"Failed to write snapshot file {absolute_output_path}: {e}", exc_info=True)
         raise  # Re-raise IOErrors
@@ -219,7 +216,7 @@ def create_snapshot(
         raise  # Re-raise other critical exceptions
 
 
-def _write_tree(outfile, node: Dict, prefix=""):
+def _write_tree(outfile, node: dict, prefix=""):
     """
     Helper function to recursively write the directory tree structure
     from the prepared dictionary.
@@ -233,7 +230,7 @@ def _write_tree(outfile, node: Dict, prefix=""):
     """
     # Separate directories (keys other than '__FILES__') from files (items in '__FILES__')
     dirs = sorted([k for k in node if k != "__FILES__"])
-    files_data: List[Tuple[Path, str]] = sorted(node.get("__FILES__", []), key=lambda x: x[0].name)
+    files_data: list[tuple[Path, str]] = sorted(node.get("__FILES__", []), key=lambda x: x[0].name)
 
     # Combine directory names and file names for iteration order
     entries = dirs + [f_info[0].name for f_info in files_data]

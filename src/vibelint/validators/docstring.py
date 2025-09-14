@@ -5,7 +5,8 @@ vibelint/validators/docstring.py
 """
 
 import logging
-from typing import List, Mapping, Optional, Sequence, Tuple, Union
+from collections.abc import Mapping, Sequence
+from typing import Union
 
 import libcst as cst
 from libcst import (
@@ -44,10 +45,10 @@ __all__ = [
 
 IssueKey = int
 BodyItem = Union[BaseStatement, BaseSmallStatement, EmptyLine, Comment]
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
-def _get_docstring_node(body_stmts: Sequence[CSTNode]) -> Optional[SimpleStatementLine]:
+def _get_docstring_node(body_stmts: Sequence[CSTNode]) -> SimpleStatementLine | None:
     """
     Attempts to get the CST node representing the docstring from a sequence of body statements.
     Searches for the first non-comment/empty statement and checks if it's a SimpleString expression.
@@ -72,7 +73,7 @@ def _get_docstring_node(body_stmts: Sequence[CSTNode]) -> Optional[SimpleStateme
     return None
 
 
-def _get_simple_string_node(body_stmts: Sequence[CSTNode]) -> Optional[SimpleString]:
+def _get_simple_string_node(body_stmts: Sequence[CSTNode]) -> SimpleString | None:
     """
     Gets the SimpleString node if it's the first statement.
 
@@ -90,7 +91,7 @@ def _get_simple_string_node(body_stmts: Sequence[CSTNode]) -> Optional[SimpleStr
     return None
 
 
-def _extract_docstring_text(node: Optional[SimpleStatementLine]) -> Optional[str]:
+def _extract_docstring_text(node: SimpleStatementLine | None) -> str | None:
     """
     Extracts the interpreted string value from a docstring node.
 
@@ -113,7 +114,7 @@ def _extract_docstring_text(node: Optional[SimpleStatementLine]) -> Optional[str
     return None
 
 
-def _get_docstring_node_index(body_stmts: Sequence[CSTNode]) -> Optional[int]:
+def _get_docstring_node_index(body_stmts: Sequence[CSTNode]) -> int | None:
     """
     Gets the index of the docstring node in a body list.
 
@@ -153,8 +154,8 @@ class DocstringValidationResult:
 
         vibelint/validators/docstring.py
         """
-        self.errors: List[ValidationIssue] = []
-        self.warnings: List[ValidationIssue] = []
+        self.errors: list[ValidationIssue] = []
+        self.warnings: list[ValidationIssue] = []
 
     def has_issues(self) -> bool:
         """
@@ -313,9 +314,9 @@ class DocstringInfoExtractor(cst.CSTVisitor):
 
     def _validate_docstring(
         self,
-        node: Union[Module, ClassDef, FunctionDef],
-        node_doc: Optional[SimpleStatementLine],
-        text_doc: Optional[str],
+        node: Module | ClassDef | FunctionDef,
+        node_doc: SimpleStatementLine | None,
+        text_doc: str | None,
         n_type: str,
         n_name: str,
     ) -> None:
@@ -399,7 +400,7 @@ class DocstringInfoExtractor(cst.CSTVisitor):
 
 def validate_every_docstring(
     content: str, relative_path: str
-) -> Tuple[DocstringValidationResult, Optional[Module]]:
+) -> tuple[DocstringValidationResult, Module | None]:
     """
     Parse source code and run the DocstringInfoExtractor visitor to validate all docstrings.
 

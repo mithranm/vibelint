@@ -5,7 +5,6 @@ vibelint/validators/encoding.py
 """
 
 import re
-from typing import List, Tuple
 
 from ..error_codes import VBL201
 
@@ -14,7 +13,7 @@ __all__ = [
     "validate_encoding_cookie",
 ]
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class EncodingValidationResult:
@@ -30,8 +29,8 @@ class EncodingValidationResult:
 
         vibelint/validators/encoding.py
         """
-        self.errors: List[ValidationIssue] = []
-        self.warnings: List[ValidationIssue] = []
+        self.errors: list[ValidationIssue] = []
+        self.warnings: list[ValidationIssue] = []
         self.line_number: int = -1
 
     def has_issues(self) -> bool:

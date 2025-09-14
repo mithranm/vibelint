@@ -6,7 +6,6 @@ vibelint/results.py
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 from .lint import LintResult
 from .namespace import NamespaceCollision, NamespaceNode
@@ -23,7 +22,7 @@ class CommandResult:
     """
 
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
     exit_code: int = 0
 
     def __post_init__(self):
@@ -45,13 +44,13 @@ class CheckResult(CommandResult):
     vibelint/results.py
     """
 
-    lint_results: List[LintResult] = field(default_factory=list)
-    hard_collisions: List[NamespaceCollision] = field(default_factory=list)
-    global_soft_collisions: List[NamespaceCollision] = field(default_factory=list)
-    local_soft_collisions: List[NamespaceCollision] = field(default_factory=list)
-    report_path: Optional[Path] = None
+    lint_results: list[LintResult] = field(default_factory=list)
+    hard_collisions: list[NamespaceCollision] = field(default_factory=list)
+    global_soft_collisions: list[NamespaceCollision] = field(default_factory=list)
+    local_soft_collisions: list[NamespaceCollision] = field(default_factory=list)
+    report_path: Path | None = None
     report_generated: bool = False
-    report_error: Optional[str] = None
+    report_error: str | None = None
 
 
 @dataclass
@@ -62,11 +61,11 @@ class NamespaceResult(CommandResult):
     vibelint/results.py
     """
 
-    root_node: Optional[NamespaceNode] = None
-    intra_file_collisions: List[NamespaceCollision] = field(default_factory=list)
-    output_path: Optional[Path] = None
+    root_node: NamespaceNode | None = None
+    intra_file_collisions: list[NamespaceCollision] = field(default_factory=list)
+    output_path: Path | None = None
     output_saved: bool = False
-    output_error: Optional[str] = None
+    output_error: str | None = None
 
 
 @dataclass
@@ -77,4 +76,4 @@ class SnapshotResult(CommandResult):
     vibelint/results.py
     """
 
-    output_path: Optional[Path] = None
+    output_path: Path | None = None

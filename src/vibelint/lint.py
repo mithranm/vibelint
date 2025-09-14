@@ -10,12 +10,17 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
 
 import click
 from rich.console import Console
-from rich.progress import TimeElapsedColumn  # Add for better progress visibility
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,  # Add for better progress visibility
+)
 from rich.table import Table
 
 from .config import Config
@@ -32,7 +37,7 @@ __all__ = ["LintResult", "LintRunner"]
 console = Console()  # Keep console instance if used elsewhere, otherwise remove
 logger = logging.getLogger(__name__)
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class LintResult:
@@ -49,8 +54,8 @@ class LintResult:
         vibelint/lint.py
         """
         self.file_path: Path = Path()
-        self.errors: List[ValidationIssue] = []  # Major vibe failures
-        self.warnings: List[ValidationIssue] = []  # Minor vibe issues
+        self.errors: list[ValidationIssue] = []  # Major vibe failures
+        self.warnings: list[ValidationIssue] = []  # Minor vibe issues
 
     @property
     def has_issues(self) -> bool:
@@ -85,10 +90,10 @@ class LintRunner:
             raise ValueError("LintRunner requires a config object with project_root set.")
 
         self.skip_confirmation = skip_confirmation
-        self.results: List[LintResult] = []
+        self.results: list[LintResult] = []
         self._final_exit_code: int = 0  # Determined by errors
 
-    def run(self, paths: List[Path]) -> int:
+    def run(self, paths: list[Path]) -> int:
         """
         Runs the linting process (Vibe Check) and returns the exit code (0 for pass, 1 for fail).
 
@@ -106,13 +111,13 @@ class LintRunner:
             logger.info(f"Ignoring codes: {sorted(list(ignore_codes_set))}")
 
         discovery_start = time.time()
-        all_discovered_files: List[Path] = discover_files(
+        all_discovered_files: list[Path] = discover_files(
             paths=paths, config=self.config, explicit_exclude_paths=set()
         )
         discovery_time = time.time() - discovery_start
         logger.debug(f"File discovery took {discovery_time:.4f} seconds.")
 
-        python_files: List[Path] = [
+        python_files: list[Path] = [
             f for f in all_discovered_files if f.is_file() and f.suffix == ".py"
         ]
         logger.debug(f"LintRunner.run: Discovered {len(python_files)} Python files for Vibe Check.")
@@ -237,7 +242,7 @@ class LintRunner:
         )
         return self._final_exit_code
 
-    def _process_file(self, file_path: Path, ignore_codes_set: Set[str]) -> LintResult:
+    def _process_file(self, file_path: Path, ignore_codes_set: set[str]) -> LintResult:
         """
         Processes a single file for linting issues (Vibe Check), filtering by ignored codes.
 
@@ -254,9 +259,9 @@ class LintRunner:
         lr.file_path = file_path
         relative_path_str = file_path.name  # Default
         log_prefix = f"[{file_path.name}]"  # Use simple name for shorter logs initially
-        original_content: Optional[str] = None
-        collected_errors: List[ValidationIssue] = []
-        collected_warnings: List[ValidationIssue] = []
+        original_content: str | None = None
+        collected_errors: list[ValidationIssue] = []
+        collected_warnings: list[ValidationIssue] = []
 
         try:
             # Determine relative path for logging and validation use
@@ -300,7 +305,7 @@ class LintRunner:
                     collected_warnings.extend(doc_res.warnings)
 
                 # Shebang Validation (VBL4xx)
-                allowed_sb: List[str] = self.config.get(
+                allowed_sb: list[str] = self.config.get(
                     "allowed_shebangs", ["#!/usr/bin/env python3"]  # Provide a default
                 )
                 # Pass content to avoid re-reading; pass path for context/AST parsing if needed

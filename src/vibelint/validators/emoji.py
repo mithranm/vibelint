@@ -10,7 +10,6 @@ vibelint/validators/emoji.py
 
 import re
 from pathlib import Path
-from typing import List, Tuple, Optional
 
 from ..error_codes import VBL601, VBL602, VBL603
 
@@ -20,7 +19,7 @@ __all__ = [
     "detect_emoji_in_text",
 ]
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class EmojiValidationResult:
@@ -32,11 +31,11 @@ class EmojiValidationResult:
 
     def __init__(self) -> None:
         """Initialize an empty emoji validation result."""
-        self.issues: List[ValidationIssue] = []
-        self.errors: List[ValidationIssue] = []
-        self.warnings: List[ValidationIssue] = []
+        self.issues: list[ValidationIssue] = []
+        self.errors: list[ValidationIssue] = []
+        self.warnings: list[ValidationIssue] = []
         self.emoji_count: int = 0
-        self.emoji_locations: List[Tuple[int, str, str]] = []  # (line_num, line_text, emoji)
+        self.emoji_locations: list[tuple[int, str, str]] = []  # (line_num, line_text, emoji)
 
     def add_emoji_issue(self, code: str, message: str, line_num: int, line_text: str, emoji: str) -> None:
         """Add an emoji-related issue to the result."""
@@ -52,7 +51,7 @@ class EmojiValidationResult:
         self.emoji_count += 1
 
 
-def detect_emoji_in_text(text: str) -> List[Tuple[str, int, int]]:
+def detect_emoji_in_text(text: str) -> list[tuple[str, int, int]]:
     """
     Detect emoji characters in text.
 
@@ -92,7 +91,7 @@ def detect_emoji_in_text(text: str) -> List[Tuple[str, int, int]]:
     return results
 
 
-def validate_emoji_usage(file_path: Path, content: Optional[str] = None) -> EmojiValidationResult:
+def validate_emoji_usage(file_path: Path, content: str | None = None) -> EmojiValidationResult:
     """
     Validate emoji usage in a Python file.
 
@@ -191,8 +190,12 @@ def _determine_emoji_context(line: str, emoji_pos: int) -> str:
         return "string"
 
     # Check for f-strings, triple quotes, etc.
-    if ('f"' in before_emoji or "f'" in before_emoji or
-        '"""' in before_emoji or "'''" in before_emoji):
+    if (
+        'f"' in before_emoji
+        or "f'" in before_emoji
+        or '"""' in before_emoji
+        or "'''" in before_emoji
+    ):
         return "string"
 
     return "code"

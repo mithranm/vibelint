@@ -8,14 +8,13 @@ vibelint/validators/exports.py
 
 import ast
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from ..config import Config
 from ..error_codes import VBL301, VBL302, VBL303, VBL304
 
 __all__ = ["ExportValidationResult", "validate_exports"]
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class ExportValidationResult:
@@ -32,11 +31,11 @@ class ExportValidationResult:
         vibelint/validators/exports.py
         """
         self.file_path = file_path
-        self.errors: List[ValidationIssue] = []
-        self.warnings: List[ValidationIssue] = []
+        self.errors: list[ValidationIssue] = []
+        self.warnings: list[ValidationIssue] = []
         self.has_all: bool = False
 
-        self.all_lineno: Optional[int] = None
+        self.all_lineno: int | None = None
 
     def has_issues(self) -> bool:
         """

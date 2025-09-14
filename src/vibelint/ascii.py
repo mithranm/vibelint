@@ -85,7 +85,7 @@ def load_ascii_from_file(filepath: str) -> str:
     src/vibelint/ascii.py
     """
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             return f.read()
     except Exception as e:
         raise RuntimeError(f"Error reading {filepath}: {e}")

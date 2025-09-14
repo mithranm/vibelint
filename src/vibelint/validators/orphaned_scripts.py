@@ -15,7 +15,6 @@ vibelint/validators/orphaned_scripts.py
 
 import fnmatch
 from pathlib import Path
-from typing import List, Tuple, Set, Optional
 
 from ..error_codes import VBL801, VBL802
 
@@ -24,7 +23,7 @@ __all__ = [
     "validate_orphaned_scripts",
 ]
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class OrphanedScriptValidationResult:
@@ -36,11 +35,11 @@ class OrphanedScriptValidationResult:
 
     def __init__(self) -> None:
         """Initialize an empty orphaned script validation result."""
-        self.issues: List[ValidationIssue] = []
-        self.errors: List[ValidationIssue] = []
-        self.warnings: List[ValidationIssue] = []
+        self.issues: list[ValidationIssue] = []
+        self.errors: list[ValidationIssue] = []
+        self.warnings: list[ValidationIssue] = []
         self.orphaned_count: int = 0
-        self.orphaned_locations: List[Tuple[str, str]] = []  # (file_path, reason)
+        self.orphaned_locations: list[tuple[str, str]] = []  # (file_path, reason)
 
     def add_orphaned_script(self, code: str, message: str, file_path: str, reason: str) -> None:
         """Add an orphaned script issue to the result."""
@@ -55,8 +54,8 @@ class OrphanedScriptValidationResult:
 
 def validate_orphaned_scripts(
     project_root: Path,
-    include_globs: List[str],
-    exclude_globs: Optional[List[str]] = None
+    include_globs: list[str],
+    exclude_globs: list[str] | None = None
 ) -> OrphanedScriptValidationResult:
     """
     Find Python scripts that exist outside the configured include patterns.
@@ -138,7 +137,7 @@ def validate_orphaned_scripts(
     return result
 
 
-def _determine_orphan_reason(py_file: Path, relative_path: str, include_globs: List[str]) -> str:
+def _determine_orphan_reason(py_file: Path, relative_path: str, include_globs: list[str]) -> str:
     """Determine why a Python file might be considered orphaned."""
 
     # Check if it's a common one-off script pattern

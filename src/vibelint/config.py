@@ -10,8 +10,9 @@ vibelint/config.py
 
 import logging
 import sys
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any
 
 if sys.version_info >= (3, 11):
 
@@ -54,7 +55,7 @@ class Config:
     vibelint/config.py
     """
 
-    def __init__(self, project_root: Optional[Path], config_dict: Dict[str, Any]):
+    def __init__(self, project_root: Path | None, config_dict: dict[str, Any]):
         """
         Initializes Config.
 
@@ -64,7 +65,7 @@ class Config:
         self._config_dict = config_dict.copy()
 
     @property
-    def project_root(self) -> Optional[Path]:
+    def project_root(self) -> Path | None:
         """
         The detected project root directory, or None if not found.
 
@@ -82,7 +83,7 @@ class Config:
         return self._config_dict
 
     @property
-    def ignore_codes(self) -> List[str]:
+    def ignore_codes(self) -> list[str]:
         """
         Returns the list of error codes to ignore, from config or empty list.
 
@@ -154,7 +155,7 @@ def load_config(start_path: Path) -> Config:
     vibelint/config.py
     """
     project_root = find_package_root(start_path)
-    loaded_settings: Dict[str, Any] = {}
+    loaded_settings: dict[str, Any] = {}
 
     if not project_root:
         logger.warning(

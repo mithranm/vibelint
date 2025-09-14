@@ -9,7 +9,6 @@ vibelint/validators/print_statements.py
 
 import ast
 from pathlib import Path
-from typing import List, Tuple, Optional, Set
 
 from ..error_codes import VBL701, VBL702, VBL703
 
@@ -19,7 +18,7 @@ __all__ = [
     "PrintStatementVisitor",
 ]
 
-ValidationIssue = Tuple[str, str]
+ValidationIssue = tuple[str, str]
 
 
 class PrintValidationResult:
@@ -31,11 +30,11 @@ class PrintValidationResult:
 
     def __init__(self) -> None:
         """Initialize an empty print statement validation result."""
-        self.issues: List[ValidationIssue] = []
-        self.errors: List[ValidationIssue] = []
-        self.warnings: List[ValidationIssue] = []
+        self.issues: list[ValidationIssue] = []
+        self.errors: list[ValidationIssue] = []
+        self.warnings: list[ValidationIssue] = []
         self.print_count: int = 0
-        self.print_locations: List[Tuple[int, str, str]] = []  # (line_num, context, suggestion)
+        self.print_locations: list[tuple[int, str, str]] = []  # (line_num, context, suggestion)
 
     def add_print_issue(self, code: str, message: str, line_num: int, context: str, suggestion: str) -> None:
         """Add a print statement issue to the result."""
@@ -60,9 +59,9 @@ class PrintStatementVisitor(ast.NodeVisitor):
 
     def __init__(self) -> None:
         """Initialize the visitor."""
-        self.print_calls: List[Tuple[int, str, Optional[str]]] = []  # (line_num, call_type, context)
-        self.current_function: Optional[str] = None
-        self.current_class: Optional[str] = None
+        self.print_calls: list[tuple[int, str, str | None]] = []  # (line_num, call_type, context)
+        self.current_function: str | None = None
+        self.current_class: str | None = None
 
     def visit_Call(self, node: ast.Call) -> None:
         """Visit function call nodes to detect print() calls."""
@@ -117,7 +116,6 @@ class PrintStatementVisitor(ast.NodeVisitor):
             first_arg = node.args[0]
 
             # Try to extract string content for analysis
-            content_hint = ""
             if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
                 content = first_arg.value.lower()
                 if any(word in content for word in ['error', 'fail', 'exception', 'critical']):
@@ -139,10 +137,10 @@ class PrintStatementVisitor(ast.NodeVisitor):
 
 def validate_print_statements(
     file_path: Path,
-    content: Optional[str] = None,
+    content: str | None = None,
     ignore_test_files: bool = True,
     ignore_cli_files: bool = True,
-    allowed_patterns: Optional[Set[str]] = None
+    allowed_patterns: set[str] | None = None
 ) -> PrintValidationResult:
     """
     Validate print statement usage in a Python file.
@@ -234,11 +232,11 @@ def _is_test_file(file_path: Path) -> bool:
     parent_names = [p.name.lower() for p in file_path.parents]
 
     return (
-        name.startswith('test_') or
-        name.endswith('_test.py') or
-        name == 'conftest.py' or
-        'test' in parent_names or
-        'tests' in parent_names
+        name.startswith('test_')
+        or name.endswith('_test.py')
+        or name == 'conftest.py'
+        or 'test' in parent_names
+        or 'tests' in parent_names
     )
 
 
@@ -248,9 +246,9 @@ def _is_cli_file(file_path: Path) -> bool:
     cli_indicators = ['cli.py', 'main.py', '__main__.py', 'command.py', 'cmd.py']
 
     return (
-        name in cli_indicators or
-        name.endswith('_cli.py') or
-        name.endswith('_cmd.py')
+        name in cli_indicators
+        or name.endswith('_cli.py')
+        or name.endswith('_cmd.py')
     )
 
 
@@ -259,9 +257,11 @@ def _has_logging_import(content: str) -> bool:
     lines = content.lower().split('\n')
     for line in lines:
         line = line.strip()
-        if (line.startswith('import logging') or
-            line.startswith('from logging') or
-            'import logging' in line):
+        if (
+            line.startswith('import logging')
+            or line.startswith('from logging')
+            or 'import logging' in line
+        ):
             return True
     return False
 
@@ -284,7 +284,7 @@ def _in_main_block(content: str, line_num: int) -> bool:
     return line_num > main_line
 
 
-def _matches_allowed_patterns(content: str, line_num: int, allowed_patterns: Set[str]) -> bool:
+def _matches_allowed_patterns(content: str, line_num: int, allowed_patterns: set[str]) -> bool:
     """Check if print statement matches any allowed patterns."""
     lines = content.split('\n')
     if line_num > len(lines):

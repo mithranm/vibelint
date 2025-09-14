@@ -8,7 +8,6 @@ import ast
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from .config import Config
 from .discovery import discover_files
@@ -51,8 +50,8 @@ class NamespaceCollision:
         self,
         name: str,
         collision_type: str,
-        paths: List[Path],
-        linenos: Optional[List[Optional[int]]] = None,
+        paths: list[Path],
+        linenos: list[int | None] | None = None,
     ) -> None:
         """
         Initializes a NamespaceCollision instance.
@@ -80,10 +79,10 @@ class NamespaceCollision:
 
         self.path1: Path = self.paths[0]
         self.path2: Path = self.paths[1] if len(self.paths) > 1 else self.paths[0]
-        self.lineno1: Optional[int] = self.linenos[0] if self.linenos else None
-        self.lineno2: Optional[int] = self.linenos[1] if len(self.linenos) > 1 else self.lineno1
+        self.lineno1: int | None = self.linenos[0] if self.linenos else None
+        self.lineno2: int | None = self.linenos[1] if len(self.linenos) > 1 else self.lineno1
 
-        self.definition_paths: List[Path] = (
+        self.definition_paths: list[Path] = (
             self.paths
             if self.collision_type in [CollisionType.GLOBAL_SOFT, CollisionType.LOCAL_SOFT]
             else []
@@ -144,9 +143,9 @@ class NamespaceCollision:
 
 
 def detect_hard_collisions(
-    paths: List[Path],
+    paths: list[Path],
     config: Config,
-) -> List[NamespaceCollision]:
+) -> list[NamespaceCollision]:
     """
     Detect HARD collisions: member vs. submodule, or duplicate definitions within a file.
 
@@ -171,9 +170,9 @@ def detect_hard_collisions(
 
 
 def detect_global_definition_collisions(
-    paths: List[Path],
+    paths: list[Path],
     config: Config,
-) -> List[NamespaceCollision]:
+) -> list[NamespaceCollision]:
     """
     Detect GLOBAL SOFT collisions: the same name defined/assigned at the top level
     in multiple different modules across the project.
@@ -196,9 +195,9 @@ def detect_global_definition_collisions(
 
 
 def detect_local_export_collisions(
-    paths: List[Path],
+    paths: list[Path],
     config: Config,
-) -> List[NamespaceCollision]:
+) -> list[NamespaceCollision]:
     """
     Detect LOCAL SOFT collisions: the same name exported via __all__ by multiple
     sibling modules within the same package.
@@ -214,13 +213,13 @@ def detect_local_export_collisions(
     """
 
     root_node, _ = build_namespace_tree(paths, config)
-    collisions: List[NamespaceCollision] = []
+    collisions: list[NamespaceCollision] = []
     root_node.find_local_export_collisions(collisions)
     return collisions
 
 
 def get_namespace_collisions_str(
-    paths: List[Path],
+    paths: list[Path],
     config: Config,
     console=None,
 ) -> str:
@@ -295,7 +294,7 @@ class NamespaceNode:
     vibelint/namespace.py
     """
 
-    def __init__(self, name: str, path: Optional[Path] = None, is_package: bool = False) -> None:
+    def __init__(self, name: str, path: Path | None = None, is_package: bool = False) -> None:
         """
         Initializes a NamespaceNode.
 
@@ -310,15 +309,15 @@ class NamespaceNode:
         self.name = name
         self.path = path
         self.is_package = is_package
-        self.children: Dict[str, "NamespaceNode"] = {}
+        self.children: dict[str, NamespaceNode] = {}
 
-        self.members: Dict[str, Tuple[Path, Optional[int]]] = {}
+        self.members: dict[str, tuple[Path, int | None]] = {}
 
-        self.member_collisions: List[NamespaceCollision] = []
+        self.member_collisions: list[NamespaceCollision] = []
 
-        self.exported_names: Optional[List[str]] = None
+        self.exported_names: list[str] | None = None
 
-    def set_exported_names(self, names: List[str]):
+    def set_exported_names(self, names: list[str]):
         """
         Sets the list of names found in __all__.
 
@@ -344,14 +343,14 @@ class NamespaceNode:
             self.children[name].is_package = is_package or self.children[name].is_package
         return self.children[name]
 
-    def get_hard_collisions(self) -> List[NamespaceCollision]:
+    def get_hard_collisions(self) -> list[NamespaceCollision]:
         """
         Detect HARD collisions recursively: members vs. child modules.
 
         vibelint/namespace.py
         """
 
-        collisions: List[NamespaceCollision] = []
+        collisions: list[NamespaceCollision] = []
 
         member_names_with_info = {}
         if self.is_package and self.path:
@@ -386,7 +385,7 @@ class NamespaceNode:
             collisions.extend(cnode.get_hard_collisions())
         return collisions
 
-    def collect_defined_members(self, all_dict: Dict[str, List[Tuple[Path, Optional[int]]]]):
+    def collect_defined_members(self, all_dict: dict[str, list[tuple[Path, int | None]]]):
         """
         Recursively collects defined members (path, lineno) for global definition collision check.
 
@@ -401,20 +400,20 @@ class NamespaceNode:
         for cnode in self.children.values():
             cnode.collect_defined_members(all_dict)
 
-    def detect_global_definition_collisions(self) -> List[NamespaceCollision]:
+    def detect_global_definition_collisions(self) -> list[NamespaceCollision]:
         """
         Detects GLOBAL SOFT collisions across the whole tree starting from this node.
 
         vibelint/namespace.py
         """
 
-        all_defined_members: Dict[str, List[Tuple[Path, Optional[int]]]] = defaultdict(list)
+        all_defined_members: dict[str, list[tuple[Path, int | None]]] = defaultdict(list)
         self.collect_defined_members(all_defined_members)
 
-        collisions: List[NamespaceCollision] = []
+        collisions: list[NamespaceCollision] = []
         for name, path_lineno_list in all_defined_members.items():
 
-            unique_paths_map: Dict[Path, Optional[int]] = {}
+            unique_paths_map: dict[Path, int | None] = {}
             for path, lineno in path_lineno_list:
                 resolved_p = path.resolve()
 
@@ -437,7 +436,7 @@ class NamespaceNode:
                 )
         return collisions
 
-    def find_local_export_collisions(self, collisions_list: List[NamespaceCollision]):
+    def find_local_export_collisions(self, collisions_list: list[NamespaceCollision]):
         """
         Recursively finds LOCAL SOFT collisions (__all__) within packages.
 
@@ -448,7 +447,7 @@ class NamespaceNode:
         """
 
         if self.is_package:
-            exports_in_package: Dict[str, List[Path]] = defaultdict(list)
+            exports_in_package: dict[str, list[Path]] = defaultdict(list)
 
             if self.path and self.path.is_dir() and self.exported_names:
 
@@ -542,7 +541,7 @@ class NamespaceNode:
                     lines.append(f"{prefix}{connector}{name} (member)")
                 else:
 
-                    child: "NamespaceNode" = item
+                    child: NamespaceNode = item
                     child_path_str = ""
                     indicator = ""
                     if child.path:
@@ -608,7 +607,7 @@ class NamespaceNode:
 
 def _extract_module_members(
     file_path: Path,
-) -> Tuple[Dict[str, Tuple[Path, Optional[int]]], List[NamespaceCollision], Optional[List[str]]]:
+) -> tuple[dict[str, tuple[Path, int | None]], list[NamespaceCollision], list[str] | None]:
     """
     Parses a Python file and extracts top-level member definitions/assignments,
     intra-file hard collisions, and the contents of __all__ if present.
@@ -630,15 +629,15 @@ def _extract_module_members(
 
         return {}, [], None
 
-    defined_members_map: Dict[str, Tuple[Path, Optional[int]]] = {}
-    collisions: List[NamespaceCollision] = []
-    exported_names: Optional[List[str]] = None
+    defined_members_map: dict[str, tuple[Path, int | None]] = {}
+    collisions: list[NamespaceCollision] = []
+    exported_names: list[str] | None = None
 
-    defined_names_nodes: Dict[str, ast.AST] = {}
+    defined_names_nodes: dict[str, ast.AST] = {}
 
     for node in tree.body:
         current_node = node
-        name: Optional[str] = None
+        name: str | None = None
         is_definition = False
         is_all_assignment = False
         lineno = getattr(current_node, "lineno", None)
@@ -727,8 +726,8 @@ def _extract_module_members(
 
 
 def build_namespace_tree(
-    paths: List[Path], config: Config
-) -> Tuple[NamespaceNode, List[NamespaceCollision]]:
+    paths: list[Path], config: Config
+) -> tuple[NamespaceNode, list[NamespaceCollision]]:
     """
     Builds the namespace tree, collects intra-file collisions, and stores members/__all__.
 
@@ -756,7 +755,7 @@ def build_namespace_tree(
 
     root = NamespaceNode(root_node_name, path=project_root_found.resolve(), is_package=True)
     root_path_for_rel = project_root_found.resolve()
-    all_intra_file_collisions: List[NamespaceCollision] = []
+    all_intra_file_collisions: list[NamespaceCollision] = []
 
     python_files = [
         f

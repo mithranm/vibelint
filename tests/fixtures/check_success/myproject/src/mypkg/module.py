@@ -9,8 +9,8 @@ __all__ = ["hello"]
 
 def hello():
     """
-    Prints hello.
+    Returns hello.
 
     mypkg/module.py
     """
-    print("Hello, world!")
+    return "Hello, world!"

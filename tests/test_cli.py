@@ -8,8 +8,9 @@ import os
 import re
 import shutil
 import sys
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Dict, Iterator
+from typing import Any, Dict
 
 import pytest
 from click.testing import CliRunner, Result
@@ -185,7 +186,7 @@ def setup_test_project(tmp_path: Path, request: pytest.FixtureRequest) -> Iterat
         os.chdir(original_cwd)
 
 
-def modify_pyproject(project_path: Path, updates: Dict[str, Any]):
+def modify_pyproject(project_path: Path, updates: dict[str, Any]):
     """Modifies the [tool.vibelint] section of pyproject.toml."""
     if tomllib is None or tomli_w is None:
         pytest.skip("Skipping test: 'tomli'/'tomli-w' not available for modifying pyproject.toml.")
