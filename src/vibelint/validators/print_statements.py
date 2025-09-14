@@ -4,7 +4,7 @@ Print statement validator using BaseValidator plugin system.
 Detects print statements that should be replaced with proper logging
 for better maintainability, configurability, and production readiness.
 
-vibelint/validators/print_statements.py
+vibelint/src/vibelint/validators/print_statements.py
 """
 
 import ast

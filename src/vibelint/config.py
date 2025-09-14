@@ -5,7 +5,7 @@ Reads settings *only* from pyproject.toml under the [tool.vibelint] section.
 No default values are assumed by this module. Callers must handle missing
 configuration keys.
 
-vibelint/config.py
+vibelint/src/vibelint/config.py
 """
 
 import logging
@@ -51,14 +51,14 @@ class Config:
     [tool.vibelint] section of pyproject.toml. Empty if the
     file or section is missing or invalid.
 
-    vibelint/config.py
+    vibelint/src/vibelint/config.py
     """
 
     def __init__(self, project_root: Path | None, config_dict: dict[str, Any]):
         """
         Initializes Config.
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         self._project_root = project_root
         self._config_dict = config_dict.copy()
@@ -68,7 +68,7 @@ class Config:
         """
         The detected project root directory, or None if not found.
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         return self._project_root
 
@@ -77,7 +77,7 @@ class Config:
         """
         Read-only view of the settings loaded from [tool.vibelint].
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         return self._config_dict
 
@@ -86,7 +86,7 @@ class Config:
         """
         Returns the list of error codes to ignore, from config or empty list.
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         ignored = self.get("ignore", [])
         if isinstance(ignored, list) and all(isinstance(item, str) for item in ignored):
@@ -105,7 +105,7 @@ class Config:
         """
         Gets a value from the loaded settings, returning default if not found.
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         return self._config_dict.get(key, default)
 
@@ -113,7 +113,7 @@ class Config:
         """
         Gets a value, raising KeyError if the key is not found.
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         if key not in self._config_dict:
             raise KeyError(
@@ -126,7 +126,7 @@ class Config:
         """
         Checks if a key exists in the loaded settings.
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         return key in self._config_dict
 
@@ -134,7 +134,7 @@ class Config:
         """
         Checks if a project root was found and some settings were loaded.
 
-        vibelint/config.py
+        vibelint/src/vibelint/config.py
         """
         return self._project_root is not None and bool(self._config_dict)
 
@@ -153,7 +153,7 @@ def load_config(start_path: Path) -> Config:
     Returns:
     A Config object. Check `config.project_root` and `config.settings`.
 
-    vibelint/config.py
+    vibelint/src/vibelint/config.py
     """
     project_root = find_package_root(start_path)
     loaded_settings: dict[str, Any] = {}

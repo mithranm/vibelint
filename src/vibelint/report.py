@@ -1,10 +1,11 @@
 """
 Report generation functionality for vibelint.
 
-vibelint/report.py
+vibelint/src/vibelint/report.py
 """
 
 import logging
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import TextIO
@@ -29,7 +30,7 @@ def _get_files_in_namespace_order(
         collected_files: A set to store the absolute paths of collected files.
         project_root: The project root path for checking containment.
 
-    vibelint/report.py
+    vibelint/src/vibelint/report.py
     """
 
     if node.is_package and node.path and node.path.is_dir():
@@ -102,7 +103,7 @@ def write_report_content(
     root_node: The root NamespaceNode of the project structure.
     config: Configuration object.
 
-    vibelint/report.py
+    vibelint/src/vibelint/report.py
     """
 
     package_name = project_root.name if project_root else "Unknown"
@@ -148,8 +149,6 @@ def write_report_content(
         f.write("*No validation issues found.*\n\n")
     else:
         # Group findings by file for better reporting
-        from collections import defaultdict
-
         files_with_findings = defaultdict(list)
         for finding in findings:
             files_with_findings[finding.file_path].append(finding)

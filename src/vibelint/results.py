@@ -1,7 +1,7 @@
 """
 Module for vibelint/results.py.
 
-vibelint/results.py
+vibelint/src/vibelint/results.py
 """
 
 from dataclasses import dataclass, field
@@ -18,7 +18,7 @@ class CommandResult:
     """
     Base class for command results.
 
-    vibelint/results.py
+    vibelint/src/vibelint/results.py
     """
 
     success: bool = True
@@ -29,7 +29,7 @@ class CommandResult:
         """
         Set exit code based on success if not explicitly set.
 
-        vibelint/results.py
+        vibelint/src/vibelint/results.py
         """
 
         if not self.success and self.exit_code == 0:
@@ -41,7 +41,7 @@ class CheckResult(CommandResult):
     """
     Result data from the 'check' command.
 
-    vibelint/results.py
+    vibelint/src/vibelint/results.py
     """
 
     findings: list[Finding] = field(default_factory=list)
@@ -58,7 +58,7 @@ class NamespaceResult(CommandResult):
     """
     Result data from the 'namespace' command.
 
-    vibelint/results.py
+    vibelint/src/vibelint/results.py
     """
 
     root_node: NamespaceNode | None = None
@@ -73,7 +73,7 @@ class SnapshotResult(CommandResult):
     """
     Result data from the 'snapshot' command.
 
-    vibelint/results.py
+    vibelint/src/vibelint/results.py
     """
 
     output_path: Path | None = None

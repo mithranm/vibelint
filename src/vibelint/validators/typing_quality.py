@@ -8,7 +8,7 @@ Detects poor typing practices that reduce code clarity and type safety:
 - Missing type annotations on public functions
 - String literals that should be Enums
 
-vibelint/validators/typing_quality.py
+vibelint/src/vibelint/validators/typing_quality.py
 """
 
 import ast

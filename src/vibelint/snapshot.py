@@ -1,8 +1,8 @@
-# src/vibelint/snapshot.py
+# vibelint/src/vibelint/snapshot.py
 """
 Codebase snapshot generation in markdown format.
 
-vibelint/snapshot.py
+vibelint/src/vibelint/snapshot.py
 """
 
 import fnmatch
@@ -32,7 +32,7 @@ def create_snapshot(
     target_paths: List of initial paths (files or directories) to discover from.
     config: The vibelint configuration object.
 
-    vibelint/snapshot.py
+    vibelint/src/vibelint/snapshot.py
     """
 
     assert config.project_root is not None, "Project root must be set before creating snapshot."
@@ -226,7 +226,7 @@ def _write_tree(outfile, node: dict, prefix=""):
         node: The current dictionary node representing a directory.
         prefix: The string prefix for drawing tree lines.
 
-    vibelint/snapshot.py
+    vibelint/src/vibelint/snapshot.py
     """
     # Separate directories (keys other than '__FILES__') from files (items in '__FILES__')
     dirs = sorted([k for k in node if k != "__FILES__"])
@@ -270,7 +270,7 @@ def _get_language(file_path: Path) -> str:
         A string representing the language identifier for markdown code blocks,
         or an empty string.
 
-    vibelint/snapshot.py
+    vibelint/src/vibelint/snapshot.py
     """
     ext = file_path.suffix.lower()
     # Mapping from file extension to markdown language identifier

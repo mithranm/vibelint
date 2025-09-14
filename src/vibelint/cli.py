@@ -4,7 +4,7 @@ Command-line interface for vibelint.
 
 Conducts vibe checks on your codebase.
 
-vibelint/cli.py
+vibelint/src/vibelint/cli.py
 """
 
 import logging
@@ -27,6 +27,7 @@ from rich.table import Table
 # Import necessary functions for ASCII art
 from .ascii import scale_to_terminal_by_height
 from .config import Config, load_config
+from .formatters import FORMAT_CHOICES, DEFAULT_FORMAT
 from .console_utils import console
 from .namespace import (
     NamespaceCollision,
@@ -46,14 +47,14 @@ class VibelintContext:
     """
     Context object to store command results and shared state.
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
 
     def __init__(self):
         """
         Initializes VibelintContext.
 
-        vibelint/cli.py
+        vibelint/src/vibelint/cli.py
         """
         self.command_result: CommandResult | None = None
         self.project_root: Path | None = None
@@ -83,7 +84,7 @@ def _present_check_results(result: CheckResult, runner):
     """
     Presents the results of the 'check' command (the Vibe Check™).
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     runner._print_summary()
     files_with_issues = sorted(
@@ -175,7 +176,7 @@ def _present_namespace_results(result: NamespaceResult):
     """
     Presents the results of the 'namespace' command.
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     if not result.success and result.error_message:
         console.print(f"[bold red]Error building namespace tree:[/bold red] {result.error_message}")
@@ -230,7 +231,7 @@ def _present_snapshot_results(result: SnapshotResult):
     """
     Presents the results of the 'snapshot' command. (Keep factual)
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     if result.success and result.output_path:
         console.print(f"[green]SUCCESS: Codebase snapshot created at {result.output_path}[/green]")
@@ -246,7 +247,7 @@ def _display_collisions(
     """
     Displays collision results in tables and returns an exit code indicating if hard collisions were found.
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     exit_code = 1 if hard_coll else 0
     total_collisions = len(hard_coll) + len(global_soft_coll) + len(local_soft_coll)
@@ -262,7 +263,7 @@ def _display_collisions(
         Get a relative path for display purposes, resolving it first.
         This is useful for consistent output in tables.
 
-        src/vibelint/cli.py
+        vibelint/src/vibelint/cli.py
         """
         try:
             # Resolve paths before getting relative path for consistency
@@ -378,13 +379,13 @@ def _display_collisions(
 @click.version_option()
 @click.option("--debug", is_flag=True, help="Enable debug logging output.")
 @click.pass_context
-def cli(ctx: click.Context, debug: bool):
+def cli(ctx: click.Context, debug: bool) -> None:
     """
     vibelint - Check the vibe, visualize namespaces, and snapshot Python codebases.
 
     Run commands from the root of your project (where pyproject.toml or .git is located).
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     ctx.ensure_object(VibelintContext)
     vibelint_ctx: VibelintContext = ctx.obj
@@ -473,9 +474,9 @@ def cli(ctx: click.Context, debug: bool):
 @click.option(
     "--format",
     "output_format",
-    default="human",
-    type=click.Choice(["human", "json", "sarif", "llm", "claude"]),
-    help="Report format: human (default), json, sarif, llm (AI-optimized), or claude (alias for llm).",
+    default=DEFAULT_FORMAT,
+    type=click.Choice(FORMAT_CHOICES),
+    help="Report format: natural (default, optimized for humans and AI agents), human (alias for natural), json, or sarif.",
 )
 @click.pass_context
 def check(ctx: click.Context, yes: bool, output_report: Path | None, output_format: str):
@@ -485,7 +486,7 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
     Fails if errors (like missing docstrings/`__all__`) or hard collisions are found.
     Warnings indicate potential vibe issues or areas for improvement.
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     vibelint_ctx: VibelintContext = ctx.obj
     project_root = vibelint_ctx.project_root
@@ -628,7 +629,7 @@ def namespace(ctx: click.Context, output: Path | None):
 
     Useful for untangling vibe conflicts.
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     vibelint_ctx: VibelintContext = ctx.obj
     project_root = vibelint_ctx.project_root
@@ -701,7 +702,7 @@ def snapshot(ctx: click.Context, output: Path):
 
     Respects include/exclude rules from your config. Good for context dumping.
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     vibelint_ctx: VibelintContext = ctx.obj
     project_root = vibelint_ctx.project_root
@@ -742,7 +743,7 @@ def main():
     """
     Main entry point for the vibelint CLI application.
 
-    vibelint/cli.py
+    vibelint/src/vibelint/cli.py
     """
     try:
         cli(obj=VibelintContext(), prog_name="vibelint")

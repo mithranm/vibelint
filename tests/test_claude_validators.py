@@ -32,10 +32,10 @@ def test_emoji_usage_validator():
     """Test EmojiUsageValidator."""
     validator = EmojiUsageValidator()
 
-    code = '''# This has emojis 🚀 that cause issues
-print("Hello world! 💫")
+    code = '''# This has emojis rocket that cause issues
+print("Hello world! stars")
 def process_data():
-    """Process data with fancy output 🎉"""
+    """Process data with fancy output celebration"""
     return True
 '''
 

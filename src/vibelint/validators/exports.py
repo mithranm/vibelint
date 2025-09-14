@@ -3,7 +3,7 @@ __all__ exports validator using BaseValidator plugin system.
 
 Checks for presence and correct format of __all__ definitions in Python modules.
 
-vibelint/validators/exports.py
+vibelint/src/vibelint/validators/exports.py
 """
 
 import ast

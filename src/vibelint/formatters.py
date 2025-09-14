@@ -10,24 +10,32 @@ from typing import Dict, List
 from .plugin_system import BaseFormatter, Finding, Severity
 
 __all__ = [
-    "HumanFormatter",
+    "NaturalLanguageFormatter",
     "JsonFormatter",
     "SarifFormatter",
-    "LLMFormatter",
     "BUILTIN_FORMATTERS",
+    "FORMAT_CHOICES",
+    "DEFAULT_FORMAT",
 ]
 
 
-class HumanFormatter(BaseFormatter):
-    """Human-readable output formatter (default)."""
+class NaturalLanguageFormatter(BaseFormatter):
+    """Natural language output formatter for humans and AI agents."""
 
-    name = "human"
-    description = "Human-readable output format"
+    name = "natural"
+    description = "Natural language output format optimized for human and AI agent consumption"
 
-    def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
+    def format_results(self, findings: List[Finding], summary: Dict[str, int], config=None) -> str:
         """Format results for human reading."""
         if not findings:
             return "All checks passed!"
+
+        # Get max display limit from config
+        max_displayed = 0  # 0 means no limit
+        if config and hasattr(config, 'get'):
+            max_displayed = config.get("max_displayed_issues", 0)
+        elif config and hasattr(config, '__getitem__'):
+            max_displayed = config.get("max_displayed_issues", 0)
 
         # Group findings by severity
         by_severity = {Severity.BLOCK: [], Severity.WARN: [], Severity.INFO: []}
@@ -37,12 +45,22 @@ class HumanFormatter(BaseFormatter):
                 by_severity[finding.severity].append(finding)
 
         lines = []
+        displayed_count = 0
+        total_count = len(findings)
 
         # Add findings by severity (highest first)
         for severity in [Severity.BLOCK, Severity.WARN, Severity.INFO]:
             if by_severity[severity]:
                 lines.append(f"\n{severity.value}:")
-                for finding in by_severity[severity]:
+
+                severity_findings = by_severity[severity]
+                for i, finding in enumerate(severity_findings):
+                    if max_displayed > 0 and displayed_count >= max_displayed:
+                        remaining_in_severity = len(severity_findings) - i
+                        remaining_total = total_count - displayed_count
+                        lines.append(f"  ... and {remaining_total} more issues (showing first {max_displayed})")
+                        break
+
                     location = (
                         f"{finding.file_path}:{finding.line}"
                         if finding.line > 0
@@ -52,10 +70,21 @@ class HumanFormatter(BaseFormatter):
                     if finding.suggestion:
                         lines.append(f"    → {finding.suggestion}")
 
-        # Add summary
-        lines.append(
-            f"\nSummary: {summary.get('BLOCK', 0)} errors, {summary.get('WARN', 0)} warnings, {summary.get('INFO', 0)} info"
-        )
+                    displayed_count += 1
+
+                if max_displayed > 0 and displayed_count >= max_displayed:
+                    break
+
+        # Add summary with full counts
+        total_errors = sum(1 for f in findings if f.severity == Severity.BLOCK)
+        total_warnings = sum(1 for f in findings if f.severity == Severity.WARN)
+        total_info = sum(1 for f in findings if f.severity == Severity.INFO)
+
+        summary_line = f"\nSummary: {total_errors} errors, {total_warnings} warnings, {total_info} info"
+        if max_displayed > 0 and total_count > max_displayed:
+            summary_line += f" (showing first {min(max_displayed, total_count)} of {total_count})"
+
+        lines.append(summary_line)
 
         return "\n".join(lines)
 
@@ -66,7 +95,7 @@ class JsonFormatter(BaseFormatter):
     name = "json"
     description = "JSON output format for CI/tooling integration"
 
-    def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
+    def format_results(self, findings: List[Finding], summary: Dict[str, int], config=None) -> str:
         """Format results as JSON."""
         result = {"summary": summary, "findings": [finding.to_dict() for finding in findings]}
         return json.dumps(result, indent=2, default=str)
@@ -78,7 +107,7 @@ class SarifFormatter(BaseFormatter):
     name = "sarif"
     description = "SARIF format for GitHub code scanning"
 
-    def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
+    def format_results(self, findings: List[Finding], summary: Dict[str, int], config=None) -> str:
         """Format results as SARIF JSON."""
         rules = {}
         results = []
@@ -149,81 +178,14 @@ class SarifFormatter(BaseFormatter):
         return mapping.get(severity, "warning")
 
 
-class LLMFormatter(BaseFormatter):
-    """LLM-optimized report formatter with actionable suggestions for AI-generated code."""
-
-    name = "llm"
-    description = "LLM-optimized report format for AI development workflows"
-
-    def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
-        """Format validation results optimized for LLM workflows."""
-        if not findings:
-            return "All checks passed! Code is ready for use."
-
-        # Group by rule type for better AI understanding
-        ai_patterns = []
-        standard_issues = []
-
-        for finding in findings:
-            # Check for AI development patterns (TODO, PARAMETERS, etc.)
-            if finding.rule_id in ["TODO-FOUND", "PARAMETERS-KEYWORD-ONLY"]:
-                ai_patterns.append(finding)
-            else:
-                standard_issues.append(finding)
-
-        lines = []
-        lines.append("## Code Analysis Results")
-
-        if ai_patterns:
-            lines.append("\n### AI Development Patterns")
-            lines.append("Issues common in AI-generated code:")
-            for finding in ai_patterns:
-                lines.append(f"- **{finding.rule_id}**: {finding.message}")
-                lines.append(f"  Location: `{finding.file_path}:{finding.line}`")
-                if finding.suggestion:
-                    lines.append(f"  **Suggestion**: {finding.suggestion}")
-                lines.append("")
-
-        if standard_issues:
-            lines.append("\n### Standard Issues")
-            for finding in standard_issues:
-                marker = (
-                    "ERROR"
-                    if finding.severity == Severity.BLOCK
-                    else "WARN" if finding.severity == Severity.WARN else "INFO"
-                )
-                lines.append(f"- [{marker}] **{finding.rule_id}**: {finding.message}")
-                lines.append(f"  Location: `{finding.file_path}:{finding.line}`")
-                if finding.suggestion:
-                    lines.append(f"  Suggestion: {finding.suggestion}")
-                lines.append("")
-
-        # Add actionable summary
-        lines.append("### Summary")
-        total_issues = sum(summary.values())
-        lines.append(f"Found {total_issues} issues total:")
-
-        for severity, count in summary.items():
-            if count > 0:
-                lines.append(f"- {count} {severity.lower()} level")
-
-        # Add workflow suggestions
-        if any(f.rule_id in ["TODO-FOUND", "PARAMETERS-KEYWORD-ONLY"] for f in findings):
-            lines.append("\n### LLM Development Workflow")
-            lines.append("Recommendations for AI-assisted development:")
-            lines.append("1. Address these patterns before committing code")
-            lines.append("2. Consider adding these checks to your development workflow")
-            lines.append("3. Use vibelint regularly to maintain code quality standards")
-
-        return "\n".join(lines)
-
-
 # Built-in report formatters
 BUILTIN_FORMATTERS = {
-    "human": HumanFormatter,
+    "natural": NaturalLanguageFormatter,
+    "human": NaturalLanguageFormatter,  # Keep human as alias for backward compatibility
     "json": JsonFormatter,
-    "sarif": SarifFormatter,
-    "llm": LLMFormatter,
-    # Keep "claude" as alias for backward compatibility during transition
-    "claude": LLMFormatter,
+    "sarif": SarifFormatter
 }
+
+# Format choices for CLI - single source of truth
+FORMAT_CHOICES = list(BUILTIN_FORMATTERS.keys())
+DEFAULT_FORMAT = "natural"

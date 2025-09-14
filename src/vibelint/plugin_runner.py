@@ -26,6 +26,7 @@ class PluginValidationRunner:
         """Initialize the plugin validation runner."""
         self.project_root = project_root
         self.config_dict = config_dict
+        self.config = config_dict  # Add config property for formatters
         self.rule_engine = RuleEngine(config_dict)
         self.findings: List[Finding] = []
 
@@ -93,7 +94,7 @@ class PluginValidationRunner:
                 formatter = BUILTIN_FORMATTERS["human"]()
 
         summary = self.get_summary()
-        return formatter.format_results(self.findings, summary)
+        return formatter.format_results(self.findings, summary, self.config)
 
     def has_blocking_issues(self) -> bool:
         """Check if any findings are blocking (BLOCK severity)."""

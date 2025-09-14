@@ -4,7 +4,7 @@ Docstring validator using BaseValidator plugin system.
 Checks for missing docstrings and proper path references in modules,
 classes, and functions.
 
-vibelint/validators/docstring.py
+vibelint/src/vibelint/validators/docstring.py
 """
 
 import ast

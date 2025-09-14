@@ -4,7 +4,7 @@ Emoji usage validator using BaseValidator plugin system.
 Detects emoji usage that can cause encoding issues, reduce readability,
 and create compatibility problems across different terminals and systems.
 
-vibelint/validators/emoji.py
+vibelint/src/vibelint/validators/emoji.py
 """
 
 import re

@@ -1,7 +1,7 @@
 """
 Utility functions for vibelint.
 
-vibelint/utils.py
+vibelint/src/vibelint/utils.py
 """
 
 import os
@@ -36,7 +36,7 @@ def find_project_root(start_path: Path) -> Path | None:
     Returns:
     Path to project root, or None if not found
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     current_path = start_path.resolve()
@@ -65,7 +65,7 @@ def find_package_root(start_path: Path) -> Path | None:
     Returns:
     Path to package root, or None if not found
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     current_path = start_path.resolve()
@@ -110,7 +110,7 @@ def is_python_file(path: Path) -> bool:
     Returns:
     True if the path is a Python file, False otherwise
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     return path.is_file() and path.suffix == ".py"
@@ -120,7 +120,7 @@ def get_relative_path(path: Path, base: Path) -> Path:
     """
     Safely compute a relative path, falling back to the original path.
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     try:
@@ -142,7 +142,7 @@ def get_import_path(file_path: Path, package_root: Path | None = None) -> str:
     Returns:
     Import path (e.g., "vibelint.utils")
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     if package_root is None:
@@ -171,7 +171,7 @@ def get_module_name(file_path: Path) -> str:
     Returns:
     Module name
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     return file_path.stem
@@ -195,7 +195,7 @@ def find_files_by_extension(
     Returns:
     List of paths to files with the specified extension
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     import fnmatch
@@ -230,7 +230,7 @@ def ensure_directory(path: Path) -> Path:
     Returns:
     Path to the directory
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     path.mkdir(parents=True, exist_ok=True)
@@ -248,7 +248,7 @@ def read_file_safe(file_path: Path, encoding: str = "utf-8") -> str | None:
     Returns:
     File contents or None if error
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     try:
@@ -269,7 +269,7 @@ def write_file_safe(file_path: Path, content: str, encoding: str = "utf-8") -> b
     Returns:
     True if successful, False otherwise
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     try:
@@ -292,7 +292,7 @@ def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
     Returns:
     True if the file seems binary, False otherwise.
 
-    vibelint/utils.py
+    vibelint/src/vibelint/utils.py
     """
 
     try:

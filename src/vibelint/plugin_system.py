@@ -122,13 +122,14 @@ class BaseFormatter(ABC):
     description: str = ""
 
     @abstractmethod
-    def format_results(self, findings: List[Finding], summary: Dict[str, int]) -> str:
+    def format_results(self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None) -> str:
         """
         Format validation results for output.
 
         Args:
             findings: List of all findings from validation
             summary: Summary counts by severity level
+            config: Optional configuration object for formatter settings
 
         Returns:
             Formatted output string

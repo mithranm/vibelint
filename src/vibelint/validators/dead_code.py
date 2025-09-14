@@ -4,7 +4,7 @@ Dead code detection validator.
 Identifies unused imports, unreferenced functions, duplicate implementations,
 and other forms of dead code that can be safely removed.
 
-vibelint/validators/dead_code.py
+vibelint/src/vibelint/validators/dead_code.py
 """
 
 import ast

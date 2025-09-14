@@ -13,7 +13,7 @@ provided paths are also excluded.
 Warns if files within common VCS directories (.git, .hg, .svn) are found
 and not covered by exclude_globs.
 
-src/vibelint/discovery.py
+vibelint/src/vibelint/discovery.py
 """
 
 import fnmatch
@@ -55,7 +55,7 @@ def _is_excluded(
     Returns:
     True if the path should be excluded/pruned, False otherwise.
 
-    vibelint/discovery.py
+    vibelint/src/vibelint/discovery.py
     """
 
     if not is_checking_directory_for_prune and path_abs in explicit_exclude_paths:

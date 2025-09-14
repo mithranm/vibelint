@@ -10,7 +10,7 @@ vibelint/validators/architecture.py
 from pathlib import Path
 from typing import Dict, Iterator, List
 
-from ..plugin_system import BaseValidator, Finding, Severity
+from ...plugin_system import BaseValidator, Finding, Severity
 
 __all__ = ["ArchitectureValidator"]
 
@@ -57,6 +57,7 @@ class ArchitectureValidator(BaseValidator):
             "console_utils.py",
             "architecture.py",
             "dead_code.py",
+            "basic_patterns.py",  # This file itself mentions multiple console patterns for detection
         ]:
             yield self.create_finding(
                 message="File uses multiple console patterns inconsistently",

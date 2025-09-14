@@ -4,7 +4,7 @@ This module provides functions to scale ASCII art to fit within the terminal's
 dimensions while preserving the original aspect ratio. It also includes a function
 to load ASCII art from a file.
 
-src/vibelint/ascii.py
+vibelint/src/vibelint/ascii.py
 """
 
 import shutil
@@ -15,7 +15,7 @@ def _get_terminal_size():
     Returns the terminal size as a tuple (width, height) of characters.
     Falls back to (80, 24) if the dimensions cannot be determined.
 
-    src/vibelint/ascii.py
+    vibelint/src/vibelint/ascii.py
     """
     try:
         size = shutil.get_terminal_size(fallback=(80, 24))
@@ -30,7 +30,7 @@ def scale_ascii_art_by_height(ascii_art: str, target_height: int) -> str:
     while preserving the original aspect ratio. The target width is
     automatically computed based on the scaling factor.
 
-    src/vibelint/ascii.py
+    vibelint/src/vibelint/ascii.py
     """
     # Split into lines and remove any fully blank lines.
     lines = [line for line in ascii_art.splitlines() if line.strip()]
@@ -68,7 +68,7 @@ def scale_to_terminal_by_height(ascii_art: str) -> str:
     Scales the provided ASCII art to fit based on the terminal's available height.
     The width is computed automatically to maintain the art's original aspect ratio.
 
-    src/vibelint/ascii.py
+    vibelint/src/vibelint/ascii.py
     """
     _, term_height = _get_terminal_size()
     # Optionally, leave a margin (here, using 90% of available height)
@@ -76,20 +76,5 @@ def scale_to_terminal_by_height(ascii_art: str) -> str:
     return scale_ascii_art_by_height(ascii_art, target_height)
 
 
-def load_ascii_from_file(filepath: str) -> str:
-    """
-    Reads an ASCII art file from disk and returns its content as a string.
-    Using a file is generally wise because it separates your art data from your code,
-    making it easier to update without modifying the code.
-
-    src/vibelint/ascii.py
-    """
-    try:
-        with open(filepath, encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        raise RuntimeError(f"Error reading {filepath}: {e}")
-
-
 # Public API
-__all__ = ["scale_ascii_art_by_height", "scale_to_terminal_by_height", "load_ascii_from_file"]
+__all__ = ["scale_ascii_art_by_height", "scale_to_terminal_by_height"]

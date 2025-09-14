@@ -7,7 +7,7 @@ Enhances Python codebase maintainability and LLM interaction through:
 - Codebase snapshots for LLM context
 - Extensible plugin system
 
-vibelint/__init__.py
+vibelint/src/vibelint/__init__.py
 """
 
 __version__ = "0.1.2"

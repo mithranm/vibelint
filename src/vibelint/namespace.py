@@ -1,7 +1,7 @@
 """
 Namespace representation & collision detection for Python code.
 
-vibelint/namespace.py
+vibelint/src/vibelint/namespace.py
 """
 
 import ast
@@ -31,7 +31,7 @@ class CollisionType:
     """
     Enum-like class for collision types.
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     HARD = "hard"
@@ -43,7 +43,7 @@ class NamespaceCollision:
     """
     Represents a collision between two or more same-named entities.
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     def __init__(
@@ -62,7 +62,7 @@ class NamespaceCollision:
         paths: A list of Path objects for all files involved in the collision.
         linenos: An optional list of line numbers corresponding to each path.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         if not paths:
@@ -92,7 +92,7 @@ class NamespaceCollision:
         """
         Provides a detailed string representation for debugging.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         return (
@@ -104,7 +104,7 @@ class NamespaceCollision:
         """
         Provides a user-friendly string representation of the collision.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         proj_root = find_project_root(Path(".").resolve())
@@ -156,7 +156,7 @@ def detect_hard_collisions(
     Returns:
     A list of detected HARD NamespaceCollision objects.
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     root_node, intra_file_collisions = build_namespace_tree(paths, config)
@@ -184,7 +184,7 @@ def detect_global_definition_collisions(
     Returns:
     A list of detected GLOBAL_SOFT NamespaceCollision objects.
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     root_node, _ = build_namespace_tree(paths, config)
@@ -209,7 +209,7 @@ def detect_local_export_collisions(
     Returns:
     A list of detected LOCAL_SOFT NamespaceCollision objects.
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     root_node, _ = build_namespace_tree(paths, config)
@@ -234,7 +234,7 @@ def get_namespace_collisions_str(
     Returns:
     A string summarizing all detected collisions.
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     from io import StringIO
@@ -291,7 +291,7 @@ class NamespaceNode:
     A node in the "module" hierarchy (like package/subpackage, or file-level).
     Holds child nodes and top-level members (functions/classes).
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     def __init__(self, name: str, path: Path | None = None, is_package: bool = False) -> None:
@@ -303,7 +303,7 @@ class NamespaceNode:
         path: The filesystem path associated with this node (optional).
         is_package: True if this node represents a package (directory).
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         self.name = name
@@ -321,7 +321,7 @@ class NamespaceNode:
         """
         Sets the list of names found in __all__.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         self.exported_names = names
@@ -330,7 +330,7 @@ class NamespaceNode:
         """
         Adds a child node, creating if necessary.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         if name not in self.children:
@@ -347,7 +347,7 @@ class NamespaceNode:
         """
         Detect HARD collisions recursively: members vs. child modules.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         collisions: list[NamespaceCollision] = []
@@ -389,7 +389,7 @@ class NamespaceNode:
         """
         Recursively collects defined members (path, lineno) for global definition collision check.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         if self.path and self.members:
@@ -404,7 +404,7 @@ class NamespaceNode:
         """
         Detects GLOBAL SOFT collisions across the whole tree starting from this node.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         all_defined_members: dict[str, list[tuple[Path, int | None]]] = defaultdict(list)
@@ -443,7 +443,7 @@ class NamespaceNode:
         Args:
         collisions_list: A list to append found collisions to.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         if self.is_package:
@@ -492,7 +492,7 @@ class NamespaceNode:
         Provides a string representation of the node and its subtree, including members.
         Uses a revised formatting approach for better clarity relative to project root.
 
-        vibelint/namespace.py
+        vibelint/src/vibelint/namespace.py
         """
 
         lines = []
@@ -506,7 +506,7 @@ class NamespaceNode:
             """
             Docstring for function 'build_tree_lines'.
 
-            vibelint/namespace.py
+            vibelint/src/vibelint/namespace.py
             """
 
             child_items = sorted(node.children.items())
@@ -619,7 +619,7 @@ def _extract_module_members(
     - A list of intra-file hard collisions (NamespaceCollision objects).
     - A list of names in __all__, or None if __all__ is not found or invalid.
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     try:
@@ -739,7 +739,7 @@ def build_namespace_tree(
 
     Returns a tuple: (root_node, all_intra_file_collisions)
 
-    vibelint/namespace.py
+    vibelint/src/vibelint/namespace.py
     """
 
     project_root_found = config.project_root or find_project_root(

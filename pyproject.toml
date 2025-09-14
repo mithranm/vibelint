@@ -29,7 +29,15 @@ dependencies = [
     "tomli-w",
     "colorama>=0.4.0",
     "rich>=12.0.0",
-    "libcst"
+    "libcst",
+    "requests>=2.25.0"
+]
+
+[project.optional-dependencies]
+embedding = [
+    "sentence-transformers>=2.2.0",
+    "torch>=1.9.0",
+    "numpy>=1.21.0"
 ]
 
 [project.scripts]
@@ -44,8 +52,11 @@ vibelint = "vibelint.cli:main"
 "PRINT-STATEMENT" = "vibelint.validators.print_statements:PrintStatementValidator"
 "EMOJI-IN-STRING" = "vibelint.validators.emoji:EmojiUsageValidator"
 "DEAD-CODE-FOUND" = "vibelint.validators.dead_code:DeadCodeValidator"
-"ARCHITECTURE-INCONSISTENT" = "vibelint.validators.architecture:ArchitectureValidator"
+"ARCHITECTURE-INCONSISTENT" = "vibelint.validators.architecture.basic_patterns:ArchitectureValidator"
 "TYPING-POOR-PRACTICE" = "vibelint.validators.typing_quality:TypingQualityValidator"
+"ARCHITECTURE-LLM" = "vibelint.validators.architecture.llm_analysis:ArchitectureLLMValidator"
+"SEMANTIC-SIMILARITY" = "vibelint.validators.architecture.semantic_similarity:SemanticSimilarityValidator"
+"FALLBACK-SILENT-FAILURE" = "vibelint.validators.architecture.fallback_patterns:FallbackAnalyzer"
 
 
 [project.entry-points."vibelint.formatters"]
@@ -76,6 +87,9 @@ allowed_shebangs = ["#!/usr/bin/env python3"]
 large_dir_threshold = 500
 error_on_missing_all_in_init = false
 
+# Output configuration
+max_displayed_issues = 20  # Limit displayed issues to avoid stdout flooding (0 = no limit)
+
 # Rule configuration - can disable or change severity
 # Values: "OFF" (disabled), "INFO", "WARN", "BLOCK"
 [tool.vibelint.rules]
@@ -91,6 +105,9 @@ error_on_missing_all_in_init = false
 "DEAD-CODE-FOUND" = "INFO"             # Dead code detection - unused imports, unreferenced functions
 "ARCHITECTURE-INCONSISTENT" = "WARN"   # Architectural inconsistency detection
 "TYPING-POOR-PRACTICE" = "WARN"        # Poor typing practices - tuples instead of dataclasses, etc.
+"ARCHITECTURE-LLM" = "WARN"            # LLM-powered architectural analysis (disabled by default, requires API configuration)
+"SEMANTIC-SIMILARITY" = "WARN"        # Embedding-based semantic similarity analysis (disabled by default, requires sentence-transformers)
+"FALLBACK-SILENT-FAILURE" = "WARN"   # Detect problematic fallback patterns that mask errors
 
 
 # Configurable thresholds for rules
@@ -114,6 +131,29 @@ exclude_globs = [
     "*_cli.py",
     "*_cmd.py"
 ]
+
+# LLM-powered architectural analysis configuration
+[tool.vibelint.llm_analysis]
+api_base_url = "http://100.94.250.88:11434"
+model = "/home/mithranmohanraj/models/gpt-oss-20b-mxfp4.gguf"
+max_tokens = 2048
+temperature = 0.3
+top_p = 0.9
+top_k = 40
+frequency_penalty = 0.1
+presence_penalty = 0.1
+timeout_seconds = 120
+
+# Embedding-based semantic similarity analysis configuration
+[tool.vibelint.embedding_analysis]
+# Enable embedding analysis
+enabled = true
+# Model to use for embeddings (EmbeddingGemma recommended for code)
+model = "google/embeddinggemma-300m"
+# Similarity threshold (0.0-1.0, higher = more strict)
+similarity_threshold = 0.85
+# Hugging Face token (will be read from environment variable HF_TOKEN if not set)
+# hf_token = "your-hf-token-here"
 
 [tool.black]
 target-version = ["py310", "py311", "py312"]
