@@ -93,7 +93,7 @@ max_displayed_issues = 20  # Limit displayed issues to avoid stdout flooding (0 
 # Rule configuration - can disable or change severity
 # Values: "OFF" (disabled), "INFO", "WARN", "BLOCK"
 [tool.vibelint.rules]
-# Core validators (using new semantic rule IDs)
+# Core validators (deterministic, high confidence)
 "DOCSTRING-MISSING" = "INFO"           # Missing docstrings
 "DOCSTRING-PATH-REFERENCE" = "INFO"    # Missing path reference in docstrings
 "EXPORTS-MISSING-ALL" = "INFO"         # Missing __all__
@@ -101,13 +101,36 @@ max_displayed_issues = 20  # Limit displayed issues to avoid stdout flooding (0 
 "PRINT-STATEMENT" = "WARN"             # Print statements
 "EMOJI-IN-STRING" = "WARN"             # Emoji usage - important for MCP compatibility
 
-# Advanced validators
+# Static analysis validators (deterministic)
 "DEAD-CODE-FOUND" = "INFO"             # Dead code detection - unused imports, unreferenced functions
 "ARCHITECTURE-INCONSISTENT" = "WARN"   # Architectural inconsistency detection
 "TYPING-POOR-PRACTICE" = "WARN"        # Poor typing practices - tuples instead of dataclasses, etc.
-"ARCHITECTURE-LLM" = "WARN"            # LLM-powered architectural analysis (disabled by default, requires API configuration)
-"SEMANTIC-SIMILARITY" = "WARN"        # Embedding-based semantic similarity analysis (disabled by default, requires sentence-transformers)
-"FALLBACK-SILENT-FAILURE" = "WARN"   # Detect problematic fallback patterns that mask errors
+"FALLBACK-SILENT-FAILURE" = "WARN"     # Detect problematic fallback patterns that mask errors
+
+# AI-powered validators (probabilistic, may need review)
+"ARCHITECTURE-LLM" = "WARN"            # LLM-powered architectural analysis (requires manual review)
+"SEMANTIC-SIMILARITY" = "WARN"         # Embedding-based semantic similarity analysis (requires manual review)
+
+# Rule categories for filtering
+[tool.vibelint.rule_categories]
+core = [
+    "DOCSTRING-MISSING",
+    "DOCSTRING-PATH-REFERENCE", 
+    "EXPORTS-MISSING-ALL",
+    "EXPORTS-MISSING-ALL-INIT",
+    "PRINT-STATEMENT",
+    "EMOJI-IN-STRING"
+]
+static = [
+    "DEAD-CODE-FOUND",
+    "ARCHITECTURE-INCONSISTENT", 
+    "TYPING-POOR-PRACTICE",
+    "FALLBACK-SILENT-FAILURE"
+]
+ai = [
+    "ARCHITECTURE-LLM",
+    "SEMANTIC-SIMILARITY"
+]
 
 
 # Configurable thresholds for rules

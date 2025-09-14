@@ -475,8 +475,25 @@ def cli(ctx: click.Context, debug: bool) -> None:
     type=click.Choice(FORMAT_CHOICES),
     help="Report format: natural (default, optimized for humans and AI agents), human (alias for natural), json, or sarif.",
 )
+@click.option(
+    "--categories",
+    default="core,static",
+    help="Comma-separated list of rule categories to run: core, static, ai, or 'all' for everything. Default: 'core,static' (excludes AI validators).",
+)
+@click.option(
+    "--exclude-ai",
+    is_flag=True,
+    help="Exclude AI-powered validators (equivalent to --categories=core,static).",
+)
 @click.pass_context
-def check(ctx: click.Context, yes: bool, output_report: Path | None, output_format: str):
+def check(
+    ctx: click.Context,
+    yes: bool,
+    output_report: Path | None,
+    output_format: str,
+    categories: str,
+    exclude_ai: bool,
+):
     """
     Run a Vibe Check: Lint rules and namespace collision detection.
 
@@ -503,10 +520,44 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
     # Use plugin system for validation combined with namespace collision detection
     result_data = CheckResult()
 
+    # Handle category filtering
+    if exclude_ai:
+        categories = "core,static"
+
+    # Parse and validate categories
+    if categories == "all":
+        enabled_categories = ["core", "static", "ai"]
+    else:
+        enabled_categories = [cat.strip() for cat in categories.split(",")]
+        valid_categories = {"core", "static", "ai"}
+        invalid_categories = set(enabled_categories) - valid_categories
+        if invalid_categories:
+            console.print(
+                f"[bold red]Error:[/bold red] Invalid categories: {', '.join(invalid_categories)}"
+            )
+            console.print(f"Valid categories: {', '.join(valid_categories)}")
+            ctx.exit(1)
+
+    # Filter config to only enable rules from selected categories
+    config_dict = dict(config.settings)
+    if "rule_categories" in config_dict and enabled_categories != ["core", "static", "ai"]:
+        rule_categories = config_dict["rule_categories"]
+        if isinstance(rule_categories, dict):
+            enabled_rules = set()
+            for category in enabled_categories:
+                if category in rule_categories and isinstance(rule_categories[category], list):
+                    enabled_rules.update(rule_categories[category])
+
+            # Disable rules not in enabled categories
+            if "rules" in config_dict and isinstance(config_dict["rules"], dict):
+                for rule_id in list(config_dict["rules"].keys()):
+                    if rule_id not in enabled_rules:
+                        config_dict["rules"][rule_id] = "OFF"
+
     try:
-        # Run plugin-based validation
-        logger_cli.debug("Running plugin-based validation...")
-        plugin_runner = run_plugin_validation(dict(config.settings), project_root)
+        # Run plugin-based validation with filtered config
+        logger_cli.debug(f"Running plugin-based validation with categories: {enabled_categories}")
+        plugin_runner = run_plugin_validation(config_dict, project_root)
 
         # For non-human formats, output just the validation results and exit
         if output_format != "human":
