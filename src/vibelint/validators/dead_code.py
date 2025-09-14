@@ -8,9 +8,8 @@ vibelint/validators/dead_code.py
 """
 
 import ast
-from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterator, List, Set
+from typing import Dict, Iterator, Set
 
 from ..plugin_system import BaseValidator, Finding, Severity
 
@@ -38,7 +37,9 @@ class DeadCodeValidator(BaseValidator):
         yield from self._check_duplicate_patterns(file_path, content)
         yield from self._check_legacy_patterns(file_path, content)
 
-    def _check_unused_imports(self, file_path: Path, tree: ast.AST, content: str) -> Iterator[Finding]:
+    def _check_unused_imports(
+        self, file_path: Path, tree: ast.AST, content: str
+    ) -> Iterator[Finding]:
         """Check for imported names that are never used."""
         imported_names: Dict[str, int] = {}  # name -> line number
         used_names: Set[str] = set()
@@ -75,7 +76,7 @@ class DeadCodeValidator(BaseValidator):
                         file_path=file_path,
                         line=line_num,
                         suggestion=f"Remove unused import: {name}",
-                        severity=Severity.INFO
+                        severity=Severity.INFO,
                     )
 
     def _check_unreferenced_definitions(self, file_path: Path, tree: ast.AST) -> Iterator[Finding]:
@@ -108,8 +109,8 @@ class DeadCodeValidator(BaseValidator):
                     message=f"Function/class '{name}' is defined but never referenced",
                     file_path=file_path,
                     line=line_num,
-                    suggestion=f"Consider removing unused definition or adding to __all__",
-                    severity=Severity.INFO
+                    suggestion="Consider removing unused definition or adding to __all__",
+                    severity=Severity.INFO,
                 )
 
     def _check_duplicate_patterns(self, file_path: Path, content: str) -> Iterator[Finding]:
@@ -125,17 +126,19 @@ class DeadCodeValidator(BaseValidator):
         if len(validation_classes) > 1:
             for line_num, class_def in validation_classes:
                 yield self.create_finding(
-                    message=f"Validation result class found - may be duplicating plugin system",
+                    message="Validation result class found - may be duplicating plugin system",
                     file_path=file_path,
                     line=line_num,
                     suggestion="Consider using plugin system's Finding class instead",
-                    severity=Severity.INFO
+                    severity=Severity.INFO,
                 )
 
         # Check for duplicate validation functions
         validation_functions = []
         for line_num, line in enumerate(lines, 1):
-            if line.strip().startswith("def validate_") and not line.strip().startswith("def validate("):
+            if line.strip().startswith("def validate_") and not line.strip().startswith(
+                "def validate("
+            ):
                 validation_functions.append((line_num, line.strip()))
 
         if len(validation_functions) > 0:
@@ -145,7 +148,7 @@ class DeadCodeValidator(BaseValidator):
                     file_path=file_path,
                     line=line_num,
                     suggestion="Consider migrating to BaseValidator plugin system",
-                    severity=Severity.INFO
+                    severity=Severity.INFO,
                 )
 
     def _check_legacy_patterns(self, file_path: Path, content: str) -> Iterator[Finding]:
@@ -164,5 +167,5 @@ class DeadCodeValidator(BaseValidator):
                     file_path=file_path,
                     line=line_num,
                     suggestion="Replace with: from .console_utils import console",
-                    severity=Severity.INFO
+                    severity=Severity.INFO,
                 )

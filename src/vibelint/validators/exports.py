@@ -23,7 +23,6 @@ class MissingAllValidator(BaseValidator):
     description = "Checks for missing __all__ definitions in modules"
     default_severity = Severity.INFO
 
-
     def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
         """Check for missing __all__ definition."""
         # Skip if it's __init__.py or private module
@@ -38,7 +37,7 @@ class MissingAllValidator(BaseValidator):
                 file_path=file_path,
                 line=1,
                 suggestion="Fix Python syntax errors in the file",
-                severity=Severity.BLOCK
+                severity=Severity.BLOCK,
             )
             return
 
@@ -57,11 +56,13 @@ class MissingAllValidator(BaseValidator):
                                 message="__all__ is not assigned a list or tuple value",
                                 file_path=file_path,
                                 line=node.lineno,
-                                suggestion="Ensure __all__ = [\"item1\", \"item2\"] or __all__ = (\"item1\", \"item2\")",
-                                severity=Severity.WARN
+                                suggestion='Ensure __all__ = ["item1", "item2"] or __all__ = ("item1", "item2")',
+                                severity=Severity.WARN,
                             )
                         break
-            elif isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith("_"):
+            elif isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith(
+                "_"
+            ):
                 has_exports = True
 
         if has_exports and not has_all:
@@ -76,8 +77,9 @@ class MissingAllValidator(BaseValidator):
         """Check if __all__ assignment value is a valid list or tuple."""
         if isinstance(node, (ast.List, ast.Tuple)):
             # Check that all elements are strings
-            return all(isinstance(elt, ast.Constant) and isinstance(elt.value, str)
-                      for elt in node.elts)
+            return all(
+                isinstance(elt, ast.Constant) and isinstance(elt.value, str) for elt in node.elts
+            )
         return False
 
 
@@ -88,7 +90,6 @@ class InitAllValidator(BaseValidator):
     name = "Missing __all__ in __init__.py"
     description = "__init__.py file is missing __all__ definition (optional based on config)"
     default_severity = Severity.INFO
-
 
     def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
         """Check for missing __all__ in __init__.py files."""
@@ -115,5 +116,5 @@ class InitAllValidator(BaseValidator):
                 message="__init__.py file is missing __all__ definition",
                 file_path=file_path,
                 line=1,
-                suggestion="Add __all__ = [...] to control package imports"
+                suggestion="Add __all__ = [...] to control package imports",
             )

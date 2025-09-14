@@ -99,7 +99,9 @@ class Config:
         else:
             return []
 
-    def get(self, key: str, default: Union[str, bool, int, list, dict, None] = None) -> Union[str, bool, int, list, dict, None]:
+    def get(
+        self, key: str, default: Union[str, bool, int, list, dict, None] = None
+    ) -> Union[str, bool, int, list, dict, None]:
         """
         Gets a value from the loaded settings, returning default if not found.
 

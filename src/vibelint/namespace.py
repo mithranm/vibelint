@@ -500,7 +500,9 @@ class NamespaceNode:
         proj_root = find_project_root(Path(".").resolve())
         base_path_for_display = proj_root if proj_root else Path(".")
 
-        def build_tree_lines(node: "NamespaceNode", prefix: str = "", base: Path = Path(".")) -> list[str]:
+        def build_tree_lines(
+            node: "NamespaceNode", prefix: str = "", base: Path = Path(".")
+        ) -> list[str]:
             """
             Docstring for function 'build_tree_lines'.
 

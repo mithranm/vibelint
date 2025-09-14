@@ -7,10 +7,8 @@ mixed patterns, and violations of established conventions.
 vibelint/validators/architecture.py
 """
 
-import ast
 from pathlib import Path
-from typing import Dict, Iterator, List, Set
-import re
+from typing import Dict, Iterator, List
 
 from ..plugin_system import BaseValidator, Finding, Severity
 
@@ -55,13 +53,16 @@ class ArchitectureValidator(BaseValidator):
 
         # If file uses multiple console patterns, flag it (except console_utils.py and validators that detect patterns)
         pattern_types = set(pattern[0] for pattern in console_patterns)
-        if (len(pattern_types) > 1 and
-            not file_path.name in ["console_utils.py", "architecture.py", "dead_code.py"]):
+        if len(pattern_types) > 1 and file_path.name not in [
+            "console_utils.py",
+            "architecture.py",
+            "dead_code.py",
+        ]:
             yield self.create_finding(
                 message="File uses multiple console patterns inconsistently",
                 file_path=file_path,
                 line=console_patterns[0][1],
-                suggestion="Use consistent console pattern throughout file"
+                suggestion="Use consistent console pattern throughout file",
             )
 
         # Check for mixed error handling patterns
@@ -80,7 +81,7 @@ class ArchitectureValidator(BaseValidator):
                 file_path=file_path,
                 line=error_patterns[0][1],
                 suggestion="Use consistent exception handling patterns",
-                severity=Severity.INFO
+                severity=Severity.INFO,
             )
 
     def _check_import_inconsistencies(self, file_path: Path, content: str) -> Iterator[Finding]:
@@ -116,7 +117,7 @@ class ArchitectureValidator(BaseValidator):
                     file_path=file_path,
                     line=first_import[1],
                     suggestion=f"Use consistent import style for {module}",
-                    severity=Severity.INFO
+                    severity=Severity.INFO,
                 )
 
 
@@ -138,24 +139,23 @@ class ProjectArchitectureAnalyzer:
         plugin_files = []
 
         for file_path in self.project_files:
-            if not file_path.suffix == '.py':
+            if not file_path.suffix == ".py":
                 continue
 
             try:
-                content = file_path.read_text(encoding='utf-8')
-            except:
+                content = file_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
                 continue
 
             # Check validation patterns
-            has_legacy = any([
-                "ValidationResult" in content,
-                "def validate_" in content and "def validate(" not in content
-            ])
+            has_legacy = any(
+                [
+                    "ValidationResult" in content,
+                    "def validate_" in content and "def validate(" not in content,
+                ]
+            )
 
-            has_plugin = any([
-                "BaseValidator" in content,
-                "self.create_finding" in content
-            ])
+            has_plugin = any(["BaseValidator" in content, "self.create_finding" in content])
 
             if has_legacy:
                 legacy_files.append(file_path)
@@ -164,12 +164,14 @@ class ProjectArchitectureAnalyzer:
 
         findings = []
         if legacy_files and plugin_files:
-            findings.append({
-                "issue": "Competing validation systems detected",
-                "legacy_files": [str(f) for f in legacy_files],
-                "plugin_files": [str(f) for f in plugin_files],
-                "suggestion": "Migrate all validators to plugin system for consistency"
-            })
+            findings.append(
+                {
+                    "issue": "Competing validation systems detected",
+                    "legacy_files": [str(f) for f in legacy_files],
+                    "plugin_files": [str(f) for f in plugin_files],
+                    "suggestion": "Migrate all validators to plugin system for consistency",
+                }
+            )
 
         return findings
 
@@ -180,12 +182,12 @@ class ProjectArchitectureAnalyzer:
         validation_files = {}  # functionality -> list of files
 
         for file_path in self.project_files:
-            if not file_path.suffix == '.py' or 'validator' not in str(file_path):
+            if not file_path.suffix == ".py" or "validator" not in str(file_path):
                 continue
 
             try:
-                content = file_path.read_text(encoding='utf-8')
-            except:
+                content = file_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
                 continue
 
             # Simple heuristic: check for similar validation functionality
@@ -202,10 +204,12 @@ class ProjectArchitectureAnalyzer:
         findings = []
         for functionality, files in validation_files.items():
             if len(files) > 1:
-                findings.append({
-                    "issue": f"Duplicate {functionality} functionality",
-                    "files": [str(f) for f in files],
-                    "suggestion": f"Consolidate {functionality} into single implementation"
-                })
+                findings.append(
+                    {
+                        "issue": f"Duplicate {functionality} functionality",
+                        "files": [str(f) for f in files],
+                        "suggestion": f"Consolidate {functionality} into single implementation",
+                    }
+                )
 
         return findings

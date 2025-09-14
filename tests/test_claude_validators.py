@@ -3,41 +3,39 @@ Tests for Claude Code-specific validators.
 """
 
 from pathlib import Path
-from vibelint.validators.builtin_validators import (
-    TodoTrackingValidator,
-    EmojiUsageValidator,
-    FunctionParameterValidator
-)
+
+# Import validators from their individual modules
+from vibelint.validators.print_statements import PrintStatementValidator
+from vibelint.validators.emoji import EmojiUsageValidator
+from vibelint.validators.typing_quality import TypingQualityValidator
 
 
-def test_todo_tracking_validator():
-    """Test TodoTrackingValidator functionality."""
-    validator = TodoTrackingValidator()
+def test_print_statement_validator():
+    """Test PrintStatementValidator functionality."""
+    validator = PrintStatementValidator()
 
-    code = '''
-# TODO: This is a regular todo
+    code = """
 print("hello")
-# TODO: URGENT fix this critical bug immediately
-# todo: implement this later
-'''
+print("debug info")
+"""
 
     findings = list(validator.validate(Path("test.py"), code))
-    assert len(findings) == 3
+    assert len(findings) == 2
 
-    # Check that urgent TODO is marked as warning
-    urgent_finding = next(f for f in findings if "critical" in f.message)
-    assert urgent_finding.severity.value == "WARN"
+    # Check that print statements are detected
+    for finding in findings:
+        assert "Print statement found" in finding.message
+        assert "logging" in finding.message
 
 
 def test_emoji_usage_validator():
     """Test EmojiUsageValidator."""
     validator = EmojiUsageValidator()
 
-    code = '''
-# This has emojis that cause issues
-print("Hello world!")
+    code = '''# This has emojis 🚀 that cause issues
+print("Hello world! 💫")
 def process_data():
-    """Process data with fancy output"""
+    """Process data with fancy output 🎉"""
     return True
 '''
 
@@ -49,43 +47,28 @@ def process_data():
         assert "MCP" in finding.suggestion or "encoding" in finding.suggestion
 
 
-def test_function_parameter_validator():
-    """Test FunctionParameterValidator functionality."""
-    validator = FunctionParameterValidator()
+def test_typing_quality_validator():
+    """Test TypingQualityValidator functionality."""
+    validator = TypingQualityValidator()
 
     code = '''
-def many_params(a, b, c, d, e, f, g, h, i):
-    """Function with too many parameters."""
-    return a + b + c + d + e + f + g + h + i
-
-def needs_keywords(a, b, c, d):
-    """Function that should use keyword-only arguments."""
-    return a + b + c + d
-
-def good_function(a, b, *, c=None, d=None):
-    """Function with proper keyword-only parameters."""
-    return a + b + (c or 0) + (d or 0)
-
-def test_calls():
-    # Too many positional arguments
-    result = some_function(1, 2, 3, 4, 5)
-    return result
+def untyped_function(a, b, c):
+    """Function without type annotations."""
+    return a + b + c
 '''
 
     findings = list(validator.validate(Path("test.py"), code))
 
-    # Should find: many_params (too many total), needs_keywords (no keyword-only),
-    # and some_function call (too many positional args)
+    # Should find missing type annotations for function and parameters
     assert len(findings) >= 3
 
-    # Check specific issues
+    # Check that type annotation issues are detected
     messages = [f.message for f in findings]
-    assert any("too many parameters" in msg for msg in messages)
-    assert any("no keyword-only arguments" in msg for msg in messages)
-    assert any("positional arguments" in msg for msg in messages)
+    assert any("missing type annotations" in msg for msg in messages)
 
 
-def test_claude_formatter():
-    """Test that ClaudeFormatter is available."""
+def test_llm_formatter():
+    """Test that LLM formatter is available."""
     from vibelint.formatters import BUILTIN_FORMATTERS
-    assert "claude" in BUILTIN_FORMATTERS
+
+    assert "llm" in BUILTIN_FORMATTERS

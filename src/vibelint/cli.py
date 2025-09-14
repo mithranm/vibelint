@@ -518,7 +518,9 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
             try:
                 output = plugin_runner.format_output(output_format)
                 print(output)
-                ctx.exit(plugin_runner.get_exit_code())
+                # Use sys.exit instead of ctx.exit to avoid Rich traceback
+                import sys
+                sys.exit(plugin_runner.get_exit_code())
             finally:
                 logging.getLogger().setLevel(original_level)
 
@@ -537,7 +539,9 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
 
         # Display namespace collision results if any were found
         has_collisions = (
-            result_data.hard_collisions or result_data.global_soft_collisions or result_data.local_soft_collisions
+            result_data.hard_collisions
+            or result_data.global_soft_collisions
+            or result_data.local_soft_collisions
         )
         if has_collisions:
             console.print()
@@ -592,6 +596,17 @@ def check(ctx: click.Context, yes: bool, output_report: Path | None, output_form
         result_data.success = False
         result_data.error_message = str(e)
         result_data.exit_code = 1
+
+    # Display report generation status
+    if result_data.report_path:
+        if result_data.report_generated:
+            console.print(
+                f"[green]SUCCESS: Detailed Vibe Report generated at {result_data.report_path}[/green]"
+            )
+        elif result_data.report_error:
+            console.print(
+                f"[bold red]Error generating vibe report:[/bold red] {result_data.report_error}"
+            )
 
     vibelint_ctx.command_result = result_data
     ctx.exit(result_data.exit_code)

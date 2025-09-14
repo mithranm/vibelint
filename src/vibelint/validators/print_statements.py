@@ -25,7 +25,6 @@ class PrintStatementValidator(BaseValidator):
     description = "Detects print() calls that should be replaced with logging"
     default_severity = Severity.WARN
 
-
     def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
         """Validate print statement usage in a Python file."""
         # Check if file should be excluded based on configuration
@@ -54,18 +53,21 @@ class PrintStatementValidator(BaseValidator):
         """Check if file should be excluded from print statement validation."""
         # Get exclude patterns from configuration
         print_config = self.config.get("print_validation", {})
-        exclude_globs = print_config.get("exclude_globs", [
-            # Default patterns if no configuration is provided
-            "test_*.py",
-            "*_test.py",
-            "conftest.py",
-            "tests/**/*.py",
-            "cli.py",
-            "main.py",
-            "__main__.py",
-            "*_cli.py",
-            "*_cmd.py"
-        ])
+        exclude_globs = print_config.get(
+            "exclude_globs",
+            [
+                # Default patterns if no configuration is provided
+                "test_*.py",
+                "*_test.py",
+                "conftest.py",
+                "tests/**/*.py",
+                "cli.py",
+                "main.py",
+                "__main__.py",
+                "*_cli.py",
+                "*_cmd.py",
+            ],
+        )
 
         # Check if file matches any exclude pattern
         for pattern in exclude_globs:

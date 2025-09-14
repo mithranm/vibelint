@@ -9,7 +9,13 @@ import json
 from typing import Dict, List
 from .plugin_system import BaseFormatter, Finding, Severity
 
-__all__ = ["HumanFormatter", "JsonFormatter", "SarifFormatter", "LLMFormatter", "BUILTIN_FORMATTERS"]
+__all__ = [
+    "HumanFormatter",
+    "JsonFormatter",
+    "SarifFormatter",
+    "LLMFormatter",
+    "BUILTIN_FORMATTERS",
+]
 
 
 class HumanFormatter(BaseFormatter):
@@ -160,7 +166,7 @@ class LLMFormatter(BaseFormatter):
 
         for finding in findings:
             # Check for AI development patterns (TODO, PARAMETERS, etc.)
-            if finding.rule_id in ['TODO-FOUND', 'PARAMETERS-KEYWORD-ONLY']:
+            if finding.rule_id in ["TODO-FOUND", "PARAMETERS-KEYWORD-ONLY"]:
                 ai_patterns.append(finding)
             else:
                 standard_issues.append(finding)
@@ -181,7 +187,11 @@ class LLMFormatter(BaseFormatter):
         if standard_issues:
             lines.append("\n### Standard Issues")
             for finding in standard_issues:
-                marker = "ERROR" if finding.severity == Severity.BLOCK else "WARN" if finding.severity == Severity.WARN else "INFO"
+                marker = (
+                    "ERROR"
+                    if finding.severity == Severity.BLOCK
+                    else "WARN" if finding.severity == Severity.WARN else "INFO"
+                )
                 lines.append(f"- [{marker}] **{finding.rule_id}**: {finding.message}")
                 lines.append(f"  Location: `{finding.file_path}:{finding.line}`")
                 if finding.suggestion:
@@ -198,7 +208,7 @@ class LLMFormatter(BaseFormatter):
                 lines.append(f"- {count} {severity.lower()} level")
 
         # Add workflow suggestions
-        if any(f.rule_id in ['TODO-FOUND', 'PARAMETERS-KEYWORD-ONLY'] for f in findings):
+        if any(f.rule_id in ["TODO-FOUND", "PARAMETERS-KEYWORD-ONLY"] for f in findings):
             lines.append("\n### LLM Development Workflow")
             lines.append("Recommendations for AI-assisted development:")
             lines.append("1. Address these patterns before committing code")
@@ -215,5 +225,5 @@ BUILTIN_FORMATTERS = {
     "sarif": SarifFormatter,
     "llm": LLMFormatter,
     # Keep "claude" as alias for backward compatibility during transition
-    "claude": LLMFormatter
+    "claude": LLMFormatter,
 }

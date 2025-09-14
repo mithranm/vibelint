@@ -61,9 +61,7 @@ class RuleEngine:
         if severity is not None:
             return severity
 
-
         return default
-
 
     def create_validator_instance(
         self, validator_class: type[BaseValidator]
@@ -125,13 +123,12 @@ def create_default_rule_config() -> Dict[str, any]:
     return {
         "rules": {
             # Semantic rule IDs (primary system)
-            "DOCSTRING-MISSING": "INFO",           # Missing docstring is just info
-            "EXPORTS-MISSING-ALL": "WARN",         # Missing __all__ is warning
-            "PRINT-STATEMENT": "WARN",             # Print statements are warnings
-            "EMOJI-IN-STRING": "WARN",             # Emojis can cause encoding issues
-            "TODO-FOUND": "INFO",                  # TODOs are informational
-            "PARAMETERS-KEYWORD-ONLY": "INFO",     # Parameter suggestions are info
-
+            "DOCSTRING-MISSING": "INFO",  # Missing docstring is just info
+            "EXPORTS-MISSING-ALL": "WARN",  # Missing __all__ is warning
+            "PRINT-STATEMENT": "WARN",  # Print statements are warnings
+            "EMOJI-IN-STRING": "WARN",  # Emojis can cause encoding issues
+            "TODO-FOUND": "INFO",  # TODOs are informational
+            "PARAMETERS-KEYWORD-ONLY": "INFO",  # Parameter suggestions are info
         },
         "plugins": {"enabled": ["vibelint.core"]},
     }

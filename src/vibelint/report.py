@@ -5,7 +5,6 @@ vibelint/report.py
 """
 
 import logging
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import TextIO
@@ -133,6 +132,7 @@ def write_report_content(
 
     # Count findings by severity
     from .plugin_system import Severity
+
     error_findings = [f for f in findings if f.severity == Severity.BLOCK]
     warn_findings = [f for f in findings if f.severity == Severity.WARN]
 
@@ -149,6 +149,7 @@ def write_report_content(
     else:
         # Group findings by file for better reporting
         from collections import defaultdict
+
         files_with_findings = defaultdict(list)
         for finding in findings:
             files_with_findings[finding.file_path].append(finding)
@@ -165,7 +166,9 @@ def write_report_content(
 
             for finding in sorted(file_findings, key=lambda f: f.line):
                 location = f":{finding.line}" if finding.line > 0 else ""
-                f.write(f"| `{rel_path}{location}` | `{finding.rule_id}` | {finding.severity.value} | {finding.message} |\n")
+                f.write(
+                    f"| `{rel_path}{location}` | `{finding.rule_id}` | {finding.severity.value} | {finding.message} |\n"
+                )
         f.write("\n")
 
     f.write("## Namespace Structure\n\n")

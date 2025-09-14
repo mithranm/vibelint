@@ -294,9 +294,9 @@ def test_check_success(runner: CliRunner, setup_test_project: Path):
     assert (
         result.exit_code == 0
     ), f"Expected exit code 0, got {result.exit_code}. Output:\n{result.output}"
-    assert_output_matches(result, r"Vibe Check Summary")
+    assert_output_matches(result, r"Initiating Vibe Check")
     assert_output_matches(
-        result, r"(Immaculate vibes|Vibes confirmed|Vibe on brother)", msg="Missing success message"
+        result, r"Summary: 0 errors, 0 warnings", msg="Expected no errors or warnings"
     )
     assert_output_does_not_match(result, r"\[VBL\d{3}\]", msg="Unexpected VBL codes found")
     assert_output_does_not_contain(result, "Collision Summary", msg="Unexpected collision summary")
@@ -312,27 +312,30 @@ def test_check_failure(runner: CliRunner, setup_test_project: Path):
     print(f"Output:\n{result.output}")
     print(f"DEBUG: CWD during test_check_failure: {Path.cwd()}")
     print(f"DEBUG: setup_test_project path (yielded root): {setup_test_project}")
+    # INFO-level findings don't cause exit code 1 in modern vibelint
     assert (
-        result.exit_code == 1
-    ), f"Expected exit code 1, got {result.exit_code}. Output:\n{result.output}"
-    assert_output_matches(result, r"Vibe Check Summary")
-    assert_output_matches(result, r"Vibe Check Failed", msg="Missing failure message")
-    assert_output_matches(result, r"\[VBL101\]", msg="Missing VBL101 code")
-    assert_output_matches(result, r"\[VBL102\]", msg="Missing VBL102 code")
-    assert_output_matches(result, r"\[VBL301\]", msg="Missing VBL301 code")
-    assert_output_contains(result, "VBL101] Missing docstring for function 'func_one'")
+        result.exit_code == 0
+    ), f"Expected exit code 0, got {result.exit_code}. Output:\n{result.output}"
+    assert_output_matches(result, r"Initiating Vibe Check")
+    # Check for semantic rule IDs instead of VBL codes
+    assert_output_matches(result, r"DOCSTRING-MISSING", msg="Missing docstring detection")
+    assert_output_matches(result, r"EXPORTS-MISSING-ALL", msg="Missing __all__ detection")
+    # Check for specific validation findings
+    assert_output_contains(result, "Function 'func_one' is missing docstring")
+    # Check for modern docstring path reference findings
     assert_output_matches(
-        result, r"VBL102\].*\(expected '[^']*?/?another\.py'\)", msg="Missing VBL102 for another.py"
+        result, r"DOCSTRING-PATH-REFERENCE.*another\.py", msg="Missing path reference detection for another.py"
     )
     assert_output_matches(
         result,
-        r"VBL102\].*\(expected '[^']*?/?needs_fix\.py'\)",
-        msg="Missing VBL102 for needs_fix.py",
+        r"DOCSTRING-PATH-REFERENCE.*needs_fix\.py",
+        msg="Missing path reference detection for needs_fix.py",
     )
+    # Check for missing __all__ detection
     assert_output_matches(
         result,
-        r"VBL301] __all__ definition not found in [^']*/?needs_fix\.py",
-        msg="Missing VBL301 message for needs_fix.py",
+        r"EXPORTS-MISSING-ALL.*needs_fix\.py",
+        msg="Missing __all__ detection for needs_fix.py",
     )
     assert_output_does_not_contain(result, "Collision Summary", msg="Unexpected collision summary")
 
@@ -359,7 +362,7 @@ def test_check_output_report(runner: CliRunner, setup_test_project: Path):
     # Check for the message parts separately due to potential wrapping
     cleaned_output = clean_output(result.output)
     assert (
-        "Detailed Vibe Report generated at" in cleaned_output
+        "SUCCESS: Detailed Vibe Report generated at" in cleaned_output
     ), f"Report text missing. Output:\n{cleaned_output}"
     # Check if the filename exists somewhere in the cleaned output
     assert (
@@ -369,7 +372,9 @@ def test_check_output_report(runner: CliRunner, setup_test_project: Path):
     report_content = report_file.read_text()
     assert "# vibelint Report" in report_content
     assert "## Linting Results" in report_content
-    assert "*No linting issues found.*" in report_content
+    # The success fixture has INFO-level findings, not no issues
+    assert "| Findings with errors | 0 |" in report_content
+    assert "| Findings with warnings | 0 |" in report_content
     assert "## Namespace Structure" in report_content
     assert setup_test_project.name in report_content
     assert "hello (member)" in report_content

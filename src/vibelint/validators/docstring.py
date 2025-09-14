@@ -24,7 +24,6 @@ class MissingDocstringValidator(BaseValidator):
     description = "Checks for missing docstrings in modules, classes, and functions"
     default_severity = Severity.INFO
 
-
     def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
         """Check for missing docstrings."""
         try:
@@ -62,7 +61,6 @@ class DocstringPathValidator(BaseValidator):
     description = "Checks that docstrings end with the expected relative file path reference"
     default_severity = Severity.INFO
 
-
     def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
         """Check for missing path references in docstrings."""
         try:
@@ -82,7 +80,7 @@ class DocstringPathValidator(BaseValidator):
                 message=f"Module docstring missing/incorrect path reference (expected '{expected_path}')",
                 file_path=file_path,
                 line=1,
-                suggestion=f"Add '{expected_path}' at the end of the module docstring for LLM context"
+                suggestion=f"Add '{expected_path}' at the end of the module docstring for LLM context",
             )
 
         # Check function and class docstrings
@@ -96,5 +94,5 @@ class DocstringPathValidator(BaseValidator):
                         file_path=file_path,
                         line=node.lineno,
                         suggestion=f"Add '{expected_path}' at the end of the docstring for LLM context",
-                        severity=Severity.INFO
+                        severity=Severity.INFO,
                     )
