@@ -6,11 +6,10 @@ import json
 from pathlib import Path
 from typing import Iterator
 
-import pytest
-
-from vibelint.plugin_system import BaseValidator, BaseFormatter, Finding, Severity, plugin_manager
+from vibelint.formatters import JsonFormatter, NaturalLanguageFormatter
+from vibelint.plugin_system import (BaseFormatter, BaseValidator, Finding,
+                                    Severity, plugin_manager)
 from vibelint.rules import RuleEngine
-from vibelint.formatters import HumanFormatter, JsonFormatter
 
 
 class TestValidator(BaseValidator):
@@ -21,7 +20,10 @@ class TestValidator(BaseValidator):
     description = "A test validator"
     default_severity = Severity.WARN
 
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+    def __init__(self, severity=None, config=None):
+        super().__init__(severity, config)
+
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         if "test_issue" in content:
             yield self.create_finding(
                 message="Found test issue",
@@ -94,15 +96,15 @@ def test_severity_override():
 def test_plugin_manager_loads_formatters():
     """Test that plugin manager can load and retrieve formatters."""
     manager = plugin_manager
-    
-    # The plugin manager loads formatters from entry points  
+
+    # The plugin manager loads formatters from entry points
     manager.load_plugins()
-    
+
     # Test getting all formatters
     formatters = manager.get_all_formatters()
     assert isinstance(formatters, dict)
     assert len(formatters) > 0
-    
+
     # Test getting specific formatter
     formatter_class = manager.get_formatter("human")
     assert formatter_class is not None
@@ -125,8 +127,8 @@ def test_rule_engine():
 
 
 def test_human_formatter():
-    """Test HumanFormatter output."""
-    formatter = HumanFormatter()
+    """Test NaturalLanguageFormatter output."""
+    formatter = NaturalLanguageFormatter()
 
     findings = [
         Finding(

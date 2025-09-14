@@ -46,7 +46,7 @@ def _get_files_in_namespace_order(
                 collected_files.add(init_file)
         except ValueError:
             logger.warning(f"Report: Skipping package node outside project root: {node.path}")
-        except Exception as e:
+        except (OSError, TypeError) as e:
             logger.error(f"Report: Error checking package init file for {node.path}: {e}")
 
     for child_name in sorted(node.children.keys()):
@@ -63,7 +63,7 @@ def _get_files_in_namespace_order(
                 logger.warning(
                     f"Report: Skipping module file outside project root: {child_node.path}"
                 )
-            except Exception as e:
+            except (OSError, TypeError) as e:
                 logger.error(f"Report: Error checking module file {child_node.path}: {e}")
 
         _get_files_in_namespace_order(child_node, collected_files, project_root)
@@ -76,7 +76,7 @@ def _get_files_in_namespace_order(
                 collected_files.add(node.path)
         except ValueError:
             logger.warning(f"Report: Skipping root file node outside project root: {node.path}")
-        except Exception as e:
+        except (OSError, TypeError) as e:
             logger.error(f"Report: Error checking root file node {node.path}: {e}")
 
 
@@ -176,7 +176,7 @@ def write_report_content(
 
         tree_str = root_node.__str__()
         f.write(tree_str)
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         logger.error(f"Report: Error generating namespace tree string: {e}")
         f.write(f"[Error generating namespace tree: {e}]\n")
     f.write("\n```\n\n")
@@ -252,7 +252,7 @@ def write_report_content(
 
         python_files_abs = sorted(list(collected_files_set), key=lambda p: str(p))
         logger.info(f"Report: Found {len(python_files_abs)} files for content section.")
-    except Exception as e:
+    except (ValueError, TypeError, OSError) as e:
         logger.error(f"Report: Error collecting files for content section: {e}", exc_info=True)
         python_files_abs = []
 
@@ -276,7 +276,7 @@ def write_report_content(
                         if not content.endswith("\n"):
                             f.write("\n")
                         f.write("```\n\n")
-                    except Exception as read_e:
+                    except (OSError, UnicodeDecodeError) as read_e:
                         logger.warning(
                             f"Report: Error reading file content for {rel_path}: {read_e}"
                         )
@@ -289,7 +289,7 @@ def write_report_content(
                     )
                     f.write(f"### {abs_file_path} (Outside Project Root)\n\n")
                     f.write("*Skipping content as file is outside the detected project root.*\n\n")
-                except Exception as e_outer:
+                except (OSError, ValueError, TypeError) as e_outer:
                     logger.error(
                         f"Report: Error processing file entry for {abs_file_path}: {e_outer}",
                         exc_info=True,

@@ -8,7 +8,7 @@ vibelint/src/vibelint/formatters.py
 """
 
 import json
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 from .plugin_system import BaseFormatter, Finding, Severity
 
@@ -28,7 +28,9 @@ class NaturalLanguageFormatter(BaseFormatter):
     name = "natural"
     description = "Natural language output format optimized for human and AI agent consumption"
 
-    def format_results(self, findings: List[Finding], summary: Dict[str, int], config=None) -> str:
+    def format_results(
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+    ) -> str:
         """Format results for human reading."""
         if not findings:
             return "All checks passed!"
@@ -57,9 +59,8 @@ class NaturalLanguageFormatter(BaseFormatter):
                 lines.append(f"\n{severity.value}:")
 
                 severity_findings = by_severity[severity]
-                for i, finding in enumerate(severity_findings):
+                for _, finding in enumerate(severity_findings):
                     if max_displayed > 0 and displayed_count >= max_displayed:
-                        len(severity_findings) - i
                         remaining_total = total_count - displayed_count
                         lines.append(
                             f"  ... and {remaining_total} more issues (showing first {max_displayed})"
@@ -102,7 +103,9 @@ class JsonFormatter(BaseFormatter):
     name = "json"
     description = "JSON output format for CI/tooling integration"
 
-    def format_results(self, findings: List[Finding], summary: Dict[str, int], config=None) -> str:
+    def format_results(
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+    ) -> str:
         """Format results as JSON."""
         result = {"summary": summary, "findings": [finding.to_dict() for finding in findings]}
         return json.dumps(result, indent=2, default=str)
@@ -114,7 +117,9 @@ class SarifFormatter(BaseFormatter):
     name = "sarif"
     description = "SARIF format for GitHub code scanning"
 
-    def format_results(self, findings: List[Finding], summary: Dict[str, int], config=None) -> str:
+    def format_results(
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+    ) -> str:
         """Format results as SARIF JSON."""
         rules = {}
         results = []
@@ -185,12 +190,42 @@ class SarifFormatter(BaseFormatter):
         return mapping.get(severity, "warning")
 
 
+class LLMFormatter(BaseFormatter):
+    """LLM-optimized formatter for AI analysis."""
+
+    name = "llm"
+    description = "LLM-optimized format for AI analysis"
+
+    def format_results(
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+    ) -> str:
+        """Format results for LLM analysis."""
+        if not findings:
+            return "No issues found."
+
+        output = []
+        for finding in findings:
+            output.append(
+                f"{finding.rule_id}: {finding.message} " f"({finding.file_path}:{finding.line})"
+            )
+
+        return "\n".join(output)
+
+
+class HumanFormatter(NaturalLanguageFormatter):
+    """Human-readable formatter (alias for NaturalLanguageFormatter)."""
+
+    name = "human"
+    description = "Human-readable format with colors and styling"
+
+
 # Built-in report formatters
 BUILTIN_FORMATTERS = {
     "natural": NaturalLanguageFormatter,
-    "human": NaturalLanguageFormatter,  # Keep human as alias for backward compatibility
+    "human": HumanFormatter,  # Separate class for plugin system compatibility
     "json": JsonFormatter,
     "sarif": SarifFormatter,
+    "llm": LLMFormatter,
 }
 
 # Format choices for CLI - single source of truth

@@ -14,13 +14,13 @@ vibelint/validators/fallback_analyzer.py
 import ast
 import logging
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
-from ...config import Config
 from ...plugin_system import BaseValidator, Finding, Severity
 
-__all__ = ["FallbackAnalyzer"]
 logger = logging.getLogger(__name__)
+
+__all__ = ["FallbackAnalyzer"]
 
 
 class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
@@ -29,13 +29,17 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
     """
 
     rule_id = "FALLBACK-SILENT-FAILURE"
+    default_severity = Severity.WARN
 
-    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None):
-        super().__init__(severity, config)
+    def __init__(
+        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
+    ) -> None:
+        BaseValidator.__init__(self, severity, config)
+        ast.NodeVisitor.__init__(self)
         self.findings: List[Finding] = []
-        self.current_file: Path = None
+        self.current_file: Optional[Path] = None
 
-    def validate(self, file_path: Path, content: str, config: Config) -> Iterator[Finding]:
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Analyze file for problematic fallback patterns."""
         self.findings = []
         self.current_file = file_path
@@ -43,86 +47,81 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
         try:
             tree = ast.parse(content)
             self.visit(tree)
-        except SyntaxError:
-            # Skip files with syntax errors
+        except SyntaxError as e:
+            logger.debug(f"Syntax error in {file_path}: {e}")
             pass
 
         return iter(self.findings)
 
-    def visit_Try(self, node: ast.Try):
+    def visit_Try(self, node: ast.Try) -> None:
         """Analyze try/except blocks for problematic fallback patterns."""
 
         # Pattern 1: Bare except that returns a default value
         for handler in node.handlers:
             if handler.type is None:  # bare except:
                 if self._handler_returns_default(handler):
+                    assert self.current_file is not None
                     self.findings.append(
-                        Finding(
-                            rule_id=f"{self.rule_id}-BARE-EXCEPT-DEFAULT",
+                        self.create_finding(
                             message="Bare except block returns default value, potentially masking important errors. Consider catching specific exceptions or at least logging the error.",
                             file_path=self.current_file,
                             line=node.lineno,
-                            severity=self.severity,
                         )
                     )
 
             # Pattern 2: Exception handler that swallows exceptions silently
             elif self._handler_is_silent(handler):
                 exception_type = "Exception" if handler.type is None else ast.unparse(handler.type)
+                assert self.current_file is not None
                 self.findings.append(
-                    Finding(
-                        rule_id=f"{self.rule_id}-SILENT-EXCEPTION",
+                    self.create_finding(
                         message=f"Exception handler for {exception_type} swallows errors silently. Consider logging the error or re-raising if appropriate.",
                         file_path=self.current_file,
                         line=node.lineno,
-                        severity=self.severity,
                     )
                 )
 
             # Pattern 3: Too broad exception catching
             elif self._handler_too_broad(handler):
+                assert self.current_file is not None
                 self.findings.append(
-                    Finding(
-                        rule_id=f"{self.rule_id}-TOO-BROAD-EXCEPT",
+                    self.create_finding(
                         message="Catching 'Exception' or 'BaseException' is too broad and may hide programming errors. Catch specific exception types instead.",
                         file_path=self.current_file,
                         line=node.lineno,
-                        severity=Severity.INFO,
                     )
                 )
 
         self.generic_visit(node)
 
-    def visit_Call(self, node: ast.Call):
+    def visit_Call(self, node: ast.Call) -> None:
         """Analyze function calls for problematic patterns."""
 
         # Pattern 4: dict.get() chains that might hide config issues
         if self._is_chained_dict_get(node):
+            assert self.current_file is not None
             self.findings.append(
-                Finding(
-                    rule_id=f"{self.rule_id}-DICT-GET-CHAIN",
+                self.create_finding(
                     message="Chained dict.get() calls with defaults may hide missing configuration. Consider validating required configuration explicitly.",
                     file_path=self.current_file,
                     line=node.lineno,
-                    severity=Severity.INFO,
                 )
             )
 
         # Pattern 5: getattr with default that might hide attribute errors
         if self._is_problematic_getattr(node):
+            assert self.current_file is not None
             self.findings.append(
-                Finding(
-                    rule_id=f"{self.rule_id}-GETATTR-DEFAULT",
+                self.create_finding(
                     message="getattr() with default value may hide missing attributes. Consider checking if attribute should exist before accessing.",
                     file_path=self.current_file,
                     line=node.lineno,
-                    severity=Severity.INFO,
                 )
             )
 
         self.generic_visit(node)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef):
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Analyze function definitions for problematic default patterns."""
 
         # Pattern 6: Functions that return None by default in multiple paths
@@ -130,13 +129,12 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
         none_returns = [r for r in return_statements if self._returns_none_or_empty(r)]
 
         if len(none_returns) >= 2 and len(return_statements) >= 3:
+            assert self.current_file is not None
             self.findings.append(
-                Finding(
-                    rule_id=f"{self.rule_id}-MULTIPLE-NONE-RETURNS",
+                self.create_finding(
                     message=f"Function '{node.name}' has multiple return paths that return None/empty values. This may indicate error conditions being masked as normal returns.",
                     file_path=self.current_file,
                     line=node.lineno,
-                    severity=Severity.INFO,
                 )
             )
 
@@ -213,7 +211,7 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
         returns = []
 
         class ReturnVisitor(ast.NodeVisitor):
-            def visit_Return(self, node):
+            def visit_Return(self, node: ast.Return) -> None:
                 returns.append(node)
 
         ReturnVisitor().visit(function_node)
@@ -230,14 +228,9 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
         if isinstance(return_node.value, ast.Name):
             return return_node.value.id == "None"
 
-        if isinstance(return_node.value, (ast.List, ast.Dict, ast.Set, ast.Tuple)):
-            return (
-                len(
-                    return_node.value.elts
-                    if hasattr(return_node.value, "elts")
-                    else return_node.value.keys if hasattr(return_node.value, "keys") else []
-                )
-                == 0
-            )
+        if isinstance(return_node.value, (ast.List, ast.Set, ast.Tuple)):
+            return len(return_node.value.elts) == 0
+        elif isinstance(return_node.value, ast.Dict):
+            return len(return_node.value.keys) == 0 and len(return_node.value.values) == 0
 
         return False

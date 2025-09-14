@@ -103,10 +103,11 @@ def _present_check_results(result: CheckResult, runner):
                 console.print(
                     f"\n[bold cyan]{lr.file_path}:[/bold cyan] ([yellow]Outside project?[/yellow])"
                 )
-            except Exception as e:
+            except (TypeError, AttributeError) as e:
                 console.print(
                     f"\n[bold cyan]{lr.file_path}:[/bold cyan] ([red]Error getting relative path: {e}[/red])"
                 )
+                logging.debug("Failed to get relative path for %s: %s", lr.file_path, e)
 
             for code, error_msg in lr.errors:
                 console.print(f"  [red]ERROR[{code}] {error_msg}[/red]")
@@ -265,7 +266,8 @@ def _display_collisions(
         try:
             # Resolve paths before getting relative path for consistency
             return str(get_relative_path(p.resolve(), project_root.resolve()))
-        except ValueError:
+        except ValueError as e:
+            logging.debug("Cannot get relative path for %s from %s: %s", p, project_root, e)
             return str(p.resolve())  # Fallback to absolute resolved path
 
     table_title = "Namespace Collision Summary"
@@ -434,7 +436,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
                     scaled_art = scale_to_terminal_by_height(art)
                     console.print(scaled_art, style="bright_yellow", highlight=False)
                     console.print("\nHow's the vibe?", justify="center")
-                except Exception as e:
+                except (UnicodeDecodeError, OSError) as e:
                     logger_cli.warning(
                         f"Could not load or display VIBECHECKER.txt from package data: {e}",
                         exc_info=debug,
@@ -443,7 +445,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
                 logger_cli.debug(
                     "VIBECHECKER.txt not found in vibelint package data, skipping display."
                 )
-        except Exception as e:
+        except (ImportError, AttributeError, OSError) as e:
             logger_cli.warning(
                 f"Error accessing package resources for VIBECHECKER.txt: {e}", exc_info=debug
             )
@@ -493,7 +495,7 @@ def check(
     output_format: str,
     categories: str,
     exclude_ai: bool,
-):
+) -> None:
     """
     Run a Vibe Check: Lint rules and namespace collision detection.
 
@@ -507,7 +509,7 @@ def check(
     assert project_root is not None, "Project root missing in check command"
 
     # Don't show UI messages for machine-readable formats
-    if output_format == "human":
+    if output_format in ["human", "natural"]:
         console.print("\n[bold magenta]Initiating Vibe Check...[/bold magenta]\n")
 
     logger_cli.debug(f"Running 'check' command (yes={yes}, report={output_report})")
@@ -559,8 +561,8 @@ def check(
         logger_cli.debug(f"Running plugin-based validation with categories: {enabled_categories}")
         plugin_runner = run_plugin_validation(config_dict, project_root)
 
-        # For non-human formats, output just the validation results and exit
-        if output_format != "human":
+        # For machine-readable formats, output just the validation results and exit
+        if output_format not in ["human", "natural"]:
             # Temporarily disable logging for clean JSON/SARIF output
             original_level = logging.getLogger().level
             logging.getLogger().setLevel(logging.ERROR)
@@ -629,7 +631,7 @@ def check(
                     )
                 result_data.report_generated = True
                 logger_cli.debug("Vibe Report generation successful.")
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 logger_cli.error(f"Error generating vibe report: {e}", exc_info=True)
                 result_data.report_error = str(e)
                 report_failed = True
@@ -641,7 +643,7 @@ def check(
         result_data.success = final_exit_code == 0
         logger_cli.debug(f"Vibe Check command finished. Final Exit Code: {final_exit_code}")
 
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         logger_cli.error(f"Critical error during Vibe Check execution: {e}", exc_info=True)
         result_data.success = False
         result_data.error_message = str(e)
@@ -671,7 +673,7 @@ def check(
     help="Save the namespace tree visualization to the specified file.",
 )
 @click.pass_context
-def namespace(ctx: click.Context, output: Path | None):
+def namespace(ctx: click.Context, output: Path | None) -> None:
     """
     Visualize the project's Python namespace structure (how things import).
 
@@ -716,7 +718,7 @@ def namespace(ctx: click.Context, output: Path | None):
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_text(tree_str + "\n", encoding="utf-8")
                 result_data.output_saved = True
-            except Exception as e:
+            except (OSError, UnicodeEncodeError) as e:
                 logger_cli.error(f"Error saving namespace tree: {e}", exc_info=True)
                 result_data.output_error = str(e)
         else:
@@ -724,7 +726,7 @@ def namespace(ctx: click.Context, output: Path | None):
 
         result_data.exit_code = 0 if result_data.success else 1
 
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         logger_cli.error(f"Error building namespace tree: {e}", exc_info=True)
         result_data.success = False
         result_data.error_message = str(e)
@@ -744,7 +746,7 @@ def namespace(ctx: click.Context, output: Path | None):
     help="Output Markdown file name (default: codebase_snapshot.md)",
 )
 @click.pass_context
-def snapshot(ctx: click.Context, output: Path):
+def snapshot(ctx: click.Context, output: Path) -> None:
     """
     Create a Markdown snapshot of project files (for LLMs or humans).
 
@@ -776,7 +778,7 @@ def snapshot(ctx: click.Context, output: Path):
         result_data.success = True
         result_data.exit_code = 0
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger_cli.error(f"Error creating snapshot: {e}", exc_info=True)
         result_data.success = False
         result_data.error_message = str(e)
@@ -787,7 +789,7 @@ def snapshot(ctx: click.Context, output: Path):
     ctx.exit(result_data.exit_code)
 
 
-def main():
+def main() -> None:
     """
     Main entry point for the vibelint CLI application.
 
@@ -797,7 +799,7 @@ def main():
         cli(obj=VibelintContext(), prog_name="vibelint")
     except SystemExit as e:
         sys.exit(e.code)
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError, ImportError) as e:
         console.print(f"[bold red]An unexpected error occurred: {e}[/bold red]")
         logger = logging.getLogger("vibelint")
         # Check if logger was configured before logging error

@@ -7,11 +7,14 @@ essential functionality without unnecessary abstractions.
 vibelint/src/vibelint/plugin_system.py
 """
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Protocol
+from typing import Any, Dict, Iterator, List, Optional, Protocol
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "Severity",
@@ -157,8 +160,8 @@ def _load_builtin_validators() -> None:
             validator_class = entry_point.load()
             if hasattr(validator_class, "rule_id"):
                 _VALIDATORS[validator_class.rule_id] = validator_class
-        except Exception:
-            # Skip invalid validators silently
+        except (ImportError, AttributeError, TypeError) as e:
+            logger.debug(f"Failed to load validator from entry point {entry_point.name}: {e}")
             pass
 
 
@@ -171,90 +174,84 @@ def _load_builtin_formatters() -> None:
             formatter_class = entry_point.load()
             if hasattr(formatter_class, "name"):
                 _FORMATTERS[formatter_class.name] = formatter_class
-        except Exception:
-            # Skip invalid formatters silently
+        except (ImportError, AttributeError, TypeError) as e:
+            logger.debug(f"Failed to load formatter from entry point {entry_point.name}: {e}")
             pass
 
 
-# Legacy compatibility - for transition period
-if TYPE_CHECKING:
-    BaseValidator = Validator
-    BaseFormatter = Formatter
-else:
-    # Runtime base classes for backward compatibility
-    class BaseValidator:
-        """Legacy base class for validators."""
+# Concrete base classes
+class BaseValidator:
+    """Base class for validators."""
 
-        rule_id: str = ""
-        default_severity: Severity = Severity.WARN
+    rule_id: str = ""
+    default_severity: Severity = Severity.WARN
 
-        def __init__(
-            self, severity: Optional[Severity] = None, config: Optional[Dict] = None
-        ) -> None:
-            self.severity = severity or self.default_severity
-            self.config = config or {}
+    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None) -> None:
+        self.severity = severity or self.default_severity
+        self.config = config or {}
 
-        def validate(self, file_path: Path, content: str, config: Any) -> Iterator[Finding]:
-            """Validate a file and yield findings."""
-            raise NotImplementedError
+    def validate(self, file_path: Path, content: str, config: Any) -> Iterator[Finding]:
+        """Validate a file and yield findings."""
+        raise NotImplementedError
 
-        def create_finding(
-            self,
-            message: str,
-            file_path: Path,
-            line: int = 0,
-            column: int = 0,
-            context: str = "",
-            suggestion: Optional[str] = None,
-        ) -> Finding:
-            """Create a Finding object with this validator's rule_id and severity."""
-            return Finding(
-                rule_id=self.rule_id,
-                message=message,
-                file_path=file_path,
-                line=line,
-                column=column,
-                severity=self.severity,
-                context=context,
-                suggestion=suggestion,
-            )
+    def create_finding(
+        self,
+        message: str,
+        file_path: Path,
+        line: int = 0,
+        column: int = 0,
+        context: str = "",
+        suggestion: Optional[str] = None,
+    ) -> Finding:
+        """Create a Finding object with this validator's rule_id and severity."""
+        return Finding(
+            rule_id=self.rule_id,
+            message=message,
+            file_path=file_path,
+            line=line,
+            column=column,
+            severity=self.severity,
+            context=context,
+            suggestion=suggestion,
+        )
 
-    class BaseFormatter(ABC):
-        """Legacy base class for formatters."""
 
-        name: str = ""
-        description: str = ""
+class BaseFormatter(ABC):
+    """Base class for formatters."""
 
-        @abstractmethod
-        def format_results(
-            self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
-        ) -> str:
-            """Format validation results for output."""
-            pass
+    name: str = ""
+    description: str = ""
+
+    @abstractmethod
+    def format_results(
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+    ) -> str:
+        """Format validation results for output."""
+        pass
 
 
 # Legacy global manager for backward compatibility
 class _LegacyPluginManager:
     """Legacy compatibility wrapper."""
 
-    def load_plugins(self):
+    def load_plugins(self) -> None:
         """Load plugins - delegated to new system."""
         get_all_validators()
         get_all_formatters()
 
-    def get_validator(self, rule_id: str):
+    def get_validator(self, rule_id: str) -> Optional[Any]:
         """Get validator by rule ID."""
         return get_validator(rule_id)
 
-    def get_all_validators(self):
+    def get_all_validators(self) -> Dict[str, type]:
         """Get all validators."""
         return get_all_validators()
 
-    def get_formatter(self, name: str):
+    def get_formatter(self, name: str) -> Optional[Any]:
         """Get formatter by name."""
         return get_formatter(name)
 
-    def get_all_formatters(self):
+    def get_all_formatters(self) -> Dict[str, type]:
         """Get all formatters."""
         return get_all_formatters()
 

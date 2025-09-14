@@ -91,13 +91,14 @@ class Config:
         ignored = self.get("ignore", [])
         if isinstance(ignored, list) and all(isinstance(item, str) for item in ignored):
             return ignored
-        elif ignored:
+
+        # Handle invalid configuration
+        if ignored:
             logger.warning(
                 "Configuration key 'ignore' in [tool.vibelint] is not a list of strings. Ignoring it."
             )
-            return []
-        else:
-            return []
+
+        return []
 
     def get(
         self, key: str, default: Union[str, bool, int, list, dict, None] = None
@@ -175,7 +176,13 @@ def load_config(start_path: Path) -> Config:
             full_toml_config = tomllib.load(f)
         logger.debug("Parsed pyproject.toml")
 
-        vibelint_config = full_toml_config.get("tool", {}).get("vibelint", {})
+        # Validate required configuration structure explicitly
+        tool_section = full_toml_config.get("tool")
+        if not isinstance(tool_section, dict):
+            logger.warning("pyproject.toml [tool] section is missing or invalid")
+            vibelint_config = {}
+        else:
+            vibelint_config = tool_section.get("vibelint", {})
 
         if isinstance(vibelint_config, dict):
             loaded_settings = vibelint_config
@@ -201,9 +208,9 @@ def load_config(start_path: Path) -> Config:
         logger.error(f"Error parsing {pyproject_path}: {e}. Using empty configuration.")
     except OSError as e:
         logger.error(f"Error reading {pyproject_path}: {e}. Using empty configuration.")
-    except Exception as e:
-
-        logger.exception(f"Unexpected error loading config from {pyproject_path}: {e}")
+    except (KeyError, TypeError, ValueError) as e:
+        logger.error(f"Error processing configuration from {pyproject_path}: {e}")
+        logger.debug("Unexpected error loading config", exc_info=True)
 
     return Config(project_root=project_root, config_dict=loaded_settings)
 

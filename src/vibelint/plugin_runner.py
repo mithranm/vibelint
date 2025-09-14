@@ -7,6 +7,7 @@ to run validators and format output according to user configuration.
 vibelint/src/vibelint/plugin_runner.py
 """
 
+import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
@@ -56,7 +57,8 @@ class PluginValidationRunner:
 
             try:
                 content = file_path.read_text(encoding="utf-8")
-            except (UnicodeDecodeError, OSError):
+            except (UnicodeDecodeError, OSError) as e:
+                logging.getLogger(__name__).debug(f"Could not read file {file_path}: {e}")
                 continue
 
             # Run all validators on this file
@@ -67,8 +69,10 @@ class PluginValidationRunner:
                         relative_path = file_path.relative_to(self.project_root)
                         finding.file_path = relative_path
                         self.findings.append(finding)
-                except Exception:
-                    # Skip validator if it fails
+                except (ImportError, AttributeError, ValueError, SyntaxError) as e:
+                    logging.getLogger(__name__).debug(
+                        f"Validator {validator.__class__.__name__} failed on {file_path}: {e}"
+                    )
                     continue
 
         return self.findings

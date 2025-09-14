@@ -71,7 +71,7 @@ def _is_excluded(
         # Path is outside project root, consider it excluded for safety
         logger.warning(f"Path {path_abs} is outside project root {project_root}. Excluding.")
         return True
-    except Exception as e:
+    except (OSError, TypeError) as e:
         logger.error(f"Error getting relative path for exclusion check on {path_abs}: {e}")
         return True  # Exclude if relative path fails
 
@@ -241,7 +241,10 @@ def discover_files(
     candidate_files: set[Path] = set()
     _explicit_excludes = {p.resolve() for p in (explicit_exclude_paths or set())}
 
+    # Validate and process include_globs configuration
     include_globs_config = config.get("include_globs")
+    include_globs_effective = []
+
     if include_globs_config is None:
         if default_includes_if_missing is not None:
             logger.warning(
@@ -253,17 +256,18 @@ def discover_files(
             logger.error(
                 "Configuration key 'include_globs' missing. No include patterns specified."
             )
-            return []
     elif not isinstance(include_globs_config, list):
         logger.error(
             f"Config error: 'include_globs' must be a list. Found {type(include_globs_config)}."
         )
-        return []
     elif not include_globs_config:
         logger.warning("Config: 'include_globs' is empty. No files will be included.")
-        include_globs_effective = []
     else:
         include_globs_effective = include_globs_config
+
+    # Early return if no valid include patterns
+    if not include_globs_effective:
+        return []
 
     normalized_includes = [p.replace("\\", "/") for p in include_globs_effective]
 
@@ -341,7 +345,7 @@ def discover_files(
                 logger.warning(
                     f"Permission denied for non-recursive glob '{pattern}': {e}. Skipping."
                 )
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 logger.error(f"Error during non-recursive glob '{pattern}': {e}", exc_info=True)
 
         pattern_time = time.time() - pattern_start_time
@@ -375,7 +379,7 @@ def discover_files(
                         vcs_warnings.add(file_path)
             except ValueError:
                 pass
-            except Exception as e_vcs:
+            except (OSError, TypeError) as e_vcs:
                 logger.debug(f"Error during VCS check for {file_path}: {e_vcs}")
 
     if vcs_warnings:

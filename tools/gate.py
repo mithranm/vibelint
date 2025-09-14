@@ -13,32 +13,15 @@ from pathlib import Path
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Gate script for vibelint validation results"
+    parser = argparse.ArgumentParser(description="Gate script for vibelint validation results")
+    parser.add_argument("json_file", type=Path, help="Path to vibelint JSON output file")
+    parser.add_argument(
+        "--warn-budget", type=int, default=10, help="Maximum allowed warning count (default: 10)"
     )
     parser.add_argument(
-        "json_file",
-        type=Path,
-        help="Path to vibelint JSON output file"
+        "--info-budget", type=int, default=50, help="Maximum allowed info count (default: 50)"
     )
-    parser.add_argument(
-        "--warn-budget",
-        type=int,
-        default=10,
-        help="Maximum allowed warning count (default: 10)"
-    )
-    parser.add_argument(
-        "--info-budget",
-        type=int,
-        default=50,
-        help="Maximum allowed info count (default: 50)"
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Verbose output"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
     args = parser.parse_args()
 
@@ -60,7 +43,7 @@ def main():
     info_count = summary.get("INFO", 0)
 
     if args.verbose:
-        print(f"Validation results:")
+        print("Validation results:")
         print(f"  BLOCK: {block_count}")
         print(f"  WARN:  {warn_count} (budget: {args.warn_budget})")
         print(f"  INFO:  {info_count} (budget: {args.info_budget})")

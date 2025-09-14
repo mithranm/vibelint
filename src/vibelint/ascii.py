@@ -7,6 +7,7 @@ to load ASCII art from a file.
 vibelint/src/vibelint/ascii.py
 """
 
+import logging
 import shutil
 
 
@@ -20,7 +21,9 @@ def _get_terminal_size():
     try:
         size = shutil.get_terminal_size(fallback=(80, 24))
         return size.columns, size.lines
-    except Exception:
+    except OSError as e:
+        # Terminal size unavailable in non-interactive environments
+        logging.debug("Failed to get terminal size: %s", e)
         return 80, 24
 
 

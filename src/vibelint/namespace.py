@@ -628,9 +628,11 @@ def _extract_module_members(
         source = file_path.read_text(encoding="utf-8")
 
         tree = ast.parse(source, filename=str(file_path))
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
+        logger.warning(f"Could not read file {file_path} for namespace analysis: {e}")
+        return {}, [], None
+    except (SyntaxError, ValueError) as e:
         logger.warning(f"Could not parse file {file_path} for namespace analysis: {e}")
-
         return {}, [], None
 
     defined_members_map: dict[str, tuple[Path, int | None]] = {}

@@ -23,7 +23,7 @@ class MissingAllValidator(BaseValidator):
     description = "Checks for missing __all__ definitions in modules"
     default_severity = Severity.INFO
 
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Check for missing __all__ definition."""
         # Skip if it's __init__.py or private module
         if file_path.name.startswith("_"):
@@ -37,7 +37,6 @@ class MissingAllValidator(BaseValidator):
                 file_path=file_path,
                 line=1,
                 suggestion="Fix Python syntax errors in the file",
-                severity=Severity.BLOCK,
             )
             return
 
@@ -57,7 +56,6 @@ class MissingAllValidator(BaseValidator):
                                 file_path=file_path,
                                 line=node.lineno,
                                 suggestion='Ensure __all__ = ["item1", "item2"] or __all__ = ("item1", "item2")',
-                                severity=Severity.WARN,
                             )
                         break
             elif isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith(
@@ -91,7 +89,7 @@ class InitAllValidator(BaseValidator):
     description = "__init__.py file is missing __all__ definition (optional based on config)"
     default_severity = Severity.INFO
 
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Check for missing __all__ in __init__.py files."""
         # Only check __init__.py files
         if file_path.name != "__init__.py":

@@ -24,7 +24,10 @@ class EmojiUsageValidator(BaseValidator):
     description = "Detects emojis that can cause MCP and Windows shell issues"
     default_severity = Severity.WARN
 
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+    def __init__(self, severity=None, config=None):
+        super().__init__(severity, config)
+
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Check for emoji usage in code."""
         # Emoji regex pattern - matches most common emojis
         emoji_pattern = re.compile(
@@ -45,7 +48,6 @@ class EmojiUsageValidator(BaseValidator):
                         file_path=file_path,
                         line=line_num,
                         suggestion="Replace emoji in code with ASCII alternatives immediately",
-                        severity=Severity.BLOCK,
                     )
                 else:
                     # Less severe for emojis in strings/comments

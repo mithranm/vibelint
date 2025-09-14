@@ -28,7 +28,10 @@ class TypingQualityValidator(BaseValidator):
     description = "Detects poor typing practices that reduce code clarity and type safety"
     default_severity = Severity.WARN
 
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+    def __init__(self, severity=None, config=None):
+        super().__init__(severity, config)
+
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Validate typing practices in a Python file."""
         try:
             tree = ast.parse(content)
@@ -66,7 +69,6 @@ class TypingQualityValidator(BaseValidator):
                     file_path=file_path,
                     line=line_num,
                     suggestion="Replace Any with a specific type or Union of types",
-                    severity=Severity.INFO,
                 )
 
         # Report missing type annotations on public functions
@@ -76,7 +78,6 @@ class TypingQualityValidator(BaseValidator):
                 file_path=file_path,
                 line=line_num,
                 suggestion=f"Add type hints: def {func_name}(...) -> ReturnType:",
-                severity=Severity.INFO,
             )
 
         # Report string literals that look like enums
@@ -89,7 +90,6 @@ class TypingQualityValidator(BaseValidator):
                     file_path=file_path,
                     line=first_line,
                     suggestion="Create an Enum for these related string constants",
-                    severity=Severity.INFO,
                 )
 
     def _looks_like_data_structure(self, name: str, tuple_info: str) -> bool:

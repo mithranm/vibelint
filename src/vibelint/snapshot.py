@@ -17,12 +17,15 @@ __all__ = ["create_snapshot"]
 
 logger = logging.getLogger(__name__)
 
+# Constants for file tree structure
+FILES_KEY = "__FILES__"
+
 
 def create_snapshot(
     output_path: Path,
     target_paths: list[Path],
     config: Config,
-):
+) -> None:
     """
     Creates a Markdown snapshot file containing the project structure and file contents,
     respecting the include/exclude rules defined in pyproject.toml.
@@ -119,10 +122,10 @@ def create_snapshot(
 
             if is_last_part:
                 # This is the filename part
-                if "__FILES__" not in node:
-                    node["__FILES__"] = []
+                if FILES_KEY not in node:
+                    node[FILES_KEY] = []
                 # Add the tuple (absolute path, category)
-                node["__FILES__"].append((f_path, f_cat))
+                node[FILES_KEY].append((f_path, f_cat))
             else:
                 # This is a directory part
                 if part not in node:
@@ -170,7 +173,7 @@ def create_snapshot(
                                         break
                                     outfile.write(line)
                                     lines_read += 1
-                        except Exception as e:
+                        except (OSError, UnicodeDecodeError) as e:
                             logger.warning(f"Error reading file for peek {relpath_header}: {e}")
                             outfile.write(f"[Error reading file for peek: {e}]\n")
                         outfile.write("```\n\n---\n")
@@ -184,16 +187,16 @@ def create_snapshot(
                                 if not content.endswith("\n"):
                                     content += "\n"
                                 outfile.write(content)
-                        except Exception as e:
+                        except (OSError, UnicodeDecodeError) as e:
                             logger.warning(f"Error reading file content {relpath_header}: {e}")
                             outfile.write(f"[Error reading file: {e}]\n")
                         outfile.write("```\n\n---\n")
 
-                except Exception as e:
+                except (OSError, ValueError, TypeError) as e:
                     # General error handling for processing a single file entry
                     try:
                         relpath_header_err = get_relative_path(f, project_root)
-                    except Exception:
+                    except ValueError:
                         relpath_header_err = str(f)  # Fallback to absolute path if rel path fails
 
                     logger.error(
@@ -210,7 +213,7 @@ def create_snapshot(
         # Error writing the main output file
         logger.error(f"Failed to write snapshot file {absolute_output_path}: {e}", exc_info=True)
         raise  # Re-raise IOErrors
-    except Exception as e:
+    except (ValueError, TypeError, RuntimeError) as e:
         # Catch-all for other unexpected errors during writing
         logger.error(f"An unexpected error occurred during snapshot writing: {e}", exc_info=True)
         raise  # Re-raise other critical exceptions
@@ -228,9 +231,9 @@ def _write_tree(outfile, node: dict, prefix=""):
 
     vibelint/src/vibelint/snapshot.py
     """
-    # Separate directories (keys other than '__FILES__') from files (items in '__FILES__')
-    dirs = sorted([k for k in node if k != "__FILES__"])
-    files_data: list[tuple[Path, str]] = sorted(node.get("__FILES__", []), key=lambda x: x[0].name)
+    # Separate directories (keys other than FILES_KEY) from files (items in FILES_KEY)
+    dirs = sorted([k for k in node if k != FILES_KEY])
+    files_data: list[tuple[Path, str]] = sorted(node.get(FILES_KEY, []), key=lambda x: x[0].name)
 
     # Combine directory names and file names for iteration order
     entries = dirs + [f_info[0].name for f_info in files_data]

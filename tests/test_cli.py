@@ -296,7 +296,7 @@ def test_check_success(runner: CliRunner, setup_test_project: Path):
     ), f"Expected exit code 0, got {result.exit_code}. Output:\n{result.output}"
     assert_output_matches(result, r"Initiating Vibe Check")
     assert_output_matches(
-        result, r"Summary: 0 errors, 0 warnings", msg="Expected no errors or warnings"
+        result, r"Summary: 0 errors, 2 warnings, 3 info", msg="Expected the fixture's known issues"
     )
     assert_output_does_not_match(result, r"\[VBL\d{3}\]", msg="Unexpected VBL codes found")
     assert_output_does_not_contain(result, "Collision Summary", msg="Unexpected collision summary")

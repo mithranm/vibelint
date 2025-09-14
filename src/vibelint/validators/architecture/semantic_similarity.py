@@ -9,21 +9,13 @@ vibelint/validators/semantic_similarity.py
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
 try:
-    import numpy as np
-
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
+    import importlib.util
+    SENTENCE_TRANSFORMERS_AVAILABLE = importlib.util.find_spec("numpy") is not None
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
-
-    # Create dummy np module for type hints
-    class DummyNumpy:
-        class ndarray:
-            pass
-
-    np = DummyNumpy()
 
 if TYPE_CHECKING or SENTENCE_TRANSFORMERS_AVAILABLE:
     try:
@@ -31,7 +23,6 @@ if TYPE_CHECKING or SENTENCE_TRANSFORMERS_AVAILABLE:
     except ImportError:
         SentenceTransformer = None  # type: ignore
 
-from ...config import Config
 from ...plugin_system import BaseValidator, Finding, Severity
 
 __all__ = ["SemanticSimilarityValidator"]
@@ -49,19 +40,32 @@ class SemanticSimilarityValidator(BaseValidator):
     """
 
     rule_id = "SEMANTIC-SIMILARITY"
+    default_severity = Severity.INFO
 
     def __init__(
         self,
         severity: Optional[Severity] = None,
-        config: Optional[Dict] = None,
-        shared_model: Optional[SentenceTransformer] = None,
-    ):
+        config: Optional[Dict[str, Any]] = None,
+    ) -> None:
         super().__init__(severity, config)
-        self._model: Optional[SentenceTransformer] = shared_model
-        self._code_cache: Dict[str, List[Tuple[Path, str, str, np.ndarray]]] = {}
+        # Get shared model from config if available
+        self._model: Optional[Any] = config.get("_shared_model") if config else None
+        self._code_cache: Dict[str, List[Tuple[Path, str, str, Any]]] = {}
         self._setup_attempted = False
 
-    def _setup_embedding_model(self, config: Config) -> bool:
+    def _safe_config_get(self, config: Any, key: str, default=None):
+        """Safely get a value from config object."""
+        if hasattr(config, "get"):
+            return config.get(key, default)
+        elif hasattr(config, "__getitem__"):
+            try:
+                return config[key]
+            except (KeyError, TypeError):
+                return default
+        else:
+            return default
+
+    def _setup_embedding_model(self, config: Any) -> bool:
         """
         Initialize the embedding model if available and configured.
 
@@ -75,8 +79,10 @@ class SemanticSimilarityValidator(BaseValidator):
 
         # If we already have a shared model, use it
         if self._model is not None:
-            embedding_config = config.get("embedding_analysis", {})
-            self._similarity_threshold = embedding_config.get("similarity_threshold", 0.85)
+            embedding_config = self._safe_config_get(config, "embedding_analysis", {})
+            self._similarity_threshold = self._safe_config_get(
+                embedding_config, "similarity_threshold", 0.85
+            )
             logger.info("Using pre-loaded embedding model")
             return True
 
@@ -87,23 +93,25 @@ class SemanticSimilarityValidator(BaseValidator):
             return False
 
         # Check configuration
-        embedding_config = config.get("embedding_analysis", {})
-        model_name = embedding_config.get("model", "google/embeddinggemma-300m")
-        similarity_threshold = embedding_config.get("similarity_threshold", 0.85)
+        embedding_config = self._safe_config_get(config, "embedding_analysis", {})
+        model_name = self._safe_config_get(embedding_config, "model", "google/embeddinggemma-300m")
+        similarity_threshold = self._safe_config_get(embedding_config, "similarity_threshold", 0.85)
 
         # Check if embedding analysis is enabled
-        if not embedding_config.get("enabled", False):
+        if not self._safe_config_get(embedding_config, "enabled", False):
             logger.debug("Semantic similarity analysis disabled in configuration")
             return False
 
         try:
             # Handle HF token from config, .env file, or environment
-            hf_token = embedding_config.get("hf_token")
+            hf_token = self._safe_config_get(embedding_config, "hf_token")
             if not hf_token:
                 import os
 
                 # Try to load from .env file
-                env_file = config.project_root / ".env" if config.project_root else None
+                env_file = getattr(config, "project_root", None)
+                if env_file:
+                    env_file = env_file / ".env"
                 if env_file and env_file.exists():
                     for line in env_file.read_text().splitlines():
                         if line.startswith("HF_TOKEN="):
@@ -118,7 +126,8 @@ class SemanticSimilarityValidator(BaseValidator):
                 os.environ["HF_TOKEN"] = hf_token
 
             logger.info(f"Loading embedding model: {model_name}")
-            self._model = SentenceTransformer(model_name)
+            if SentenceTransformer is not None:
+                self._model = SentenceTransformer(model_name)
             self._similarity_threshold = similarity_threshold
             logger.info(f"Semantic similarity analysis enabled (threshold: {similarity_threshold})")
             return True
@@ -205,7 +214,7 @@ class SemanticSimilarityValidator(BaseValidator):
 
         return elements
 
-    def _get_embedding(self, text: str, task_type: str = "clustering") -> Optional[np.ndarray]:
+    def _get_embedding(self, text: str, task_type: str = "clustering") -> Optional[Any]:
         """Generate embedding for text using task-specific prompting."""
         if not self._model:
             return None
@@ -229,7 +238,7 @@ class SemanticSimilarityValidator(BaseValidator):
 
     def _get_embeddings_batch(
         self, texts: List[str], task_type: str = "clustering"
-    ) -> Optional[np.ndarray]:
+    ) -> Optional[Any]:
         """Generate embeddings for multiple texts using batch processing for efficiency."""
         if not self._model or not texts:
             return None
@@ -255,18 +264,23 @@ class SemanticSimilarityValidator(BaseValidator):
             logger.debug(f"Failed to generate batch embeddings: {e}")
             return None
 
-    def _compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+    def _compute_similarity(self, embedding1: Any, embedding2: Any) -> float:
         """Compute cosine similarity between two embeddings."""
-        return float(np.dot(embedding1, embedding2))
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
+            import numpy as np
 
-    def validate(self, file_path: Path, content: str, config: Config) -> Iterator[Finding]:
+            return float(np.dot(embedding1, embedding2))
+        else:
+            return 0.0
+
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """
         Perform semantic similarity analysis on the current file.
 
         Compares functions and classes in this file against previously seen ones
         to detect semantic redundancy.
         """
-        if not self._setup_embedding_model(config):
+        if config is None or not self._setup_embedding_model(config):
             return
 
         # Extract code elements from current file
@@ -288,19 +302,15 @@ class SemanticSimilarityValidator(BaseValidator):
                 self._code_cache[cache_key] = []
 
             # Compare against existing elements
-            for cached_file, cached_name, cached_content, cached_embedding in self._code_cache[
-                cache_key
-            ]:
+            for cached_file, cached_name, _, cached_embedding in self._code_cache[cache_key]:
                 # Skip if same file and same name
                 if cached_file == file_path and cached_name == name:
                     continue
 
                 similarity = self._compute_similarity(embedding, cached_embedding)
 
-                if similarity >= self._similarity_threshold:
-                    # Generate a unique rule ID based on similarity type
-                    rule_suffix = f"{element_type.upper()}-SIMILARITY"
-
+                threshold = getattr(self, "_similarity_threshold", 0.85)
+                if similarity >= threshold:
                     # Create descriptive message
                     if cached_file == file_path:
                         message = f"Similar {element_type}s '{name}' and '{cached_name}' found in same file (similarity: {similarity:.3f})"
@@ -310,12 +320,10 @@ class SemanticSimilarityValidator(BaseValidator):
                         message = f"{element_type.title()} '{name}' is very similar to '{cached_name}' in {relative_cached} (similarity: {similarity:.3f})"
                         recommendation = f"Consider consolidating duplicate {element_type}s across files or documenting the differences"
 
-                    yield Finding(
-                        rule_id=f"{self.rule_id}-{rule_suffix}",
+                    yield self.create_finding(
                         message=f"{message}. Recommendation: {recommendation}",
                         file_path=file_path,
                         line=1,  # Could be enhanced to find actual line number
-                        severity=self.severity,
                     )
 
             # Add current element to cache for future comparisons

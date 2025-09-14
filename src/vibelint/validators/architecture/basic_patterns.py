@@ -7,10 +7,13 @@ mixed patterns, and violations of established conventions.
 vibelint/validators/architecture.py
 """
 
+import logging
 from pathlib import Path
-from typing import Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Optional
 
 from ...plugin_system import BaseValidator, Finding, Severity
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["ArchitectureValidator"]
 
@@ -23,7 +26,12 @@ class ArchitectureValidator(BaseValidator):
     description = "Identifies competing systems, mixed patterns, and architectural violations"
     default_severity = Severity.WARN
 
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+    def __init__(
+        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
+    ) -> None:
+        super().__init__(severity, config)
+
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Analyze file for architectural inconsistencies."""
         yield from self._check_competing_systems(file_path, content)
         yield from self._check_mixed_patterns(file_path, content)
@@ -82,7 +90,6 @@ class ArchitectureValidator(BaseValidator):
                 file_path=file_path,
                 line=error_patterns[0][1],
                 suggestion="Use consistent exception handling patterns",
-                severity=Severity.INFO,
             )
 
     def _check_import_inconsistencies(self, file_path: Path, content: str) -> Iterator[Finding]:
@@ -118,7 +125,6 @@ class ArchitectureValidator(BaseValidator):
                     file_path=file_path,
                     line=first_import[1],
                     suggestion=f"Use consistent import style for {module}",
-                    severity=Severity.INFO,
                 )
 
 
@@ -145,7 +151,8 @@ class ProjectArchitectureAnalyzer:
 
             try:
                 content = file_path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug(f"Could not read file {file_path}: {e}")
                 continue
 
             # Check validation patterns
@@ -188,7 +195,8 @@ class ProjectArchitectureAnalyzer:
 
             try:
                 content = file_path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug(f"Could not read file {file_path}: {e}")
                 continue
 
             # Simple heuristic: check for similar validation functionality

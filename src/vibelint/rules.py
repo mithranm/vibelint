@@ -6,17 +6,24 @@ Handles rule configuration, severity overrides, and policy management.
 vibelint/src/vibelint/rules.py
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+import logging
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set
 
 from .plugin_system import BaseValidator, Severity, plugin_manager
 
-if TYPE_CHECKING:
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError:
-        SentenceTransformer = None  # type: ignore
+logger = logging.getLogger(__name__)
 
-__all__ = ["RuleEngine", "create_default_rule_config"]
+
+class DefaultSeverity(Enum):
+    """Predefined severity levels for consistency."""
+
+    INFO = "INFO"
+    WARN = "WARN"
+    ERROR = "ERROR"
+
+
+__all__ = ["RuleEngine", "create_default_rule_config", "DefaultSeverity"]
 
 
 class RuleEngine:
@@ -43,8 +50,8 @@ class RuleEngine:
             if isinstance(setting, str):
                 try:
                     self._rule_overrides[rule_id] = Severity(setting.upper())
-                except ValueError:
-                    # Invalid severity, skip
+                except ValueError as e:
+                    logger.debug(f"Invalid severity setting for rule {rule_id}: {setting} - {e}")
                     pass
             elif isinstance(setting, bool):
                 # Boolean: True=default severity, False=OFF
@@ -93,7 +100,10 @@ class RuleEngine:
         # Handle special cases that need shared resources
         if validator_class.rule_id == "SEMANTIC-SIMILARITY":
             shared_model = self._get_or_create_embedding_model()
-            return validator_class(severity=severity, config=self.config, shared_model=shared_model)
+            # Pass the model through config
+            config_with_model = dict(self.config)
+            config_with_model["_shared_model"] = shared_model
+            return validator_class(severity=severity, config=config_with_model)
 
         return validator_class(severity=severity, config=self.config)
 
@@ -125,13 +135,13 @@ class RuleEngine:
         model_key = "embedding_gemma"
 
         if model_key not in self._shared_models:
+            import logging
+            import os
+
+            logger = logging.getLogger(__name__)
+
             try:
-                import logging
-                import os
-
                 from sentence_transformers import SentenceTransformer
-
-                logger = logging.getLogger(__name__)
 
                 # Check configuration
                 embedding_config = self.config.get("embedding_analysis", {})
@@ -146,9 +156,9 @@ class RuleEngine:
                 hf_token = embedding_config.get("hf_token")
                 if not hf_token:
                     # Try to load from .env file
-                    env_file = getattr(self.config, "project_root", None)
-                    if env_file:
-                        env_file = env_file / ".env"
+                    project_root = getattr(self.config, "project_root", None)
+                    if project_root and hasattr(self.config, "project_root"):
+                        env_file = project_root / ".env"
                         if env_file and env_file.exists():
                             for line in env_file.read_text().splitlines():
                                 if line.startswith("HF_TOKEN="):
@@ -171,7 +181,7 @@ class RuleEngine:
                     "Semantic similarity analysis disabled: sentence-transformers not available"
                 )
                 self._shared_models[model_key] = None
-            except Exception as e:
+            except (ImportError, RuntimeError, OSError) as e:
                 logger.warning(f"Failed to load embedding model: {e}")
                 self._shared_models[model_key] = None
 
@@ -196,12 +206,12 @@ def create_default_rule_config() -> Dict[str, Any]:
     return {
         "rules": {
             # Semantic rule IDs (primary system)
-            "DOCSTRING-MISSING": "INFO",  # Missing docstring is just info
-            "EXPORTS-MISSING-ALL": "WARN",  # Missing __all__ is warning
-            "PRINT-STATEMENT": "WARN",  # Print statements are warnings
-            "EMOJI-IN-STRING": "WARN",  # Emojis can cause encoding issues
-            "TODO-FOUND": "INFO",  # TODOs are informational
-            "PARAMETERS-KEYWORD-ONLY": "INFO",  # Parameter suggestions are info
+            "DOCSTRING-MISSING": DefaultSeverity.INFO.value,  # Missing docstring is just info
+            "EXPORTS-MISSING-ALL": DefaultSeverity.WARN.value,  # Missing __all__ is warning
+            "PRINT-STATEMENT": DefaultSeverity.WARN.value,  # Print statements are warnings
+            "EMOJI-IN-STRING": DefaultSeverity.WARN.value,  # Emojis can cause encoding issues
+            "TODO-FOUND": DefaultSeverity.INFO.value,  # TODOs are informational
+            "PARAMETERS-KEYWORD-ONLY": DefaultSeverity.INFO.value,  # Parameter suggestions are info
         },
         "plugins": {"enabled": ["vibelint.core"]},
     }

@@ -61,8 +61,10 @@ vibelint = "vibelint.cli:main"
 
 [project.entry-points."vibelint.formatters"]
 human = "vibelint.formatters:HumanFormatter"
+natural = "vibelint.formatters:NaturalLanguageFormatter"
 json = "vibelint.formatters:JsonFormatter"
 sarif = "vibelint.formatters:SarifFormatter"
+llm = "vibelint.formatters:LLMFormatter"
 
 [project.urls]
 "Homepage" = "https://github.com/mithranm/vibelint"

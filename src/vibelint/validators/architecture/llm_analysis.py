@@ -11,7 +11,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, Optional
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -31,8 +31,11 @@ class ArchitectureLLMValidator(BaseValidator):
     """
 
     rule_id = "ARCHITECTURE-LLM"
+    default_severity = Severity.INFO
 
-    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None):
+    def __init__(
+        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
+    ) -> None:
         super().__init__(severity, config)
         self._api_base_url: Optional[str] = None
         self._model_name: Optional[str] = None
@@ -257,7 +260,7 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
 
         return None
 
-    def validate(self, file_path: Path, content: str, config: Config) -> Iterator[Finding]:
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """
         Perform LLM-powered architectural validation on individual files.
 
@@ -269,7 +272,7 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
         # Skip if LLM is not available or not configured
         if not hasattr(self, "_llm_setup_attempted"):
             self._llm_setup_attempted = True
-            self._llm_available = self._setup_llm_client(config)
+            self._llm_available = config is not None and self._setup_llm_client(config)
 
         if not self._llm_available:
             return
@@ -300,12 +303,10 @@ Look for: thin wrapper classes, unnecessary middle layers, over-complex data cla
             else:
                 return
 
-            yield Finding(
-                rule_id=f"{self.rule_id}-ANALYSIS",
+            yield self.create_finding(
                 message=message,
                 file_path=file_path,
                 line=1,
-                severity=self.severity,
             )
 
     def _should_analyze_file(self, file_path: Path, content: str) -> bool:

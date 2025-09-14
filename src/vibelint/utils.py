@@ -4,8 +4,11 @@ Utility functions for vibelint.
 vibelint/src/vibelint/utils.py
 """
 
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ensure_directory",
@@ -126,8 +129,8 @@ def get_relative_path(path: Path, base: Path) -> Path:
     try:
 
         return path.resolve().relative_to(base.resolve())
-    except ValueError:
-
+    except ValueError as e:
+        logger.debug(f"Path {path} is not relative to {base}: {e}")
         return path.resolve()
 
 
@@ -157,7 +160,8 @@ def get_import_path(file_path: Path, package_root: Path | None = None) -> str:
         if import_path.endswith(".py"):
             import_path = import_path[:-3]
         return import_path
-    except ValueError:
+    except ValueError as e:
+        logger.debug(f"Could not determine import path for {file_path}: {e}")
         return file_path.stem
 
 
@@ -253,7 +257,8 @@ def read_file_safe(file_path: Path, encoding: str = "utf-8") -> str | None:
 
     try:
         return file_path.read_text(encoding=encoding)
-    except Exception:
+    except (OSError, UnicodeDecodeError) as e:
+        logger.debug(f"Could not read file {file_path}: {e}")
         return None
 
 
@@ -276,7 +281,8 @@ def write_file_safe(file_path: Path, content: str, encoding: str = "utf-8") -> b
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding=encoding)
         return True
-    except Exception:
+    except (OSError, UnicodeEncodeError) as e:
+        logger.debug(f"Could not write file {file_path}: {e}")
         return False
 
 
@@ -314,6 +320,6 @@ def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
     except OSError:
 
         return True
-    except Exception:
-
+    except (TypeError, AttributeError) as e:
+        logger.debug(f"Error checking if {file_path} is binary: {e}")
         return True
