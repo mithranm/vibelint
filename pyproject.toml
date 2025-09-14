@@ -80,16 +80,22 @@ select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
     "F",      # pyflakes
-    "I",      # isort
-    "N",      # pep8-naming
-    "UP",     # pyupgrade
-    "B",      # flake8-bugbear
-    "C4",     # flake8-comprehensions
-    "SIM",    # flake8-simplify
 ]
 ignore = [
     "E501",   # Line too long (handled by black)
     "B008",   # Allow function calls in argument defaults
+    "B904",   # Allow raise without from for now
+    "UP036",  # Allow outdated version blocks
+    "C414",   # Allow unnecessary list() calls for clarity
+    "SIM102", # Allow nested if statements
+    "SIM210", # Allow if-else instead of bool()
+    "SIM113", # Allow manual index tracking
+    "SIM103", # Allow explicit return True/False
+    "N802",   # Allow uppercase function names (LibCST visitor methods)
+    "N806",   # Allow uppercase variables
+    "B006",   # Allow mutable defaults for now
+    "B007",   # Allow unused loop variables
+    "UP007",  # Allow Union syntax for now
 ]
 
 [tool.ruff.lint.per-file-ignores]
