@@ -164,7 +164,23 @@ Return your response as valid JSON with this structure:
         # Get the actual files being analyzed from the validation engine
         analysis_files = config.get("_analysis_files", [file_path]) if config else [file_path]
 
+        # Estimate analysis time (rough estimate: ~30-60 seconds per file for LLM analysis)
+        estimated_minutes = max(1, (len(analysis_files) * 45) // 60)  # 45 seconds per file average
+        estimated_range = f"{max(1, estimated_minutes - 1)}-{estimated_minutes + 2}"
+
         logger.info(f"Starting LLM architectural analysis on {len(analysis_files)} files")
+        logger.info(f"ESTIMATED TIME: {estimated_range} minutes (depends on LLM response speed)")
+        logger.info(
+            "TIP: For faster analysis, use path override: vibelint check src/specific_dir/ --exclude-ai"
+        )
+
+        if estimated_minutes > 5:
+            logger.warning(f"TIMEOUT RISK: Analysis may take {estimated_range} minutes")
+            logger.warning(
+                "If using AI coding tools or CI systems, consider analyzing smaller chunks:"
+            )
+            logger.warning("   vibelint check src/module1/ --rule ARCHITECTURE-LLM")
+            logger.warning("   vibelint check src/module2/ --rule ARCHITECTURE-LLM")
 
         # Run architectural analysis on the specified files
         yield from self._analyze_global_structure(file_path, analysis_files)
@@ -391,6 +407,9 @@ Return ONLY the JSON, no other text."""
 
             except json.JSONDecodeError as e:
                 logger.warning(f"Phase 2 JSON parsing failed: {e}")
+                logger.debug(
+                    f"Failed to parse JSON response (length: {len(cleaned_json_text)}): {cleaned_json_text[:200]}..."
+                )
                 # Fallback: create finding from Phase 1 analysis
                 yield self.create_finding(
                     message=f"Architectural analysis: {cleaned_response[:300]}...",
@@ -400,6 +419,10 @@ Return ONLY the JSON, no other text."""
 
         except Exception as e:
             logger.warning(f"Global LLM analysis failed: {e}")
+
+        # Analysis completion indicator
+        logger.info(f"LLM architectural analysis COMPLETED on {len(analysis_files)} files")
+        logger.info("Status: Analysis finished successfully (not interrupted)")
 
     def _create_structured_summary(self, file_paths: list[Path]) -> str:
         """Create a structured summary optimized for LLM analysis with advanced compression strategies."""

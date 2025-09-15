@@ -516,6 +516,11 @@ def cli(ctx: click.Context, debug: bool) -> None:
     multiple=True,
     help="Run only specific rule(s). Can be used multiple times. Example: --rule=ARCHITECTURE-LLM --rule=SEMANTIC-SIMILARITY",
 )
+@click.option(
+    "--fix",
+    is_flag=True,
+    help="Automatically fix low-hanging fruit issues like missing docstrings, path references, and __all__ exports using the configured LLM.",
+)
 @click.pass_context
 def check(
     ctx: click.Context,
@@ -527,6 +532,7 @@ def check(
     exclude_ai: bool,
     include_ai: bool,
     specific_rules: tuple[str, ...],
+    fix: bool,
 ) -> None:
     """
     Run a Vibe Check: Lint rules and namespace collision detection.
@@ -549,6 +555,8 @@ def check(
         vibelint check --exclude-ai src/             # Skip AI validators for faster analysis
         vibelint check --rule=ARCHITECTURE-LLM src/ # Run only specific rule
         vibelint check --rule=SEMANTIC-SIMILARITY --rule=ARCHITECTURE-LLM src/  # Run multiple specific rules
+
+        vibelint check --fix src/                    # Automatically fix issues like missing docstrings and __all__
 
     vibelint/src/vibelint/cli.py
     """
@@ -642,6 +650,46 @@ def check(
             logger_cli.debug("Using configured include_globs for project-wide analysis")
 
         plugin_runner = run_plugin_validation(config_dict, project_root, include_globs_override)
+
+        # Apply fixes if --fix flag is provided
+        if fix:
+            console.print("\n[bold blue]Applying automatic fixes...[/bold blue]")
+            import asyncio
+            from .fix import apply_fixes
+
+            # Collect fixable findings by file
+            from collections import defaultdict
+            file_findings = defaultdict(list)
+
+            from .fix import can_fix_finding
+            for finding in plugin_runner.findings:
+                if can_fix_finding(finding):
+                    # Convert relative path back to absolute path
+                    absolute_path = project_root / finding.file_path
+                    file_findings[absolute_path].append(finding)
+
+            if file_findings:
+                # Apply fixes asynchronously
+                try:
+                    fix_results = asyncio.run(apply_fixes(config, file_findings))
+
+                    # Report fix results
+                    fixed_count = sum(1 for was_fixed in fix_results.values() if was_fixed)
+                    total_files = len(fix_results)
+
+                    if fixed_count > 0:
+                        console.print(f"[green]Applied fixes to {fixed_count}/{total_files} files[/green]")
+
+                        # Re-run validation to show updated results
+                        console.print("\n[bold blue]Re-running validation after fixes...[/bold blue]")
+                        plugin_runner = run_plugin_validation(config_dict, project_root, include_globs_override)
+                    else:
+                        console.print("[yellow]No fixes could be applied automatically[/yellow]")
+
+                except Exception as e:
+                    console.print(f"[red]Error applying fixes: {e}[/red]")
+            else:
+                console.print("[yellow]No fixable issues found[/yellow]")
 
         # For machine-readable formats, output just the validation results and exit
         if output_format not in ["human", "natural"]:

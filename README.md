@@ -112,6 +112,83 @@ vibelint check --format json
 vibelint check --format sarif  # GitHub integration
 ```
 
+#### 🎯 **Path Override for Faster Analysis**
+
+When working with large codebases, you can analyze specific directories or files by providing paths as arguments. This **overrides** the `include_globs` configuration and analyzes only the specified paths:
+
+```bash
+# Analyze only the src directory (fast)
+vibelint check src/
+
+# Analyze a specific file
+vibelint check src/mymodule.py
+
+# Analyze multiple paths
+vibelint check src/ tests/ docs/
+
+# Skip AI analysis for even faster results
+vibelint check src/mymodule.py --exclude-ai
+
+# Combine with specific rules for targeted analysis
+vibelint check src/ --rule EMOJI-IN-STRING --rule TYPING-POOR-PRACTICE
+```
+
+**Why use path override?**
+- ⚡ **Faster analysis**: Analyze 10 files instead of 100+
+- 🎯 **Focused feedback**: Get issues for specific areas you're working on
+- 🔄 **Iterative workflow**: Fix issues incrementally while developing
+- 📊 **AI analysis**: Make LLM analysis practical for large projects
+
+**Example workflow:**
+```bash
+# Fast check while developing audio features
+vibelint check src/myproject/audio/ --exclude-ai
+
+# Deep analysis on specific module with AI
+vibelint check src/myproject/core/engine.py
+
+# Quick emoji/typing check across project
+vibelint check --rule EMOJI-IN-STRING --rule TYPING-POOR-PRACTICE
+```
+
+#### ⏱️ **Managing Timeouts & Long-Running Analysis**
+
+vibelint provides **time estimates** and **completion indicators** to help you work within timeout constraints common to AI coding tools and CI systems (typically 5-10 minutes):
+
+**Time Estimation:**
+```bash
+# vibelint automatically estimates analysis time
+vibelint check src/ --rule ARCHITECTURE-LLM
+
+# Output:
+# Starting LLM architectural analysis on 25 files
+# ESTIMATED TIME: 4-7 minutes (depends on LLM response speed)
+# TIMEOUT RISK: Analysis may take 4-7 minutes
+# If using AI coding tools or CI, consider analyzing smaller chunks
+```
+
+**Timeout Management Strategies:**
+```bash
+# Strategy 1: Analyze in chunks
+vibelint check src/module1/ --rule ARCHITECTURE-LLM  # ~2 minutes
+vibelint check src/module2/ --rule ARCHITECTURE-LLM  # ~2 minutes
+
+# Strategy 2: Skip AI analysis for speed
+vibelint check src/ --exclude-ai  # Fast: <30 seconds
+
+# Strategy 3: Focus on specific rules
+vibelint check --rule EMOJI-IN-STRING  # Very fast: <10 seconds
+```
+
+**Completion Indicators:**
+When analysis finishes, vibelint shows:
+```
+LLM architectural analysis COMPLETED on 25 files
+Status: Analysis finished successfully (not interrupted)
+```
+
+If you see timeout/interruption, the analysis was cut short and you should use smaller chunks.
+
 ### 📸 `vibelint snapshot`
 Create comprehensive codebase documentation:
 

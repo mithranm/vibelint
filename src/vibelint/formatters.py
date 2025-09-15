@@ -36,11 +36,11 @@ class NaturalLanguageFormatter(BaseFormatter):
             return "All checks passed!"
 
         # Get max display limit from config
-        max_displayed = 0  # 0 means no limit
+        max_displayed = 50  # Default to 50 issues for readability (0 means no limit)
         if config and hasattr(config, "get"):
-            max_displayed = config.get("max_displayed_issues", 0)
+            max_displayed = config.get("max_displayed_issues", 50)
         elif config and hasattr(config, "__getitem__"):
-            max_displayed = config.get("max_displayed_issues", 0)
+            max_displayed = config.get("max_displayed_issues", 50)
 
         # Group findings by severity
         by_severity = {Severity.BLOCK: [], Severity.WARN: [], Severity.INFO: []}
@@ -62,8 +62,12 @@ class NaturalLanguageFormatter(BaseFormatter):
                 for _, finding in enumerate(severity_findings):
                     if max_displayed > 0 and displayed_count >= max_displayed:
                         remaining_total = total_count - displayed_count
+                        lines.append("")
                         lines.append(
-                            f"  ... and {remaining_total} more issues (showing first {max_displayed})"
+                            f"  WARNING: Showing first {max_displayed} issues. {remaining_total} more found."
+                        )
+                        lines.append(
+                            "  TIP: Set max_displayed_issues = 0 in pyproject.toml to show all issues."
                         )
                         break
 
