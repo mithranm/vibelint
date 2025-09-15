@@ -166,7 +166,9 @@ class DeadCodeValidator(BaseValidator):
                     suggestion=f"Remove unused import: {name}",
                 )
 
-    def _check_unreferenced_definitions_dynamic(self, file_path: Path, tree: ast.AST, project_root: Path) -> Iterator[Finding]:
+    def _check_unreferenced_definitions_dynamic(
+        self, file_path: Path, tree: ast.AST, project_root: Path
+    ) -> Iterator[Finding]:
         """Check for functions/classes that are defined but never referenced with dynamic analysis."""
         # Skip this check for __init__.py files and test files
         if file_path.name == "__init__.py" or "test" in file_path.name.lower():
@@ -218,7 +220,9 @@ class DeadCodeValidator(BaseValidator):
             if name not in referenced_names:
                 # Dynamic analysis checks
                 is_exported = name in all_exports
-                is_string_referenced = self._scan_string_references(file_path.read_text(encoding="utf-8"), name)
+                is_string_referenced = self._scan_string_references(
+                    file_path.read_text(encoding="utf-8"), name
+                )
                 is_test_used = self._is_used_in_tests(name, project_root)
                 is_cross_file_used = _is_used_in_other_files(name)
 

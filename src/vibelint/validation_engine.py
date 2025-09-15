@@ -47,7 +47,7 @@ class PluginValidationRunner:
 
         # Get enabled validators
         validators = self.rule_engine.get_enabled_validators()
-        
+
         # Create extended config with analysis context
         analysis_config = dict(self.config)
         analysis_config["_analysis_files"] = file_paths  # Pass the actual files being analyzed
@@ -118,7 +118,9 @@ class PluginValidationRunner:
 
 
 def run_plugin_validation(
-    config_dict: Dict[str, Any], project_root: Path, include_globs_override: List[Path] | None = None
+    config_dict: Dict[str, Any],
+    project_root: Path,
+    include_globs_override: List[Path] | None = None,
 ) -> PluginValidationRunner:
     """
     Run validation using the plugin system.
@@ -144,16 +146,12 @@ def run_plugin_validation(
     if include_globs_override:
         # Use custom path discovery (include_globs override)
         files = discover_files_from_paths(
-            custom_paths=include_globs_override,
-            config=fake_config,
-            explicit_exclude_paths=set()
+            custom_paths=include_globs_override, config=fake_config, explicit_exclude_paths=set()
         )
     else:
         # Use original discovery method with configured include_globs
         files = discover_files(
-            paths=[project_root],
-            config=fake_config,
-            explicit_exclude_paths=set()
+            paths=[project_root], config=fake_config, explicit_exclude_paths=set()
         )
 
     # Run validation
