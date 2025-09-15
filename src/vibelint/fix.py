@@ -25,7 +25,7 @@ class FixEngine:
         vibelint/src/vibelint/fix.py
         """
         self.config = config
-        self.llm_config = getattr(config, "llm_analysis", {})
+        self.llm_config = config.settings.get("llm_analysis", {})
 
     def can_fix_finding(self, finding: Finding) -> bool:
         """Check if a finding can be automatically fixed.
@@ -153,8 +153,11 @@ Please provide ONLY the fixed Python code without any explanation or markdown fo
 
         vibelint/src/vibelint/fix.py
         """
+        # First remove thinking tokens if enabled
+        cleaned_response = self._remove_thinking_tokens(llm_response)
+
         # Remove markdown code blocks if present
-        response = llm_response.strip()
+        response = cleaned_response.strip()
 
         # Check for code blocks and extract
         code_block_pattern = r"```(?:python)?\n?(.*?)\n?```"
@@ -165,6 +168,68 @@ Please provide ONLY the fixed Python code without any explanation or markdown fo
 
         # If no code blocks, return the response as-is (assume it's all code)
         return response
+
+    def _remove_thinking_tokens(self, text: str) -> str:
+        """Remove thinking tokens from LLM response based on configured format."""
+        remove_thinking = self.llm_config.get("remove_thinking_tokens", True)
+        if not remove_thinking:
+            return text
+
+        thinking_format = self.llm_config.get("thinking_format", "harmony")
+
+        # Built-in format patterns
+        format_patterns = {
+            "harmony": [
+                r"<\|channel\|>analysis<\|message\|>.*?(?=<\|channel\|>|<\|end\|>|$)",
+                r"<\|channel\|>commentary<\|message\|>.*?(?=<\|channel\|>|<\|end\|>|$)",
+                r"<\|[^|]*\|>",
+            ],
+            "qwen": [
+                r"<think>.*?</think>",
+                r"<思考>.*?</思考>",
+                r"\[思考\].*?\[/思考\]",
+                r"思考：.*?(?=\n|\r|\r\n|$)",
+            ],
+        }
+
+        # Special handling for Harmony format - try to extract final channel first
+        if thinking_format == "harmony":
+            # Try to extract explicit final channel content
+            final_pattern = r"<\|channel\|>final<\|message\|>(.*?)(?:<\|end\|>|$)"
+            final_matches = re.findall(final_pattern, text, re.DOTALL)
+
+            if final_matches:
+                # Found explicit final channel content
+                result = final_matches[-1].strip()
+                logger.info(f"Extracted final channel content ({len(result)} chars)")
+                return result
+
+            # If no final channel, try to extract content after analysis channel
+            analysis_end_pattern = r"<\|channel\|>analysis<\|message\|>.*?<\|end\|>(.+)$"
+            analysis_match = re.search(analysis_end_pattern, text, re.DOTALL)
+
+            if analysis_match:
+                result = analysis_match.group(1).strip()
+                logger.info(f"Extracted content after analysis channel ({len(result)} chars)")
+                return result
+
+        # Get patterns for the configured format
+        if thinking_format in format_patterns:
+            patterns = format_patterns[thinking_format]
+        else:
+            # Use custom patterns if format not recognized
+            patterns = self.llm_config.get("custom_thinking_patterns", [])
+
+        # Remove all patterns
+        cleaned_text = text
+        for pattern in patterns:
+            cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.DOTALL | re.IGNORECASE)
+
+        # Clean up extra whitespace
+        cleaned_text = re.sub(r"\n\s*\n", "\n\n", cleaned_text)
+        cleaned_text = cleaned_text.strip()
+
+        return cleaned_text
 
 
 def can_fix_finding(finding: Finding) -> bool:
