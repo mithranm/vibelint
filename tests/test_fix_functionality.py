@@ -20,7 +20,7 @@ class TestFixFunctionality:
             message="Missing docstring",
             file_path=Path("test.py"),
             line=1,
-            severity=Severity.WARN
+            severity=Severity.WARN,
         )
         assert can_fix_finding(finding1) is True
 
@@ -29,7 +29,7 @@ class TestFixFunctionality:
             message="Missing path reference",
             file_path=Path("test.py"),
             line=1,
-            severity=Severity.WARN
+            severity=Severity.WARN,
         )
         assert can_fix_finding(finding2) is True
 
@@ -38,7 +38,7 @@ class TestFixFunctionality:
             message="Missing __all__",
             file_path=Path("test.py"),
             line=1,
-            severity=Severity.WARN
+            severity=Severity.WARN,
         )
         assert can_fix_finding(finding3) is True
 
@@ -49,7 +49,7 @@ class TestFixFunctionality:
             message="Some other issue",
             file_path=Path("test.py"),
             line=1,
-            severity=Severity.WARN
+            severity=Severity.WARN,
         )
         assert can_fix_finding(finding) is False
 
@@ -63,7 +63,7 @@ class TestFixFunctionality:
             message="Missing docstring",
             file_path=Path("test.py"),
             line=1,
-            severity=Severity.WARN
+            severity=Severity.WARN,
         )
         assert engine.can_fix_finding(finding) is True
 
@@ -72,7 +72,7 @@ class TestFixFunctionality:
             message="Some other issue",
             file_path=Path("test.py"),
             line=1,
-            severity=Severity.WARN
+            severity=Severity.WARN,
         )
         assert engine.can_fix_finding(finding2) is False
 
@@ -87,15 +87,15 @@ class TestFixFunctionality:
                 message="Missing docstring",
                 file_path=Path("test.py"),
                 line=5,
-                severity=Severity.WARN
+                severity=Severity.WARN,
             ),
             Finding(
                 rule_id="EXPORTS-MISSING-ALL",
                 message="Missing __all__",
                 file_path=Path("test.py"),
                 line=1,
-                severity=Severity.WARN
-            )
+                severity=Severity.WARN,
+            ),
         ]
 
         prompt = engine._build_fix_prompt(Path("test.py"), "# content", findings)
@@ -105,6 +105,36 @@ class TestFixFunctionality:
         assert "EXPORTS-MISSING-ALL" in prompt
         assert "Line 5: DOCSTRING-MISSING" in prompt
         assert "Line 1: EXPORTS-MISSING-ALL" in prompt
+
+    def test_extract_fixed_code(self):
+        """Test _extract_fixed_code method."""
+        config = MagicMock()
+        engine = FixEngine(config)
+
+        # Test with markdown code blocks
+        response_with_blocks = '''Here's the fixed code:
+
+```python
+def hello():
+    """Say hello."""
+    print("Hello!")
+```
+
+That should fix the issue.'''
+
+        result = engine._extract_fixed_code(response_with_blocks)
+        expected = '''def hello():
+    """Say hello."""
+    print("Hello!")'''
+        assert result == expected
+
+        # Test without code blocks
+        response_without_blocks = '''def hello():
+    """Say hello."""
+    print("Hello!")'''
+
+        result = engine._extract_fixed_code(response_without_blocks)
+        assert result == response_without_blocks
 
     @pytest.mark.asyncio
     async def test_apply_fixes_integration(self):
@@ -118,7 +148,7 @@ class TestFixFunctionality:
                 message="Missing docstring",
                 file_path=Path("test.py"),
                 line=5,
-                severity=Severity.WARN
+                severity=Severity.WARN,
             )
         ]
 
