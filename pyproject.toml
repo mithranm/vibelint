@@ -96,6 +96,24 @@ model = "/home/mithranmohanraj/models/gpt-oss-20b-mxfp4.gguf"
 temperature = 0.1
 max_tokens = 4096
 
+# Thinking token removal configuration
+remove_thinking_tokens = true        # Set to false to keep all model output
+thinking_format = "harmony"          # Options: "harmony", "qwen", "custom"
+
+# For models using different thinking patterns, set thinking_format = "custom" and specify:
+# custom_thinking_patterns = [
+#     "r'<think>.*?</think>'",          # For models using <think> tags
+#     "r'<reasoning>.*?</reasoning>'",   # For models using <reasoning> tags
+#     "r'\\[THINKING\\].*?\\[/THINKING\\]'", # For models using [THINKING] blocks
+#     "r'```thinking.*?```'",           # For models using code block thinking
+# ]
+
+# Examples for common model families:
+# - Claude (Anthropic): thinking_format = "harmony" (default)
+# - Qwen models: thinking_format = "qwen"
+# - OpenAI o1 models: thinking_format = "custom" + patterns for their format
+# - Custom/local models: thinking_format = "custom" + custom_thinking_patterns
+
 [tool.black]
 target-version = ["py310", "py311", "py312"]
 line-length=100

@@ -16,6 +16,7 @@
 - [Quick Start](#quick-start)
 - [Core Commands](#core-commands)
 - [AI-Powered Analysis](#ai-powered-analysis)
+- [Thinking Token Configuration](#thinking-token-management)
 - [Output Formats](#output-formats)
 - [Plugin System](#plugin-system)
 - [Configuration](#configuration)
@@ -158,6 +159,35 @@ Connects to local LLM endpoints for architectural analysis:
 api_base_url = "http://localhost:11434"
 model = "codellama:13b"
 temperature = 0.3
+```
+
+### 🧠 **Thinking Token Management**
+vibelint automatically removes "thinking" tokens from LLM responses to provide clean analysis output:
+
+```toml
+[tool.vibelint.llm_analysis]
+# Configure thinking token removal
+remove_thinking_tokens = true    # Set to false to keep all output
+thinking_format = "harmony"      # Options: "harmony", "qwen", "custom"
+
+# For models with custom thinking patterns:
+# thinking_format = "custom"
+# custom_thinking_patterns = [
+#     "r'<think>.*?</think>'",
+#     "r'<reasoning>.*?</reasoning>'"
+# ]
+```
+
+**Common Model Configurations:**
+- **Claude/Anthropic models**: Use default `thinking_format = "harmony"`
+- **Qwen models**: Set `thinking_format = "qwen"`
+- **OpenAI o1 models**: Use `thinking_format = "custom"` with appropriate patterns
+- **Other models**: Use `thinking_format = "custom"` and define your patterns
+
+**Get configuration help:**
+```bash
+vibelint thinking-tokens --show-formats  # Show all supported formats
+vibelint thinking-tokens --detect file   # Detect tokens in a file
 ```
 
 ### ⚡ **Performance Analysis**

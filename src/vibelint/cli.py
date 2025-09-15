@@ -36,11 +36,11 @@ from .namespace import (
     detect_hard_collisions,
     detect_local_export_collisions,
 )
-from .validation_engine import run_plugin_validation
 from .report import write_report_content
 from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .snapshot import create_snapshot
 from .utils import find_project_root, get_relative_path
+from .validation_engine import run_plugin_validation
 
 
 class VibelintContext:
@@ -386,7 +386,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
     vibelint - Check the vibe, visualize namespaces, and snapshot Python codebases.
 
     Run commands from the root of your project (where pyproject.toml or .git is located).
-    
+
     Examples:
         vibelint check src/ --rule ARCHITECTURE-LLM  # Check src with LLM analysis
         vibelint check file.py                       # Check specific file
@@ -460,7 +460,9 @@ def cli(ctx: click.Context, debug: bool) -> None:
             )
 
         console.print("\nRun [bold cyan]vibelint --help[/bold cyan] for available commands.")
-        console.print("Common usage: [bold]vibelint check src/[/bold] or [bold]vibelint check file.py --rule ARCHITECTURE-LLM[/bold]")
+        console.print(
+            "Common usage: [bold]vibelint check src/[/bold] or [bold]vibelint check file.py --rule ARCHITECTURE-LLM[/bold]"
+        )
         ctx.exit(0)
 
     # --- Subcommand Execution Check ---
@@ -540,10 +542,10 @@ def check(
 
     Examples:
         vibelint check                               # Analyze entire project with all configured rules
-        vibelint check src/                          # Override: analyze only src directory  
+        vibelint check src/                          # Override: analyze only src directory
         vibelint check file.py                       # Override: analyze only single file
         vibelint check src/ tests/                   # Override: analyze only these paths
-        
+
         vibelint check --exclude-ai src/             # Skip AI validators for faster analysis
         vibelint check --rule=ARCHITECTURE-LLM src/ # Run only specific rule
         vibelint check --rule=SEMANTIC-SIMILARITY --rule=ARCHITECTURE-LLM src/  # Run multiple specific rules
@@ -573,10 +575,14 @@ def check(
         categories = "core,static"
     elif include_ai:
         categories = "all"  # Redundant since "all" is now the default
-    
+
     # If specific rules are provided, use only those
     if specific_rules:
-        enabled_categories = ["core", "static", "ai"]  # Allow all categories when filtering by specific rules
+        enabled_categories = [
+            "core",
+            "static",
+            "ai",
+        ]  # Allow all categories when filtering by specific rules
         console.print(f"[bold blue]Running specific rules:[/bold blue] {', '.join(specific_rules)}")
     else:
         # Parse and validate categories
@@ -595,7 +601,7 @@ def check(
 
     # Filter config to only enable rules from selected categories or specific rules
     config_dict = dict(config.settings)
-    
+
     if specific_rules:
         # Enable only specific rules and disable all others
         if "rules" in config_dict and isinstance(config_dict["rules"], dict):
@@ -603,11 +609,11 @@ def check(
                 if rule_id in specific_rules:
                     config_dict["rules"][rule_id] = "WARN"  # Enable specified rules
                 else:
-                    config_dict["rules"][rule_id] = "OFF"   # Disable all other rules
+                    config_dict["rules"][rule_id] = "OFF"  # Disable all other rules
         else:
             # Create rules dict with only specified rules
             config_dict["rules"] = {rule_id: "WARN" for rule_id in specific_rules}
-    
+
     elif "rule_categories" in config_dict and enabled_categories != ["core", "static", "ai"]:
         rule_categories = config_dict["rule_categories"]
         if isinstance(rule_categories, dict):
@@ -625,14 +631,16 @@ def check(
     try:
         # Run plugin-based validation with filtered config
         logger_cli.debug(f"Running plugin-based validation with categories: {enabled_categories}")
-        
+
         # Convert paths tuple to list for plugin runner
         include_globs_override = list(paths) if paths else None
         if include_globs_override:
-            logger_cli.info(f"Overriding include_globs: analyzing only specified paths: {[str(p) for p in include_globs_override]}")
+            logger_cli.info(
+                f"Overriding include_globs: analyzing only specified paths: {[str(p) for p in include_globs_override]}"
+            )
         else:
             logger_cli.debug("Using configured include_globs for project-wide analysis")
-        
+
         plugin_runner = run_plugin_validation(config_dict, project_root, include_globs_override)
 
         # For machine-readable formats, output just the validation results and exit
@@ -861,6 +869,165 @@ def snapshot(ctx: click.Context, output: Path) -> None:
     vibelint_ctx.command_result = result_data
     _present_snapshot_results(result_data)
     ctx.exit(result_data.exit_code)
+
+
+@cli.command("thinking-tokens")
+@click.option("--show-formats", is_flag=True, help="Show all supported thinking token formats")
+@click.option(
+    "--detect",
+    type=click.Path(exists=True, path_type=Path),
+    help="Detect thinking tokens in a file",
+)
+def thinking_tokens(show_formats: bool, detect: Path | None) -> None:
+    """
+    Get help with configuring thinking token removal for your LLM model.
+
+    Vibelint automatically removes "thinking" tokens from LLM responses. This
+    command helps you configure it for your specific model type.
+
+    Examples:
+        vibelint thinking-tokens --show-formats  # Show all supported formats
+        vibelint thinking-tokens --detect file.py  # Detect tokens in file
+
+    vibelint/src/vibelint/cli.py
+    """
+    from rich.panel import Panel
+    from rich.syntax import Syntax
+
+    if show_formats:
+        console.print("\n[bold blue]Supported Thinking Token Formats:[/bold blue]")
+
+        # Harmony format
+        console.print(
+            Panel(
+                "[bold]harmony[/bold] (default) - For Claude/Anthropic models\n"
+                "Removes: <|channel|>analysis<|message|>..., <thinking>...</thinking>, etc.\n"
+                "\n[dim]Configuration:[/dim]\n"
+                'thinking_format = "harmony"',
+                title="Harmony Format",
+                border_style="green",
+            )
+        )
+
+        # Qwen format
+        console.print(
+            Panel(
+                "[bold]qwen[/bold] - For Qwen model family\n"
+                "Removes: <think>...</think>, <思考>...</思考>, 思考：..., etc.\n"
+                "\n[dim]Configuration:[/dim]\n"
+                'thinking_format = "qwen"',
+                title="Qwen Format",
+                border_style="blue",
+            )
+        )
+
+        # Custom format
+        console.print(
+            Panel(
+                "[bold]custom[/bold] - For other models with custom patterns\n"
+                "Define your own regex patterns for thinking token removal.\n"
+                "\n[dim]Configuration:[/dim]\n"
+                'thinking_format = "custom"\n'
+                "custom_thinking_patterns = [\n"
+                "  r'<think>.*?</think>',\n"
+                "  r'<reasoning>.*?</reasoning>',\n"
+                "  r'# Thinking:.*?(?=\\n|$)',\n"
+                "]",
+                title="Custom Format",
+                border_style="yellow",
+            )
+        )
+
+        # Configuration example
+        config_example = """[tool.vibelint.llm_analysis]
+# Basic LLM settings
+api_base_url = "http://localhost:11434"
+model = "your-model-name"
+
+# Thinking token configuration
+remove_thinking_tokens = true    # Set to false to keep all output
+thinking_format = "harmony"      # Options: "harmony", "qwen", "custom"
+
+# For custom patterns:
+# thinking_format = "custom"
+# custom_thinking_patterns = [
+#     "r'<think>.*?</think>'",
+#     "r'<reasoning>.*?</reasoning>'"
+# ]"""
+
+        syntax = Syntax(config_example, "toml", theme="monokai", line_numbers=True)
+        console.print(
+            Panel(syntax, title="Example pyproject.toml Configuration", border_style="cyan")
+        )
+
+    elif detect:
+        console.print(f"\n[bold blue]Analyzing {detect} for thinking tokens...[/bold blue]")
+
+        try:
+            content = detect.read_text(encoding="utf-8")
+
+            # Import the detection logic
+            from .validators.architecture.llm_analysis import LLMAnalysisValidator
+
+            # Create a temporary validator instance to use detection method
+            validator = LLMAnalysisValidator()
+            detected = validator._detect_unremoved_thinking_tokens(content)
+
+            if detected:
+                console.print("\n[bold yellow]Found potential thinking tokens:[/bold yellow]")
+                for token in detected:
+                    console.print(f"  • {token}")
+
+                console.print("\n[bold green]Suggested configuration:[/bold green]")
+
+                # Generate suggestions
+                suggestions = []
+                for pattern_name in detected:
+                    if pattern_name == "<think>":
+                        suggestions.append("r'<think>.*?</think>'")
+                    elif pattern_name == "<reasoning>":
+                        suggestions.append("r'<reasoning>.*?</reasoning>'")
+                    elif pattern_name == "[THINKING]":
+                        suggestions.append("r'\\[THINKING\\].*?\\[/THINKING\\]'")
+                    elif pattern_name == "```thinking":
+                        suggestions.append("r'```thinking.*?```'")
+                    # Add more as needed
+
+                if suggestions:
+                    config = f"""[tool.vibelint.llm_analysis]
+thinking_format = "custom"
+custom_thinking_patterns = {suggestions}"""
+
+                    syntax = Syntax(config, "toml", theme="monokai")
+                    console.print(
+                        Panel(syntax, title="Add to pyproject.toml", border_style="green")
+                    )
+
+            else:
+                console.print(
+                    "\n[bold green]✓ No thinking tokens detected in this file.[/bold green]"
+                )
+
+        except Exception as e:
+            console.print(f"[bold red]Error reading file: {e}[/bold red]")
+
+    else:
+        # Show general help
+        console.print("\n[bold blue]Thinking Token Configuration Help[/bold blue]")
+        console.print(
+            "\nVibelint automatically removes 'thinking' tokens from LLM responses to provide clean analysis output."
+        )
+        console.print("\nUse these options to get help:")
+        console.print(
+            "  [dim]vibelint thinking-tokens --show-formats[/dim]  Show all supported formats"
+        )
+        console.print(
+            "  [dim]vibelint thinking-tokens --detect FILE[/dim]   Detect tokens in a file"
+        )
+        console.print("\nCommon model configurations:")
+        console.print("  • [bold]Claude/Anthropic models:[/bold] Use default (harmony format)")
+        console.print('  • [bold]Qwen models:[/bold] Set thinking_format = "qwen"')
+        console.print('  • [bold]Other models:[/bold] Set thinking_format = "custom" + patterns')
 
 
 def main() -> None:

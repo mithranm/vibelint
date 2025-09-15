@@ -10,6 +10,7 @@ vibelint/validators/architecture/llm_analysis.py
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
@@ -243,6 +244,61 @@ Return your response as valid JSON with this structure:
 
         return cleaned_text
 
+    def _detect_unremoved_thinking_tokens(self, text: str) -> list[str]:
+        """Detect potential thinking tokens that weren't removed."""
+        common_patterns = {
+            "<think>": r"<think>.*?</think>",
+            "<reasoning>": r"<reasoning>.*?</reasoning>",
+            "[THINKING]": r"\[THINKING\].*?\[/THINKING\]",
+            "```thinking": r"```thinking.*?```",
+            "<thought>": r"<thought>.*?</thought>",
+            "# Thinking:": r"# Thinking:.*?(?=\n|\r|\r\n|$)",
+            "## Analysis": r"## Analysis.*?(?=\n#|\n\n|$)",
+        }
+
+        detected = []
+        for name, pattern in common_patterns.items():
+            if re.search(pattern, text, re.DOTALL | re.IGNORECASE):
+                detected.append(name)
+
+        return detected
+
+    def _warn_about_unremoved_tokens(self, text: str) -> None:
+        """Warn user about potential unremoved thinking tokens and suggest configuration."""
+        detected_patterns = self._detect_unremoved_thinking_tokens(text)
+
+        if detected_patterns and len(detected_patterns) > 0:
+            logger.warning(
+                f"Detected potential unremoved thinking tokens: {', '.join(detected_patterns)}. "
+                f"Consider updating your vibelint configuration:"
+            )
+            logger.warning(
+                "Set thinking_format='custom' and add custom_thinking_patterns to your pyproject.toml:"
+            )
+
+            # Suggest specific patterns based on what was detected
+            suggestions = []
+            for pattern_name in detected_patterns:
+                if pattern_name == "<think>":
+                    suggestions.append("r'<think>.*?</think>'")
+                elif pattern_name == "<reasoning>":
+                    suggestions.append("r'<reasoning>.*?</reasoning>'")
+                elif pattern_name == "[THINKING]":
+                    suggestions.append("r'\\[THINKING\\].*?\\[/THINKING\\]'")
+                elif pattern_name == "```thinking":
+                    suggestions.append("r'```thinking.*?```'")
+                elif pattern_name == "<thought>":
+                    suggestions.append("r'<thought>.*?</thought>'")
+                elif pattern_name == "# Thinking:":
+                    suggestions.append("r'# Thinking:.*?(?=\\n|\\r|\\r\\n|$)'")
+                elif pattern_name == "## Analysis":
+                    suggestions.append("r'## Analysis.*?(?=\\n#|\\n\\n|$)'")
+
+            if suggestions:
+                logger.warning(
+                    f"Add to [tool.vibelint.llm_analysis]: custom_thinking_patterns = {suggestions}"
+                )
+
     def _analyze_global_structure(
         self, current_file: Path, analysis_files: list[Path]
     ) -> Iterator[Finding]:
@@ -284,6 +340,7 @@ This is Phase 1 of a multi-phase analysis. Provide your analysis as natural lang
             if not isinstance(response_text, str):
                 response_text = str(response_text)
             cleaned_response = self._remove_thinking_tokens(response_text)
+            self._warn_about_unremoved_tokens(cleaned_response)
             logger.info(f"Phase 1 complete: {cleaned_response[:200]}...")
 
             # Phase 2: Follow up with structured JSON request
@@ -318,6 +375,7 @@ Return ONLY the JSON, no other text."""
             if not isinstance(json_text, str):
                 json_text = str(json_text)
             cleaned_json_text = self._remove_thinking_tokens(json_text)
+            self._warn_about_unremoved_tokens(cleaned_json_text)
 
             try:
                 analysis_data = json.loads(cleaned_json_text)

@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 class IntelligentLLMValidator(BaseValidator):
     """
     Intelligent LLM-powered architectural analysis using multi-phase approach.
-    
+
     Phase 1: Analyzes entire project structure to identify potentially problematic files
-    Phase 2: Performs pairwise comparison of flagged files  
+    Phase 2: Performs pairwise comparison of flagged files
     Phase 3: Generates specific architectural findings
     """
 
@@ -67,7 +67,9 @@ class IntelligentLLMValidator(BaseValidator):
 
         # Setup requests session
         self._session = requests.Session()
-        retry_strategy = Retry(total=2, status_forcelist=[429, 500, 502, 503, 504], backoff_factor=1)
+        retry_strategy = Retry(
+            total=2, status_forcelist=[429, 500, 502, 503, 504], backoff_factor=1
+        )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self._session.mount("http://", adapter)
         self._session.mount("https://", adapter)
@@ -111,11 +113,13 @@ class IntelligentLLMValidator(BaseValidator):
             if response.status_code == 200:
                 result = response.json()
                 response_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-                
+
                 # Handle different response formats
                 if "<|message|>" in response_text:
                     if "<|channel|>final<|message|>" in response_text:
-                        final_start = response_text.find("<|channel|>final<|message|>") + len("<|channel|>final<|message|>")
+                        final_start = response_text.find("<|channel|>final<|message|>") + len(
+                            "<|channel|>final<|message|>"
+                        )
                         content = response_text[final_start:].split("<|end|>")[0].strip()
                     else:
                         message_start = response_text.find("<|message|>") + len("<|message|>")
@@ -139,7 +143,7 @@ class IntelligentLLMValidator(BaseValidator):
     def _collect_project_structure(self, project_root: Path, file_paths: List[Path]) -> str:
         """Create a project structure overview for LLM analysis."""
         structure_lines = ["# Project Structure Overview\n"]
-        
+
         # Group files by directory
         dirs_files: Dict[str, List[Path]] = {}
         for file_path in file_paths:
@@ -156,33 +160,37 @@ class IntelligentLLMValidator(BaseValidator):
         for dir_path in sorted(dirs_files.keys()):
             structure_lines.append(f"\n## Directory: {dir_path}")
             files = sorted(dirs_files[dir_path])
-            
+
             for file_path in files:
                 # Add basic file info
                 try:
                     full_path = project_root / file_path
                     if full_path.exists():
                         size = full_path.stat().st_size
-                        lines = len(full_path.read_text(encoding="utf-8", errors="ignore").splitlines())
+                        lines = len(
+                            full_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+                        )
                         structure_lines.append(f"- {file_path.name} ({lines} lines, {size} bytes)")
                 except Exception:
                     structure_lines.append(f"- {file_path.name}")
 
         return "\n".join(structure_lines)
 
-    def _phase1_global_analysis(self, project_root: Path, file_paths: List[Path]) -> Optional[List[str]]:
+    def _phase1_global_analysis(
+        self, project_root: Path, file_paths: List[Path]
+    ) -> Optional[List[str]]:
         """Phase 1: Global project structure analysis to identify potentially problematic files."""
         logger.info("Phase 1: Running global project structure analysis")
-        
+
         structure_overview = self._collect_project_structure(project_root, file_paths)
-        
+
         prompt = f"""Analyze this Python project structure for potential architectural issues.
 
 {structure_overview}
 
 Look for patterns that indicate:
 1. Code duplication across files
-2. Overly similar file names suggesting redundant functionality  
+2. Overly similar file names suggesting redundant functionality
 3. Thin wrapper files that might be unnecessary abstractions
 4. Files that appear to be doing too many things (poor separation of concerns)
 5. Missing abstractions where there should be shared code
@@ -205,42 +213,46 @@ Focus on files that likely contain architectural issues, not every file in the p
         response = self._query_llm(prompt)
         if response and "potentially_problematic_files" in response:
             flagged_files = response["potentially_problematic_files"]
-            logger.info(f"Phase 1 complete: Flagged {len(flagged_files)} potentially problematic files")
+            logger.info(
+                f"Phase 1 complete: Flagged {len(flagged_files)} potentially problematic files"
+            )
             logger.debug(f"Reasoning: {response.get('reasoning', 'No reasoning provided')}")
-            
+
             # Store comparison pairs for phase 2
             self._analysis_cache["comparison_pairs"] = response.get("comparison_pairs", [])
             return flagged_files
-        
+
         logger.warning("Phase 1 failed: No valid response from LLM")
         return None
 
-    def _phase2_pairwise_comparison(self, project_root: Path, comparison_pairs: List[List[str]]) -> List[Dict[str, Any]]:
+    def _phase2_pairwise_comparison(
+        self, project_root: Path, comparison_pairs: List[List[str]]
+    ) -> List[Dict[str, Any]]:
         """Phase 2: Pairwise comparison of flagged files."""
         logger.info(f"Phase 2: Running pairwise comparison of {len(comparison_pairs)} file pairs")
-        
+
         issues = []
-        
+
         for pair in comparison_pairs:
             if len(pair) != 2:
                 continue
-                
+
             file1_path = project_root / pair[0]
             file2_path = project_root / pair[1]
-            
+
             if not (file1_path.exists() and file2_path.exists()):
                 continue
-                
+
             try:
                 file1_content = file1_path.read_text(encoding="utf-8", errors="ignore")
                 file2_content = file2_path.read_text(encoding="utf-8", errors="ignore")
-                
+
                 # Limit content size for LLM
                 if len(file1_content) > 3000:
                     file1_content = file1_content[:3000] + "\n... [truncated]"
                 if len(file2_content) > 3000:
                     file2_content = file2_content[:3000] + "\n... [truncated]"
-                
+
                 prompt = f"""Compare these two Python files for architectural redundancy and issues:
 
 ## File 1: {pair[0]}
@@ -248,7 +260,7 @@ Focus on files that likely contain architectural issues, not every file in the p
 {file1_content}
 ```
 
-## File 2: {pair[1]}  
+## File 2: {pair[1]}
 ```python
 {file2_content}
 ```
@@ -263,32 +275,34 @@ Respond with JSON:
 {{
     "has_issues": true/false,
     "issue_type": "duplication|thin_wrapper|poor_separation|other",
-    "severity": "low|medium|high", 
+    "severity": "low|medium|high",
     "description": "Specific description of the architectural issue",
     "recommendation": "Specific recommendation for improvement"
 }}"""
 
                 response = self._query_llm(prompt)
                 if response and response.get("has_issues"):
-                    issues.append({
-                        "files": pair,
-                        "issue_type": response.get("issue_type", "unknown"),
-                        "severity": response.get("severity", "medium"),
-                        "description": response.get("description", ""),
-                        "recommendation": response.get("recommendation", "")
-                    })
-                    
+                    issues.append(
+                        {
+                            "files": pair,
+                            "issue_type": response.get("issue_type", "unknown"),
+                            "severity": response.get("severity", "medium"),
+                            "description": response.get("description", ""),
+                            "recommendation": response.get("recommendation", ""),
+                        }
+                    )
+
             except Exception as e:
                 logger.debug(f"Failed to compare {pair[0]} and {pair[1]}: {e}")
                 continue
-                
+
         logger.info(f"Phase 2 complete: Found {len(issues)} architectural issues")
         return issues
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """
         Run intelligent multi-phase LLM architectural analysis.
-        
+
         Only runs on the first file encountered, then analyzes the entire project.
         """
         # Skip if LLM is not available or already analyzed
@@ -302,30 +316,32 @@ Respond with JSON:
         # Only run analysis once per project (on first file)
         if hasattr(self, "_analysis_completed"):
             return
-            
+
         self._analysis_completed = True
-        
+
         # Collect all project files
         project_root = config.project_root if config else file_path.parent
         self._project_files = list(project_root.rglob("*.py"))
-        
-        logger.info(f"Starting intelligent LLM architectural analysis on {len(self._project_files)} files")
-        
+
+        logger.info(
+            f"Starting intelligent LLM architectural analysis on {len(self._project_files)} files"
+        )
+
         # Phase 1: Global analysis
         flagged_files = self._phase1_global_analysis(project_root, self._project_files)
         if not flagged_files:
             return
-            
+
         # Phase 2: Pairwise comparison
         comparison_pairs = self._analysis_cache.get("comparison_pairs", [])
         if comparison_pairs:
             issues = self._phase2_pairwise_comparison(project_root, comparison_pairs)
-            
+
             # Generate findings
             for issue in issues:
                 files_str = " and ".join(issue["files"])
                 message = f"Architectural issue in {files_str}: {issue['description']}"
-                
+
                 yield self.create_finding(
                     message=message,
                     file_path=file_path,  # Report on current file
