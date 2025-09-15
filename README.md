@@ -4,59 +4,62 @@
 [![PyPI version](https://badge.fury.io/py/vibelint.svg)](https://badge.fury.io/py/vibelint)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Enhance your Python codebase's "vibe" for better maintainability and LLM interaction.**
+**A comprehensive Python code quality tool with AI-powered analysis for better maintainability and LLM interaction.**
 
-`vibelint` is a suite of tools designed to identify and help resolve common Python code smells and anti-patterns that can hinder developer understanding and confuse Large Language Models (LLMs) used in AI-assisted coding. It helps you visualize your project's structure, detect naming conflicts, and enforce coding conventions that promote clarity. It also helps you take flat snapshots of your entire codebase to feed into large-context LLM chat interfaces.
+`vibelint` is a modern code quality tool that combines traditional linting with AI-powered analysis to identify code smells, architectural issues, and patterns that hinder both human understanding and Large Language Model (LLM) effectiveness. It helps you build codebases with good "vibes" - clean, maintainable, and AI-friendly code.
 
 ## Table of Contents
 
-*   [Why Use vibelint?](#why-use-vibelint)
-*   [Key Features](#key-features)
-*   [Installation](#installation)
-*   [Usage](#usage)
-    *   [Checking Your Codebase (Linting & Collisions)](#checking-your-codebase-linting--collisions)
-    *   [Getting a Full Report](#getting-a-full-report)
-    *   [Visualizing Your Namespace](#visualizing-your-namespace)
-    *   [Creating Code Snapshots](#creating-code-snapshots)
-    *   [Getting Help](#getting-help)
-*   [Strategies for Namespace Cleanup](#strategies-for-namespace-cleanup)
-*   [Configuration](#configuration)
-    *   [Disabling the Docstring Path Check](#disabling-the-docstring-path-check)
-*   [Error Codes](#error-codes)
-*   [Contributing](#contributing)
-*   [License](#license)
+- [Why Use vibelint?](#why-use-vibelint)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Core Commands](#core-commands)
+- [AI-Powered Analysis](#ai-powered-analysis)
+- [Output Formats](#output-formats)
+- [Plugin System](#plugin-system)
+- [Configuration](#configuration)
+- [Error Categories](#error-categories)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Why Use vibelint?
 
-Modern Python codebases can become complex, leading to issues that aren't syntax errors but degrade maintainability and clarity:
+Modern Python development involves both human developers and AI assistants. Code that's hard for humans to understand is also problematic for LLMs. vibelint addresses:
 
-1.  **Hidden Namespace Conflicts:** It's easy to accidentally define the same function or class name in multiple modules. While Python might resolve imports one way, developers (and LLMs) can be confused about which implementation is intended or active in a given context. Hard collisions (e.g., a module name clashing with a variable in `__init__.py`) can even break imports unexpectedly.
-2.  **Ambiguity for LLMs & Developers:** Tools like Copilot or ChatGPT rely heavily on context. Missing `__all__` definitions obscure a module's public API. Docstrings without clear file path references make it harder for both humans and AI to know *where* that code lives within the project structure, hindering understanding and accurate code generation/analysis.
-3.  **Inconsistent Code Patterns:** Issues like missing docstrings, improper `__all__` usage, or incorrect shebangs create friction during development and code reviews.
+### 🧠 **Human & AI Understanding**
+- **Missing Documentation**: Functions and modules without proper docstrings
+- **Unclear Context**: Missing file path references that help LLMs locate code
+- **Poor Type Annotations**: Functions without type hints reduce clarity
 
-`vibelint` helps you address these by:
+### 🏗️ **Architectural Issues**
+- **Dead Code**: Unused functions and imports cluttering the codebase
+- **Silent Failures**: Exception handling that masks errors
+- **Namespace Collisions**: Conflicting names that create ambiguity
 
-*   **Revealing Structure:** Clearly visualizing your project's namespace.
-*   **Preventing Errors:** Catching hard namespace collisions before they cause runtime import failures.
-*   **Reducing Ambiguity:** Identifying soft collisions and enforcing explicit APIs (`__all__`) and contextual docstrings.
-*   **Improving Maintainability:** Promoting consistent, understandable code patterns.
-*   **Enhancing AI Collaboration:** Providing clearer context (via docstring paths and snapshots) for better results from LLM coding assistants.
+### 🤖 **AI Integration**
+- **Emoji Usage**: Characters that break text encoding in AI tools
+- **Print Statements**: Debug code left in production
+- **Semantic Similarity**: Duplicate functionality across modules
 
 ## Key Features
 
-*   **Namespace Visualization (`vibelint namespace`):** Generates a tree view of your project's Python namespace (packages, modules, `__init__.py` members).
-*   **Collision Detection (`vibelint check`):**
-    *   **Hard Collisions:** Name conflicts likely to break Python imports.
-    *   **Global Soft Collisions:** Same name defined in multiple modules (potential ambiguity).
-    *   **Local Soft Collisions:** Same name exported via `__all__` in sibling modules (confusing `import *`).
-*   **Targeted Linting (`vibelint check`):**
-    *   **Docstring Presence & Path:** Checks for docstrings and enforces the inclusion of a standardized relative file path at the end.
-    *   **`__all__` Enforcement:** Ensures modules define their public API via `__all__`.
-    *   **Shebang & Encoding:** Validates script shebangs and encoding declarations.
-*   **Codebase Snapshot (`vibelint snapshot`):** Creates a single Markdown file with a file tree and code contents, respecting includes/excludes – ideal for LLM context.
-*   **Comprehensive Reporting (`vibelint check -o report.md`):** Generates detailed Markdown reports summarizing all findings.
+### 🔍 **Traditional Linting**
+- **Documentation Quality**: Ensures proper docstrings with path references
+- **Code Hygiene**: Detects dead code, print statements, and encoding issues
+- **Type Safety**: Identifies missing type annotations
+- **Export Management**: Validates `__all__` declarations
 
-*(Note: vibelint currently focuses on identifying issues, not automatically fixing them.)*
+### 🧠 **AI-Powered Analysis**
+- **Semantic Similarity**: Uses embeddings to find functionally similar code
+- **LLM Architecture Review**: Detects over-engineering and unnecessary abstractions
+- **Fallback Pattern Analysis**: Identifies problematic exception handling
+
+### 📊 **Project Intelligence**
+- **Namespace Visualization**: Interactive project structure analysis
+- **Code Snapshots**: Generate LLM-ready codebase summaries
+- **Collision Detection**: Find naming conflicts and ambiguities
+- **Comprehensive Reporting**: Detailed Markdown reports with actionable insights
 
 ## Installation
 
@@ -64,295 +67,314 @@ Modern Python codebases can become complex, leading to issues that aren't syntax
 pip install vibelint
 ```
 
-`vibelint` requires Python 3.10 or higher.
+vibelint requires Python 3.10 or higher.
 
-*   **Note on TOML parsing:** For Python 3.10, `vibelint` requires the `tomli` package. For Python 3.11+, it uses the built-in `tomllib`. This dependency is handled automatically by `pip`.
+**Optional AI Features:**
+```bash
+# For semantic similarity analysis
+pip install sentence-transformers
 
-## Usage
+# For advanced embedding models
+pip install torch transformers
+```
 
-Run `vibelint` commands from the root of your project (the directory containing `pyproject.toml` or `.git`).
-
-### Checking Your Codebase (Linting & Collisions)
-
-This is the primary command to analyze your project.
+## Quick Start
 
 ```bash
+# Check your entire codebase
 vibelint check
-```
 
-This runs all configured linters and namespace collision checks, printing a summary and details of any issues found to the console. It will exit with a non-zero code if errors (like hard collisions or missing `__all__` where required) are found.
+# Generate a detailed report
+vibelint check -o report.md
 
-### Getting a Full Report
+# Create an LLM-ready snapshot
+vibelint snapshot
 
-To get a detailed breakdown of all linting issues, the namespace structure, detected collisions, and the content of included files, use the `-o` or `--output-report` option with the `check` command:
-
-```bash
-vibelint check -o vibelint-report.md
-```
-
-This will generate a comprehensive Markdown file (e.g., `vibelint-report.md`) in your current directory. This report is useful for reviewing issues offline or sharing with your team.
-
-### Visualizing Your Namespace
-
-To understand your project's Python structure:
-
-```bash
+# Visualize project structure
 vibelint namespace
 ```
 
-This prints the namespace tree directly to your terminal.
+## Core Commands
 
-*   **Save the tree to a file:**
-    ```bash
-    vibelint namespace -o namespace_tree.txt
-    ```
-
-### Creating Code Snapshots
-
-Generate a single Markdown file containing the project structure and file contents (useful for LLMs):
+### 🔍 `vibelint check`
+Analyze your codebase for quality issues:
 
 ```bash
+# Basic check
+vibelint check
+
+# Check with AI analysis
+vibelint check --categories core,static,ai
+
+# Output in different formats
+vibelint check --format json
+vibelint check --format sarif  # GitHub integration
+```
+
+### 📸 `vibelint snapshot`
+Create comprehensive codebase documentation:
+
+```bash
+# Generate snapshot for LLM context
 vibelint snapshot
+
+# Custom output file
+vibelint snapshot -o context.md
+
+# Exclude test files
+vibelint snapshot --exclude "tests/**"
 ```
 
-This creates `codebase_snapshot.md` by default.
-
-*   **Specify a different output file:**
-    ```bash
-    vibelint snapshot -o context_for_llm.md
-    ```
-The snapshot respects the `include_globs`, `exclude_globs`, and `peek_globs` defined in your configuration.
-
-### Getting Help
+### 🌲 `vibelint namespace`
+Visualize project structure:
 
 ```bash
-vibelint --help
-vibelint check --help
-vibelint namespace --help
-vibelint snapshot --help
+# Display namespace tree
+vibelint namespace
+
+# Save to file
+vibelint namespace -o structure.txt
 ```
 
-## Strategies for Namespace Cleanup
+## AI-Powered Analysis
 
-The `vibelint check` command might report namespace collisions. Here’s a suggested strategy for addressing them:
+vibelint includes cutting-edge AI analysis capabilities:
 
-1.  **Prioritize Hard Collisions:** These are marked `[HARD]` and are the most critical as they can break Python's import mechanism or lead to very unexpected behavior.
-    *   **Cause:** Typically a clash between a submodule/subpackage name and an object (variable, function, class) defined in a parent `__init__.py`. For example, having `src/utils/` directory and defining `utils = ...` in `src/__init__.py`.
-    *   **Fix:** Rename one of the conflicting items. Usually, renaming the object in the `__init__.py` is less disruptive than renaming a whole directory/package. Choose a more descriptive name.
+### 🔗 **Semantic Similarity Detection**
+Uses sentence transformers to find functionally duplicate code:
 
-2.  **Address Local Soft Collisions (`__all__`):** These are marked `[LOCAL_SOFT]` and occur when multiple sibling modules (files in the same directory/package) export the same name via their `__all__` list. This mainly causes issues with wildcard imports (`from package import *`).
-    *   **Review:** Is it necessary for the same name to be part of the public API of multiple sibling modules?
-    *   **Fix Options:**
-        *   Rename the object in one of the modules.
-        *   Remove the name from the `__all__` list in one or more modules if it's not truly intended to be public from that specific module.
-        *   Reconsider the package structure – perhaps the conflicting objects should live elsewhere or be consolidated.
+```toml
+[tool.vibelint.embedding_analysis]
+enabled = true
+model = "google/embeddinggemma-300m"
+similarity_threshold = 0.85
+```
 
-3.  **Review Global Soft Collisions (Definitions):** These are marked `[GLOBAL_SOFT]` and indicate the same name (function, class, top-level variable) is defined in multiple modules anywhere in the project. These usually don't cause runtime errors but create ambiguity for developers and LLMs.
-    *   **Evaluate:** Is the duplication intentional and necessary? Sometimes utility functions might be deliberately duplicated.
-    *   **Fix Options:**
-        *   If the logic is identical, consolidate the definition into a single shared module and import it where needed.
-        *   If the logic differs but the name causes confusion, rename the object in one or more locations to be more specific.
-        *   If the duplication is intentional (e.g., different implementations of an interface), ensure clear documentation distinguishes them. You might consider ignoring specific instances if the ambiguity is acceptable (see Configuration).
+### 🤖 **LLM Architecture Review**
+Connects to local LLM endpoints for architectural analysis:
 
-4.  **Use `vibelint namespace`:** Refer to the namespace visualization (`vibelint namespace`) output while refactoring to better understand the project structure you are modifying.
+```toml
+[tool.vibelint.llm_analysis]
+api_base_url = "http://localhost:11434"
+model = "codellama:13b"
+temperature = 0.3
+```
 
-5.  **Iterate:** Don't try to fix everything at once. Start with hard collisions, then local soft, then global soft. Rerun `vibelint check` after making changes.
+### ⚡ **Performance Analysis**
+Detects common performance anti-patterns and suggests optimizations.
 
-## Plugin System
+## Output Formats
 
-vibelint now supports a plugin architecture that allows teams to write custom validators and output formatters for their specific needs.
+### 📝 **Natural Language** (Default)
+Human-readable output with colors and suggestions:
 
-### JSON Output
+```
+WARN:
+  DEAD-CODE-FOUND: Function 'unused_helper' is defined but never referenced (src/utils.py:42)
+    → Consider removing unused definition or adding to __all__
 
-Get machine-readable output for CI/tooling integration:
+INFO:
+  DOCSTRING-PATH-REFERENCE: Missing path reference in docstring (src/main.py:10)
+    → Add 'src/main.py' at the end of the docstring for LLM context
+```
+
+### 🔧 **JSON**
+Machine-readable for CI/CD integration:
 
 ```bash
 vibelint check --format json > results.json
 ```
 
-The JSON output includes a summary of issues by severity level and detailed findings:
-
-```json
-{
-  "summary": {
-    "BLOCK": 0,
-    "WARN": 2,
-    "INFO": 5
-  },
-  "findings": [
-    {
-      "rule": "VBL301",
-      "level": "INFO",
-      "path": "src/mymodule.py",
-      "line": 1,
-      "msg": "Module has public functions but no __all__ definition",
-      "suggestion": "Add __all__ = [...] to explicitly define public API"
-    }
-  ]
-}
-```
-
-### SARIF Output
-
-For GitHub integration and code scanning:
+### 🔒 **SARIF**
+GitHub Security scanning format:
 
 ```bash
 vibelint check --format sarif > results.sarif
 ```
 
-### Gate Script
-
-Use the included gate script to fail CI builds based on issue counts:
+### 🤖 **LLM**
+Optimized format for AI analysis:
 
 ```bash
-# Fail if any blocking issues or >10 warnings
-python tools/gate.py results.json --warn-budget 10
-
-# Custom budgets for different severity levels
-python tools/gate.py results.json --warn-budget 5 --info-budget 20 --verbose
+vibelint check --format llm > issues.txt
 ```
 
-### Creating Custom Validators
+## Plugin System
 
-Create your own validators by extending `BaseValidator`:
+vibelint supports custom validators and formatters:
+
+### Creating Custom Validators
 
 ```python
 from vibelint.plugin_system import BaseValidator, Severity, Finding
 from pathlib import Path
 from typing import Iterator
 
-class NoTodoValidator(BaseValidator):
-    rule_id = "MYTEAM001"
-    name = "No TODO Comments"
-    description = "Prevents TODO comments in main branch"
-    default_severity = Severity.WARN
+class NoHardcodedSecretsValidator(BaseValidator):
+    rule_id = "SECURITY-001"
+    name = "No Hardcoded Secrets"
+    description = "Detects potential hardcoded secrets"
+    default_severity = Severity.BLOCK
 
-    def validate(self, file_path: Path, content: str) -> Iterator[Finding]:
+    def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         for line_num, line in enumerate(content.splitlines(), 1):
-            if "TODO" in line:
+            if "password" in line.lower() and "=" in line:
                 yield self.create_finding(
-                    message="TODO comment found",
+                    message="Potential hardcoded password detected",
                     file_path=file_path,
                     line=line_num,
-                    suggestion="Complete the TODO or create a ticket"
+                    suggestion="Use environment variables or secret management"
                 )
 ```
 
-Register your validator as a plugin in `pyproject.toml`:
+### Register in pyproject.toml
 
 ```toml
 [project.entry-points."vibelint.validators"]
-MYTEAM001 = "mypackage.validators:NoTodoValidator"
-```
-
-### Rule Configuration
-
-Configure which rules are enabled and their severity levels:
-
-```toml
-[tool.vibelint.rules]
-"VBL301" = "OFF"        # Disable __all__ checking
-"VBL701" = "WARN"       # Print statements as warnings
-"MYTEAM001" = "BLOCK"   # Custom rule blocks CI
-
-[tool.vibelint.plugins]
-enabled = [
-    "vibelint.core",           # Built-in validators
-    "myteam-python-standards"  # Custom plugin package
-]
+SECURITY-001 = "mypackage.validators:NoHardcodedSecretsValidator"
 ```
 
 ## Configuration
 
-Configure `vibelint` by adding a `[tool.vibelint]` section to your `pyproject.toml` file.
+Configure vibelint in your `pyproject.toml`:
 
 ```toml
-# pyproject.toml
-
 [tool.vibelint]
-# Globs for files to include (relative to project root)
-# Files matching these patterns will be considered for linting and snapshots.
+# File patterns to analyze
 include_globs = [
     "src/**/*.py",
     "tests/**/*.py",
-    "scripts/*.py",
-    "*.py" # Include top-level python files
+    "*.py"
 ]
 
-# Globs for files/directories to exclude
-# Files matching these are ignored, even if they match include_globs.
-# Defaults usually cover common virtual envs, caches, etc.
+# Patterns to exclude
 exclude_globs = [
-    ".git/**",
-    ".tox/**",
-    "*.egg-info/**",
-    "build/**",
-    "dist/**",
-    "**/__pycache__/**",
-    ".pytest_cache/**",
-    ".ruff_cache/**",
-    "*.env*",
-    "**/.DS_Store",
-    # Add project-specific ignores:
-    "docs/**",
-    "data/**",
+    ".venv/**",
+    "**/migrations/**",
+    "**/__pycache__/**"
 ]
 
-# List of allowed shebang lines for executable scripts (checked by VBL402)
-# Only applies to files containing a `if __name__ == "__main__":` block.
-allowed_shebangs = ["#!/usr/bin/env python3"]
+# Rule configuration
+[tool.vibelint.rules]
+"DEAD-CODE-FOUND" = "WARN"
+"EMOJI-IN-STRING" = "BLOCK"
+"DOCSTRING-MISSING" = "INFO"
 
-# If true, enforce __all__ presence in __init__.py files (VBL301).
-# If false (default), only issue a warning (VBL302) for missing __all__ in __init__.py.
-error_on_missing_all_in_init = false
+# AI Analysis Configuration
+[tool.vibelint.embedding_analysis]
+enabled = true
+model = "google/embeddinggemma-300m"
+similarity_threshold = 0.85
 
-# List of VBL error/warning codes to ignore globally.
-# Find codes in src/vibelint/error_codes.py or from `vibelint check` output.
-ignore = ["VBL102"] # Example: Ignore missing path references in docstrings
+[tool.vibelint.llm_analysis]
+api_base_url = "http://localhost:11434"
+model = "codellama:13b"
+max_tokens = 2048
+temperature = 0.3
 
-# Threshold for confirming before processing many files during `check`.
-# Set to a very large number (or use --yes flag) to disable confirmation.
-large_dir_threshold = 500
-
-# Glob patterns for files whose content should be truncated (peeked)
-# instead of fully included in `vibelint snapshot` output.
-# Useful for large data files, logs, etc.
-# peek_globs = [
-#   "data/**/*.csv",
-#   "logs/*.log",
-# ]
+# Rule categories for targeted analysis
+[tool.vibelint.rule_categories]
+core = [
+    "DOCSTRING-MISSING",
+    "EXPORTS-MISSING-ALL",
+    "PRINT-STATEMENT",
+    "EMOJI-IN-STRING"
+]
+static = [
+    "DEAD-CODE-FOUND",
+    "ARCHITECTURE-INCONSISTENT",
+    "TYPING-POOR-PRACTICE",
+    "FALLBACK-SILENT-FAILURE"
+]
+ai = [
+    "ARCHITECTURE-LLM",
+    "SEMANTIC-SIMILARITY"
+]
 ```
 
-### Disabling the Docstring Path Check
+## Error Categories
 
-If you disagree with the convention of including the relative file path at the end of docstrings, you can disable the specific check (`VBL102`).
+vibelint organizes issues into logical categories:
 
-Add the code `VBL102` to the `ignore` list in your `pyproject.toml` under the `[tool.vibelint]` section:
+### 🔧 **Core Issues** (Always Run)
+- `DOCSTRING-MISSING`: Missing function/module documentation
+- `DOCSTRING-PATH-REFERENCE`: Missing file paths in docstrings
+- `EXPORTS-MISSING-ALL`: Missing `__all__` declarations
+- `PRINT-STATEMENT`: Debug print statements
+- `EMOJI-IN-STRING`: Encoding-problematic characters
 
-```toml
-[tool.vibelint]
-# ... other settings ...
-ignore = ["VBL102"]
+### 🏗️ **Static Analysis**
+- `DEAD-CODE-FOUND`: Unused functions and imports
+- `ARCHITECTURE-INCONSISTENT`: Architectural violations
+- `TYPING-POOR-PRACTICE`: Missing type annotations
+- `FALLBACK-SILENT-FAILURE`: Problematic exception handling
+
+### 🤖 **AI-Powered**
+- `ARCHITECTURE-LLM`: LLM-detected architectural issues
+- `SEMANTIC-SIMILARITY`: Functionally duplicate code
+
+## Advanced Usage
+
+### CI/CD Integration
+
+```yaml
+# .github/workflows/quality.yml
+- name: Run vibelint
+  run: |
+    vibelint check --format sarif > vibelint.sarif
+    vibelint check --format json > vibelint.json
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v2
+  with:
+    sarif_file: vibelint.sarif
 ```
 
-You can add multiple codes to the list to ignore other specific checks if needed, e.g., `ignore = ["VBL102", "VBL302"]`.
+### Pre-commit Hook
 
-## Error Codes
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: vibelint
+        name: vibelint
+        entry: vibelint check
+        language: system
+        types: [python]
+```
 
-`vibelint` uses specific codes (e.g., `VBL101`, `VBL301`, `VBL402`) to identify issues found by the `check` command. These codes help you understand the exact nature of the problem and allow for targeted configuration (e.g., ignoring specific codes).
+### Quality Gates
 
-You can find the definition of these codes in the source file: `src/vibelint/error_codes.py`.
-
-*   **VBL1xx:** Docstring issues (Presence, Path reference, Format)
-*   **VBL2xx:** Encoding cookie issues
-*   **VBL3xx:** `__all__` export issues (Presence, Format)
-*   **VBL4xx:** Shebang (`#!`) issues (Presence, Validity)
-*   **VBL9xx:** Internal processing errors
+```bash
+# Fail build if too many issues
+python -c "
+import json
+data = json.load(open('vibelint.json'))
+errors = data['summary'].get('BLOCK', 0)
+warnings = data['summary'].get('WARN', 0)
+if errors > 0 or warnings > 10:
+    exit(1)
+"
+```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to open issues for bug reports or feature requests, or submit pull requests on GitHub.
+We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+git clone https://github.com/mithranm/vibelint.git
+cd vibelint
+pip install -e ".[dev]"
+pytest
+```
 
 ## License
 
-`vibelint` is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+vibelint is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+**Made with ❤️ for better Python codebases and AI collaboration**
