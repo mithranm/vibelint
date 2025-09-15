@@ -1,5 +1,5 @@
 """
-Tests for Claude Code-specific validators.
+Tests for validators.
 """
 
 from pathlib import Path

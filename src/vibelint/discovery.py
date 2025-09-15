@@ -26,10 +26,31 @@ from pathlib import Path
 from .config import Config
 from .utils import get_relative_path
 
-__all__ = ["discover_files"]
+__all__ = ["discover_files", "discover_files_from_paths"]
 logger = logging.getLogger(__name__)
 
 _VCS_DIRS = {".git", ".hg", ".svn"}
+
+# Default exclude patterns to avoid __pycache__, .git, etc. when using custom paths
+_DEFAULT_EXCLUDE_PATTERNS = [
+    "__pycache__/**",
+    "*.pyc",
+    "*.pyo",
+    ".git/**",
+    ".hg/**",
+    ".svn/**",
+    ".pytest_cache/**",
+    ".coverage",
+    ".mypy_cache/**",
+    ".tox/**",
+    "venv/**",
+    ".venv/**",
+    "env/**",
+    ".env/**",
+    "node_modules/**",
+    ".DS_Store",
+    "*.egg-info/**",
+]
 
 
 def _is_excluded(
@@ -405,3 +426,79 @@ def discover_files(
 
     logger.debug(f"Discovery complete. Returning {final_count} files.")
     return sorted(list(final_files_set))
+
+
+def discover_files_from_paths(
+    custom_paths: list[Path],
+    config: Config,
+    explicit_exclude_paths: set[Path] | None = None,
+) -> list[Path]:
+    """
+    Discover files from explicitly provided paths (include_globs override).
+    
+    This function handles user-provided paths as an override to the configured
+    include_globs, while still respecting exclude_globs and sensible defaults
+    to avoid processing __pycache__, .git, etc.
+    
+    Args:
+        custom_paths: List of file or directory paths (include_globs override)
+        config: The vibelint configuration object
+        explicit_exclude_paths: Additional paths to explicitly exclude
+        
+    Returns:
+        A sorted list of unique absolute Path objects for Python files
+    """
+    if config.project_root is None:
+        raise ValueError("Cannot discover files without a project root defined in Config.")
+    
+    project_root = config.project_root.resolve()
+    candidate_files: set[Path] = set()
+    _explicit_excludes = {p.resolve() for p in (explicit_exclude_paths or set())}
+    
+    # Combine config exclude patterns with defaults
+    config_exclude_globs = config.get("exclude_globs", [])
+    if not isinstance(config_exclude_globs, list):
+        config_exclude_globs = []
+    
+    # Always apply default exclude patterns to avoid __pycache__, .git, etc.
+    all_exclude_patterns = _DEFAULT_EXCLUDE_PATTERNS + config_exclude_globs
+    
+    logger.info(f"Include globs override: processing {len(custom_paths)} custom path(s)")
+    logger.debug(f"Using exclude patterns: {all_exclude_patterns}")
+    
+    for path in custom_paths:
+        abs_path = path.resolve()
+        
+        if abs_path.is_file():
+            # Single file - check if it's a Python file and not excluded
+            if abs_path.suffix == '.py':
+                if not _is_excluded(
+                    abs_path,
+                    project_root,
+                    all_exclude_patterns,
+                    _explicit_excludes,
+                    is_checking_directory_for_prune=False,
+                ):
+                    candidate_files.add(abs_path)
+                else:
+                    logger.debug(f"Excluding file {abs_path} due to exclude patterns")
+        
+        elif abs_path.is_dir():
+            # Directory - recursively find Python files while respecting exclusions
+            logger.debug(f"Scanning directory: {abs_path}")
+            
+            # Use the existing recursive walker with Python file pattern
+            for py_file in _recursive_glob_with_pruning(
+                abs_path,
+                "*.py",  # Only Python files
+                project_root,
+                all_exclude_patterns,
+                _explicit_excludes,
+            ):
+                candidate_files.add(py_file)
+        else:
+            logger.warning(f"Path does not exist or is not a file/directory: {abs_path}")
+    
+    sorted_files = sorted(candidate_files)
+    logger.info(f"Include globs override result: discovered {len(sorted_files)} Python files")
+    return sorted_files

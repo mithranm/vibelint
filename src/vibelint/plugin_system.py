@@ -161,7 +161,7 @@ def _load_builtin_validators() -> None:
             if hasattr(validator_class, "rule_id"):
                 _VALIDATORS[validator_class.rule_id] = validator_class
         except (ImportError, AttributeError, TypeError) as e:
-            logger.debug(f"Failed to load validator from entry point {entry_point.name}: {e}")
+            logger.warning(f"Failed to load validator '{entry_point.name}' from entry point {entry_point.value}: {e}")
             pass
 
 

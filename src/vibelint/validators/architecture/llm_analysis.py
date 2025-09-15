@@ -1,387 +1,640 @@
 """
-LLM-powered architectural analysis validator for vibelint.
+LLM-powered architectural analysis validator using OpenAI-compatible APIs.
 
-Detects over-engineering patterns and architectural redundancies that traditional
-rule-based linting cannot identify, using an OpenAI-compatible API for semantic analysis.
+Provides intelligent architectural analysis using Large Language Models
+to detect design issues, inconsistencies, and improvement opportunities.
 
-vibelint/validators/architecture_llm.py
+vibelint/validators/architecture/llm_analysis.py
 """
 
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field, SecretStr
 
-from ...config import Config
 from ...plugin_system import BaseValidator, Finding, Severity
 
-__all__ = ["ArchitectureLLMValidator"]
 logger = logging.getLogger(__name__)
 
+__all__ = ["LLMAnalysisValidator"]
 
-class ArchitectureLLMValidator(BaseValidator):
-    """
-    Validates architectural patterns using LLM analysis to detect over-engineering,
-    unnecessary abstractions, and semantic redundancies that escape traditional linting.
-    """
+
+class ArchitecturalFinding(BaseModel):
+    """Schema for architectural analysis findings."""
+
+    file: str = Field(description="File path where issue was found")
+    line: int = Field(default=1, description="Line number of the issue")
+    severity: str = Field(description="Severity level: error, warning, info")
+    category: str = Field(description="Category of architectural issue")
+    message: str = Field(description="Description of the architectural issue")
+    suggestion: str = Field(default="", description="Suggested improvement")
+
+
+class ArchitecturalAnalysis(BaseModel):
+    """Schema for complete architectural analysis response."""
+
+    findings: List[ArchitecturalFinding] = Field(description="List of architectural issues found")
+    summary: str = Field(description="Overall assessment of the codebase architecture")
+
+
+class LLMAnalysisValidator(BaseValidator):
+    """LLM-powered architectural analysis using OpenAI-compatible API for structured workflow."""
 
     rule_id = "ARCHITECTURE-LLM"
+    name = "LLM Architectural Analysis"
+    description = "AI-powered analysis of code architecture and design patterns"
     default_severity = Severity.INFO
 
     def __init__(
         self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
-    ) -> None:
+    ):
         super().__init__(severity, config)
-        self._api_base_url: Optional[str] = None
-        self._model_name: Optional[str] = None
-        self._session: Optional[requests.Session] = None
 
-    def _setup_llm_client(self, config: Config) -> bool:
-        """
-        Initialize LLM client with configuration from vibelint config.
+        # Track analysis state
+        self._llm_setup_attempted = False
+        self._llm_available = False
+        self._analysis_completed = False
+        self._analyzed_files: set[Path] = set()  # Track which files we've seen
 
-        Returns:
-            True if LLM API is available and configured, False otherwise.
-        """
-        # Check for LLM configuration in vibelint config
-        llm_config = config.get("llm_analysis", {})
+        # API configuration from environment or config
+        llm_config = self.config.get("llm_analysis", {})
 
-        if not isinstance(llm_config, dict):
-            logger.debug("LLM analysis disabled: no llm_analysis config section found")
-            return False
+        self.api_url = os.getenv(
+            "OPENAI_BASE_URL", llm_config.get("api_base_url", "http://100.94.250.88:11434")
+        )
+        self.model = os.getenv(
+            "OPENAI_MODEL",
+            llm_config.get("model", "/home/mithranmohanraj/models/gpt-oss-20b-mxfp4.gguf"),
+        )
+        self.api_key = os.getenv("OPENAI_API_KEY", "not-needed")
 
-        self._api_base_url = llm_config.get("api_base_url")
-        self._model_name = llm_config.get("model")
-        self._api_key = llm_config.get("api_key")
-        self._max_tokens = llm_config.get("max_tokens", 2048)
-        self._temperature = llm_config.get("temperature", 0.3)
-        self._top_p = llm_config.get("top_p", 0.9)
-        self._top_k = llm_config.get("top_k", 40)
-        self._frequency_penalty = llm_config.get("frequency_penalty", 0.1)
-        self._presence_penalty = llm_config.get("presence_penalty", 0.1)
-        self._timeout_seconds = llm_config.get("timeout_seconds", 120)
+        # Context window management
+        self.max_tokens = llm_config.get("max_tokens", 4096)
+        self.max_context_tokens = llm_config.get("max_context_tokens", 32768)
+        self.max_prompt_tokens = llm_config.get("max_prompt_tokens", 28672)
+        self.max_file_lines = llm_config.get("max_file_lines", 100)
+        self.max_files = llm_config.get("max_files", 10)
+        self.temperature = llm_config.get("temperature", 0.1)
 
-        if not self._api_base_url:
-            logger.debug("LLM analysis disabled: no api_base_url configured")
-            return False
+        # Compression strategies
+        self.enable_import_summary = llm_config.get("enable_import_summary", True)
+        self.enable_hierarchy_extraction = llm_config.get("enable_hierarchy_extraction", True)
+        self.enable_pattern_detection = llm_config.get("enable_pattern_detection", True)
+        self.enable_complexity_analysis = llm_config.get("enable_complexity_analysis", True)
+        self.max_signature_lines = llm_config.get("max_signature_lines", 20)
+        self.max_hierarchy_depth = llm_config.get("max_hierarchy_depth", 15)
 
-        if not self._model_name:
-            logger.debug("LLM analysis disabled: no model specified")
-            return False
+        # Response processing
+        self.remove_thinking_tokens = llm_config.get("remove_thinking_tokens", True)
+        self.thinking_format = llm_config.get("thinking_format", "harmony")
+        self.custom_thinking_patterns = llm_config.get("custom_thinking_patterns", [])
 
-        # Check if we're running in CI and if LLM analysis is explicitly enabled
-        is_ci = any(
-            ci_var in os.environ
-            for ci_var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "TRAVIS", "CIRCLECI"]
+        # Initialize langchain components for OpenAI-compatible API
+        self.llm = ChatOpenAI(
+            base_url=self.api_url + "/v1",
+            model=self.model,
+            temperature=self.temperature,
+            max_completion_tokens=self.max_tokens,
+            api_key=SecretStr(self.api_key),
         )
 
-        if is_ci and not llm_config.get("enable_in_ci", False):
-            logger.debug(
-                "LLM analysis disabled: running in CI environment and enable_in_ci is not set"
-            )
-            return False
+        # Global architecture analysis prompt
+        self.global_prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are an expert software architect analyzing Python code for structural quality.
 
-        # Setup requests session with retry strategy
-        self._session = requests.Session()
-        retry_strategy = Retry(
-            total=2, status_forcelist=[429, 500, 502, 503, 504], backoff_factor=1
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self._session.mount("http://", adapter)
-        self._session.mount("https://", adapter)
+Analyze the provided codebase for architectural issues including:
+- Module organization and coupling problems
+- Violation of design principles (SOLID, DRY, etc.)
+- Inconsistent patterns and abstractions
+- Poor separation of concerns
+- Code duplication and redundancy
+- Naming convention violations
+- API design issues
 
-        # Set authorization header if API key is provided
-        if self._api_key:
-            self._session.headers.update({"Authorization": f"Bearer {self._api_key}"})
+Focus on structural problems that affect maintainability, not syntax errors.
 
-        # Test API connectivity
-        try:
-            response = self._session.get(f"{self._api_base_url}/v1/models", timeout=5)
-            if response.status_code == 200:
-                logger.info(f"LLM analysis enabled using API at {self._api_base_url}")
-                return True
-            else:
-                logger.warning(f"LLM API test failed with status {response.status_code}")
-                return False
-        except Exception as e:
-            logger.debug(f"LLM API connectivity test failed: {e}")
-            return False
-
-    def _analyze_codebase_structure(self, project_root: Path) -> dict:
-        """
-        Analyze codebase structure to identify potential architectural issues.
-
-        Args:
-            project_root: Root directory of the project
-
-        Returns:
-            Dictionary containing structural analysis data
-        """
-        structure = {"files": [], "modules": {}, "potential_issues": []}
-
-        # Collect Python files and their basic info
-        for py_file in project_root.rglob("*.py"):
-            try:
-                rel_path = py_file.relative_to(project_root)
-                file_info = {
-                    "path": str(rel_path),
-                    "size": py_file.stat().st_size,
-                    "lines": len(py_file.read_text(encoding="utf-8", errors="ignore").splitlines()),
-                }
-
-                # Analyze imports and basic structure
-                content = py_file.read_text(encoding="utf-8", errors="ignore")
-                file_info["imports"] = self._extract_imports(content)
-                file_info["classes"] = self._extract_classes(content)
-                file_info["functions"] = self._extract_functions(content)
-
-                structure["files"].append(file_info)
-
-            except Exception as e:
-                logger.debug(f"Error analyzing {py_file}: {e}")
-
-        return structure
-
-    def _extract_imports(self, content: str) -> list[str]:
-        """Extract import statements from file content."""
-        imports = []
-        for line in content.splitlines():
-            line = line.strip()
-            if line.startswith(("import ", "from ")):
-                imports.append(line)
-        return imports
-
-    def _extract_classes(self, content: str) -> list[str]:
-        """Extract class definitions from file content."""
-        classes = []
-        for line in content.splitlines():
-            line = line.strip()
-            if line.startswith("class "):
-                class_name = line.split()[1].split("(")[0].rstrip(":")
-                classes.append(class_name)
-        return classes
-
-    def _extract_functions(self, content: str) -> list[str]:
-        """Extract function definitions from file content."""
-        functions = []
-        for line in content.splitlines():
-            line = line.strip()
-            if line.startswith("def "):
-                func_name = line.split()[1].split("(")[0]
-                functions.append(func_name)
-        return functions
-
-    def _query_llm_for_analysis(self, codebase_summary: str) -> Optional[dict]:
-        """
-        Query the LLM API for architectural analysis.
-
-        Args:
-            codebase_summary: Summarized codebase structure for analysis
-
-        Returns:
-            Analysis results from LLM or None if API call fails
-        """
-        if not self._session or not self._api_base_url:
-            return None
-
-        prompt = f"""Analyze this Python file for architectural over-engineering patterns.
-
-{codebase_summary}
-
-Respond with a JSON object containing your analysis. Use this exact format:
+Return your response as valid JSON with this structure:
 {{
-    "has_issues": true/false,
-    "summary": "Brief 1-2 sentence summary of findings",
-    "details": "Detailed explanation if issues found, or empty string if none"
-}}
+  "findings": [
+    {{
+      "file": "path/to/file.py",
+      "line": 1,
+      "severity": "warning",
+      "category": "architectural",
+      "message": "Description of issue",
+      "suggestion": "Suggested improvement"
+    }}
+  ]
+}}""",
+                ),
+                ("user", "Analyze this Python codebase structure:\n\n{code_content}"),
+            ]
+        )
 
-Look for: thin wrapper classes, unnecessary middle layers, over-complex data classes, fake plugin systems, premature abstractions."""
-
-        try:
-            payload = {
-                "model": self._model_name,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": self._temperature,
-                "max_tokens": self._max_tokens,
-                "top_p": self._top_p,
-                "top_k": self._top_k,
-                "frequency_penalty": self._frequency_penalty,
-                "presence_penalty": self._presence_penalty,
-                "response_format": {"type": "json_object"},
-            }
-
-            response = self._session.post(
-                f"{self._api_base_url}/v1/chat/completions",
-                json=payload,
-                timeout=self._timeout_seconds,
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                response_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-                # Extract content from harmony format if present
-                if "<|message|>" in response_text:
-                    # Look for final channel content
-                    if "<|channel|>final<|message|>" in response_text:
-                        final_start = response_text.find("<|channel|>final<|message|>") + len(
-                            "<|channel|>final<|message|>"
-                        )
-                        content = response_text[final_start:].split("<|end|>")[0].strip()
-                    else:
-                        # Fallback to any message content
-                        message_start = response_text.find("<|message|>") + len("<|message|>")
-                        content = response_text[message_start:].split("<|end|>")[0].strip()
-                else:
-                    content = response_text.strip()
-
-                # Parse JSON response
-                try:
-                    analysis_json = json.loads(content)
-                    if analysis_json.get("has_issues", False):
-                        return analysis_json
-                except json.JSONDecodeError:
-                    logger.debug(f"Failed to parse JSON from LLM response: {content[:200]}...")
-                    # Fallback to text analysis
-                    if content and "no significant" not in content.lower():
-                        return {"analysis": content}
-
-            else:
-                logger.warning(f"LLM API request failed with status {response.status_code}")
-                logger.debug(f"Response: {response.text[:200]}...")
-
-        except Exception as e:
-            logger.debug(f"LLM analysis request failed: {e}")
-
-        return None
+        # Create analysis chain
+        self.global_chain = self.global_prompt | self.llm
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """
-        Perform LLM-powered architectural validation on individual files.
+        Run LLM architectural analysis on the specified files.
 
-        Analyzes files that are likely to contain architectural issues based on patterns:
-        - Files with "runner", "manager", "system" in the name
-        - Files with many classes but few methods per class
-        - Files that are thin wrappers around other modules
+        Analyzes the actual files being processed, not the entire project.
         """
-        # Skip if LLM is not available or not configured
-        if not hasattr(self, "_llm_setup_attempted"):
+        # Skip if LLM setup hasn't been attempted yet
+        if not self._llm_setup_attempted:
             self._llm_setup_attempted = True
-            self._llm_available = config is not None and self._setup_llm_client(config)
+            self._llm_available = self._test_connectivity()
 
         if not self._llm_available:
+            logger.debug("LLM service not available, skipping analysis")
             return
 
-        # Check if this file is worth analyzing for architectural issues
-        if not self._should_analyze_file(file_path, content):
+        # Skip if we've already analyzed this file
+        if file_path in self._analyzed_files:
             return
 
-        logger.info(f"Running LLM architectural analysis on {file_path}")
+        self._analyzed_files.add(file_path)
 
-        # Create focused analysis prompt for this specific file
-        analysis_prompt = self._create_file_analysis_prompt(file_path, content)
+        # Get the actual files being analyzed from the validation engine
+        analysis_files = config.get("_analysis_files", [file_path]) if config else [file_path]
 
-        # Query LLM for analysis
-        analysis_result = self._query_llm_for_analysis(analysis_prompt)
+        logger.info(f"Starting LLM architectural analysis on {len(analysis_files)} files")
 
-        if analysis_result:
-            if "summary" in analysis_result and "details" in analysis_result:
-                # Structured JSON response
-                summary = analysis_result["summary"]
-                details = analysis_result.get("details", "")
-                message = f"{summary}"
-                if details:
-                    message += f" Details: {details}"
-            elif "analysis" in analysis_result:
-                # Fallback text response
-                message = analysis_result["analysis"]
-            else:
-                return
+        # Run architectural analysis on the specified files
+        yield from self._analyze_global_structure(file_path, analysis_files)
 
-            yield self.create_finding(
-                message=message,
-                file_path=file_path,
-                line=1,
-            )
-
-    def _should_analyze_file(self, file_path: Path, content: str) -> bool:
-        """
-        Determine if a file is worth analyzing for architectural issues.
-
-        Returns True for files that commonly contain architectural issues:
-        - Files with suspicious names (runner, manager, system, wrapper, facade)
-        - Files that are short but have many imports
-        - Files with many small classes
-        """
-        filename = file_path.name.lower()
-
-        # Check for suspicious filename patterns
-        suspicious_patterns = [
-            "runner",
-            "manager",
-            "system",
-            "wrapper",
-            "facade",
-            "handler",
-            "controller",
-        ]
-        if any(pattern in filename for pattern in suspicious_patterns):
-            logger.debug(f"Analyzing {file_path} due to suspicious filename pattern")
+    def _test_connectivity(self) -> bool:
+        """Test if OpenAI-compatible API service is available."""
+        try:
+            # Simple connectivity test with ChatOpenAI
+            self.llm.invoke("Test connectivity")
             return True
+        except Exception as e:
+            logger.debug(f"LLM connectivity test failed: {e}")
+            return False
 
-        # Analyze content patterns
-        lines = content.splitlines()
-        total_lines = len(lines)
+    def _remove_thinking_tokens(self, text: str) -> str:
+        """Remove thinking tokens from LLM response based on configured format."""
+        if not self.remove_thinking_tokens:
+            return text
 
-        if total_lines < 20:
-            return False  # Too small to have architectural issues
+        # Built-in format patterns
+        format_patterns = {
+            "harmony": [
+                r"<\|channel\|>analysis<\|message\|>.*?(?=<\|channel\|>|<\|end\|>|$)",
+                r"<\|channel\|>commentary<\|message\|>.*?(?=<\|channel\|>|<\|end\|>|$)",
+                r"<\|[^|]*\|>",
+                r"<think>.*?</think>",
+                r"<thinking>.*?</thinking>",
+                r"\[Thought:.*?\]",
+                r"\[Internal:.*?\]",
+            ],
+            "qwen": [
+                r"<think>.*?</think>",
+                r"<思考>.*?</思考>",
+                r"\[思考\].*?\[/思考\]",
+                r"思考：.*?(?=\n|\r|\r\n|$)",
+            ],
+        }
 
-        # Count imports, classes, functions
-        import_count = len(
-            [line for line in lines if line.strip().startswith(("import ", "from "))]
-        )
-        class_count = len([line for line in lines if line.strip().startswith("class ")])
-        len([line for line in lines if line.strip().startswith("def ")])
-
-        # High import-to-code ratio might indicate a thin wrapper
-        if import_count > 5 and total_lines < 150 and import_count / total_lines > 0.1:
-            logger.debug(f"Analyzing {file_path} due to high import-to-code ratio")
-            return True
-
-        # Many small classes might indicate over-engineering
-        if class_count > 3 and total_lines / class_count < 50:
-            logger.debug(f"Analyzing {file_path} due to many small classes")
-            return True
-
-        return False
-
-    def _create_file_analysis_prompt(self, file_path: Path, content: str) -> str:
-        """Create a focused prompt for analyzing a specific file."""
-        # Truncate content if too long
-        lines = content.splitlines()
-        if len(lines) > 200:
-            content_preview = (
-                "\n".join(lines[:100]) + "\n\n... [truncated] ...\n\n" + "\n".join(lines[-50:])
-            )
+        # Get patterns for the configured format
+        if self.thinking_format in format_patterns:
+            patterns = format_patterns[self.thinking_format]
         else:
-            content_preview = content
+            # Use custom patterns if format not recognized
+            patterns = self.custom_thinking_patterns
 
-        return f"""Analyze this Python file for architectural over-engineering patterns:
+        # Special handling for Harmony format - try to extract final channel first
+        if self.thinking_format == "harmony":
+            import re
 
-File: {file_path.name}
+            final_pattern = r"<\|channel\|>final<\|message\|>(.*?)(?:<\|end\|>|$)"
+            final_matches = re.findall(final_pattern, text, re.DOTALL)
 
-{content_preview}
+            if final_matches:
+                # Found explicit final channel content
+                result = final_matches[-1].strip()
+                logger.debug(f"Extracted final channel content ({len(result)} chars)")
+                return result
 
-Respond with a JSON object using this exact format:
+        # Remove all patterns
+        import re
+
+        cleaned_text = text
+        for pattern in patterns:
+            cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.DOTALL | re.IGNORECASE)
+
+        # Clean up extra whitespace
+        cleaned_text = re.sub(r"\n\s*\n", "\n\n", cleaned_text)
+        cleaned_text = cleaned_text.strip()
+
+        # Log the cleaning if significant content was removed
+        original_length = len(text)
+        cleaned_length = len(cleaned_text)
+        if original_length - cleaned_length > 50:
+            logger.debug(
+                f"Removed {original_length - cleaned_length} characters of thinking tokens"
+            )
+
+        return cleaned_text
+
+    def _analyze_global_structure(
+        self, current_file: Path, analysis_files: list[Path]
+    ) -> Iterator[Finding]:
+        """Analyze overall codebase architecture using intelligent multi-phase langchain approach."""
+
+        if not analysis_files:
+            logger.warning("No analysis files provided")
+            return
+
+        logger.info(f"Phase 1: Running global structure analysis on {len(analysis_files)} files")
+
+        # Phase 1: Create code context for LLM
+        code_content = self._create_structured_summary(analysis_files)
+
+        # Phase 1: Global analysis with raw channel response (not JSON)
+        phase1_prompt = f"""Analyze this Python codebase structure for potential architectural issues:
+
+{code_content}
+
+Look for patterns that indicate:
+1. Code duplication across files
+2. Overly similar functionality suggesting redundant code
+3. Poor separation of concerns
+4. Missing abstractions where there should be shared code
+5. Architectural anti-patterns
+
+This is Phase 1 of a multi-phase analysis. Provide your analysis as natural language commentary about what you observe."""
+
+        try:
+            # Phase 1: Use langchain for initial analysis (expects channel/message format)
+            phase1_response = self.global_chain.invoke({"code_content": phase1_prompt})
+
+            # Extract and clean raw response content
+            response_text = (
+                phase1_response.content
+                if hasattr(phase1_response, "content")
+                else str(phase1_response)
+            )
+            if not isinstance(response_text, str):
+                response_text = str(response_text)
+            cleaned_response = self._remove_thinking_tokens(response_text)
+            logger.info(f"Phase 1 complete: {cleaned_response[:200]}...")
+
+            # Phase 2: Follow up with structured JSON request
+            phase2_prompt = f"""Based on your previous analysis:
+
+{cleaned_response}
+
+Now provide specific architectural findings as valid JSON with this structure:
 {{
-    "has_issues": true/false,
-    "summary": "Brief 1-2 sentence summary of findings",
-    "details": "Detailed explanation if issues found, or empty string if none"
+    "findings": [
+        {{
+            "message": "Description of the issue",
+            "suggestion": "How to fix it",
+            "line": 1,
+            "severity": "info"
+        }}
+    ]
 }}
 
-Look for: thin wrapper classes, unnecessary middle layers, over-complex data classes, fake plugin systems, premature abstractions."""
+Return ONLY the JSON, no other text."""
+
+            # Phase 2: Get structured JSON response
+            phase2_response = self.global_chain.invoke({"code_content": phase2_prompt})
+
+            json_text = (
+                phase2_response.content
+                if hasattr(phase2_response, "content")
+                else str(phase2_response)
+            )
+
+            # Ensure we have a string for JSON parsing and clean thinking tokens
+            if not isinstance(json_text, str):
+                json_text = str(json_text)
+            cleaned_json_text = self._remove_thinking_tokens(json_text)
+
+            try:
+                analysis_data = json.loads(cleaned_json_text)
+                findings_list = analysis_data.get("findings", [])
+
+                # Convert findings to plugin system findings
+                for finding_data in findings_list:
+                    yield self.create_finding(
+                        message=f"{finding_data.get('message', '')} {finding_data.get('suggestion', '')}".strip(),
+                        file_path=current_file,  # Report on current file being processed
+                        line=finding_data.get("line", 1),
+                    )
+
+            except json.JSONDecodeError as e:
+                logger.warning(f"Phase 2 JSON parsing failed: {e}")
+                # Fallback: create finding from Phase 1 analysis
+                yield self.create_finding(
+                    message=f"Architectural analysis: {cleaned_response[:300]}...",
+                    file_path=current_file,
+                    line=1,
+                )
+
+        except Exception as e:
+            logger.warning(f"Global LLM analysis failed: {e}")
+
+    def _create_structured_summary(self, file_paths: list[Path]) -> str:
+        """Create a structured summary optimized for LLM analysis with advanced compression strategies."""
+        summary_parts = []
+        total_tokens_estimate = 0
+
+        # Rough token estimation: ~4 chars per token
+        max_content_tokens = self.max_prompt_tokens - 2000  # Reserve space for prompt template
+
+        # Limit files to prevent token overflow
+        limited_files = file_paths[: self.max_files]
+
+        # First pass: collect and prioritize content
+        file_contents = []
+        for path in limited_files:
+            try:
+                content = path.read_text(encoding="utf-8")
+                compressed_content = self._compress_file_content(path, content)
+                if compressed_content:
+                    file_contents.append((path, compressed_content))
+            except Exception as e:
+                logger.debug(f"Could not analyze {path}: {e}")
+
+        # Second pass: fit content within token budget
+        for path, compressed_content in file_contents:
+            try:
+                rel_path = path.relative_to(path.parents[2])
+            except (ValueError, IndexError):
+                rel_path = path
+
+            # Create file summary with compression indicators
+            file_summary = f"=== {rel_path} ===\n{compressed_content}"
+
+            # Estimate tokens for this file summary
+            file_tokens = len(file_summary) // 4
+
+            # Check if adding this file would exceed context window
+            if total_tokens_estimate + file_tokens > max_content_tokens:
+                logger.info(
+                    f"Context window limit reached, truncating at {len(summary_parts)} files"
+                )
+                break
+
+            summary_parts.append(file_summary)
+            total_tokens_estimate += file_tokens
+
+        result = "\n\n".join(summary_parts)
+        logger.info(
+            f"Generated compressed summary with ~{total_tokens_estimate} tokens for {len(summary_parts)} files"
+        )
+        return result
+
+    def _compress_file_content(self, file_path: Path, content: str) -> str:
+        """Apply multiple compression strategies to file content."""
+        lines = content.split("\n")
+
+        # Strategy 1: Extract architectural signatures
+        signatures = self._extract_architectural_signatures(lines)
+
+        # Strategy 2: Summarize imports and dependencies
+        import_summary = self._summarize_imports(lines) if self.enable_import_summary else None
+
+        # Strategy 3: Extract class/function hierarchy
+        hierarchy = (
+            self._extract_code_hierarchy(lines) if self.enable_hierarchy_extraction else None
+        )
+
+        # Strategy 4: Find architectural patterns and anti-patterns
+        patterns = self._identify_patterns(lines) if self.enable_pattern_detection else None
+
+        # Strategy 5: Extract complexity indicators
+        complexity = (
+            self._analyze_complexity_indicators(lines, file_path)
+            if self.enable_complexity_analysis
+            else None
+        )
+
+        # Combine all compressed information
+        compressed_parts = []
+
+        if import_summary:
+            compressed_parts.append(f"IMPORTS: {import_summary}")
+
+        if hierarchy:
+            compressed_parts.append(f"STRUCTURE:\n{hierarchy}")
+
+        if signatures:
+            compressed_parts.append(
+                f"KEY_CODE:\n{chr(10).join(signatures[:self.max_signature_lines])}"
+            )
+
+        if patterns:
+            compressed_parts.append(f"PATTERNS: {patterns}")
+
+        if complexity:
+            compressed_parts.append(f"COMPLEXITY: {complexity}")
+
+        return "\n".join(compressed_parts)
+
+    def _extract_architectural_signatures(self, lines: list[str]) -> list[str]:
+        """Extract the most architecturally significant lines."""
+        signatures = []
+
+        for line in lines[: self.max_file_lines]:
+            stripped = line.strip()
+
+            # High priority: classes, functions, decorators
+            if (
+                stripped.startswith(("class ", "def ", "async def ", "@"))
+                or
+                # Medium priority: control flow and error handling
+                any(keyword in stripped for keyword in ["raise", "except", "finally", "with"])
+                or
+                # Architecture indicators
+                any(pattern in stripped for pattern in ["TODO", "FIXME", "XXX", "HACK", "NOTE"])
+                or
+                # Design patterns
+                any(
+                    pattern in stripped
+                    for pattern in ["factory", "singleton", "observer", "strategy", "adapter"]
+                )
+                or
+                # Type hints and contracts
+                "->" in stripped
+                or ": " in stripped
+                and "=" not in stripped
+            ):
+
+                signatures.append(line)
+
+        return signatures
+
+    def _summarize_imports(self, lines: list[str]) -> str:
+        """Summarize import structure to understand dependencies."""
+        imports = {"stdlib": set(), "third_party": set(), "local": set()}
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith(("import ", "from ")):
+                if stripped.startswith("from .") or stripped.startswith("from .."):
+                    imports["local"].add(stripped)
+                elif any(
+                    stdlib in stripped
+                    for stdlib in ["os", "sys", "json", "logging", "pathlib", "typing"]
+                ):
+                    imports["stdlib"].add(stripped)
+                else:
+                    imports["third_party"].add(stripped)
+
+        summary_parts = []
+        if imports["stdlib"]:
+            summary_parts.append(f"stdlib({len(imports['stdlib'])})")
+        if imports["third_party"]:
+            summary_parts.append(f"3rd_party({len(imports['third_party'])})")
+        if imports["local"]:
+            summary_parts.append(f"local({len(imports['local'])})")
+
+        return ", ".join(summary_parts)
+
+    def _extract_code_hierarchy(self, lines: list[str]) -> str:
+        """Extract class and function hierarchy structure."""
+        hierarchy = []
+        current_class = None
+        indent_level = 0
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            # Calculate indentation
+            leading_spaces = len(line) - len(line.lstrip())
+
+            if stripped.startswith("class "):
+                class_name = stripped.split("(")[0].replace("class ", "").strip(":")
+                current_class = class_name
+                hierarchy.append(f"class {class_name}")
+                indent_level = leading_spaces
+
+            elif stripped.startswith(("def ", "async def ")) and current_class:
+                func_name = stripped.split("(")[0].replace("def ", "").replace("async ", "").strip()
+                if leading_spaces > indent_level:  # Method inside class
+                    hierarchy.append(f"  └─ {func_name}()")
+                else:  # New top-level function
+                    current_class = None
+                    hierarchy.append(f"def {func_name}()")
+
+            elif stripped.startswith(("def ", "async def ")):
+                func_name = stripped.split("(")[0].replace("def ", "").replace("async ", "").strip()
+                hierarchy.append(f"def {func_name}()")
+                current_class = None
+
+        return "\n".join(hierarchy[: self.max_hierarchy_depth])  # Use configured hierarchy depth
+
+    def _identify_patterns(self, lines: list[str]) -> str:
+        """Identify architectural patterns and anti-patterns."""
+        patterns = []
+
+        # Count pattern indicators
+        class_count = sum(1 for line in lines if line.strip().startswith("class "))
+        function_count = sum(1 for line in lines if line.strip().startswith(("def ", "async def ")))
+        import_count = sum(1 for line in lines if line.strip().startswith(("import ", "from ")))
+
+        # Identify specific patterns
+        has_inheritance = any("(" in line and line.strip().startswith("class ") for line in lines)
+        has_decorators = any(line.strip().startswith("@") for line in lines)
+        has_async = any("async " in line for line in lines)
+        has_context_managers = any("with " in line for line in lines)
+        has_exceptions = any(word in line for line in lines for word in ["raise", "except", "try:"])
+
+        # Anti-pattern detection
+        long_functions = []
+        for i, line in enumerate(lines):
+            if line.strip().startswith(("def ", "async def ")):
+                # Count lines until next function/class or end
+                func_lines = 0
+                for j in range(i + 1, min(i + 100, len(lines))):
+                    if lines[j].strip().startswith(("def ", "class ", "async def ")):
+                        break
+                    if lines[j].strip():  # Non-empty line
+                        func_lines += 1
+                if func_lines > 50:  # Arbitrary threshold
+                    func_name = line.split("(")[0].replace("def ", "").replace("async ", "").strip()
+                    long_functions.append(f"{func_name}({func_lines}L)")
+
+        # Build pattern summary
+        if class_count:
+            patterns.append(f"classes({class_count})")
+        if function_count:
+            patterns.append(f"functions({function_count})")
+        if import_count > 10:
+            patterns.append(f"heavy_imports({import_count})")
+        if has_inheritance:
+            patterns.append("inheritance")
+        if has_decorators:
+            patterns.append("decorators")
+        if has_async:
+            patterns.append("async")
+        if has_context_managers:
+            patterns.append("context_mgmt")
+        if has_exceptions:
+            patterns.append("error_handling")
+        if long_functions:
+            patterns.append(f"long_funcs[{','.join(long_functions[:3])}]")
+
+        return ", ".join(patterns)
+
+    def _analyze_complexity_indicators(self, lines: list[str], file_path: Path) -> str:
+        """Analyze complexity and quality indicators."""
+        indicators = []
+
+        # File size indicators
+        total_lines = len(lines)
+        code_lines = len(
+            [line for line in lines if line.strip() and not line.strip().startswith("#")]
+        )
+
+        # Complexity indicators
+        nested_blocks = 0
+        max_nesting = 0
+        current_nesting = 0
+
+        for line in lines:
+            stripped = line.strip()
+            if any(keyword in stripped for keyword in ["if ", "for ", "while ", "with ", "try:"]):
+                current_nesting += 1
+                max_nesting = max(max_nesting, current_nesting)
+                nested_blocks += 1
+            # Simple heuristic for block end (not perfect but gives indication)
+            elif stripped and not line.startswith(" ") and current_nesting > 0:
+                current_nesting = max(0, current_nesting - 1)
+
+        # Quality indicators
+        todo_count = sum(
+            1
+            for line in lines
+            if any(marker in line.upper() for marker in ["TODO", "FIXME", "XXX", "HACK"])
+        )
+        comment_lines = sum(1 for line in lines if line.strip().startswith("#"))
+
+        # Build complexity summary
+        if total_lines > 200:
+            indicators.append(f"large_file({total_lines}L)")
+        if max_nesting > 3:
+            indicators.append(f"deep_nesting({max_nesting})")
+        if todo_count > 0:
+            indicators.append(f"todos({todo_count})")
+        if comment_lines / max(code_lines, 1) < 0.1:
+            indicators.append("low_comments")
+        elif comment_lines / max(code_lines, 1) > 0.3:
+            indicators.append("well_documented")
+
+        return ", ".join(indicators) if indicators else "moderate_complexity"

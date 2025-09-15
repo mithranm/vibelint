@@ -22,7 +22,7 @@ if TYPE_CHECKING or SENTENCE_TRANSFORMERS_AVAILABLE:
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError:
-        SentenceTransformer = None  # type: ignore
+        SentenceTransformer = None
 
 from ...plugin_system import BaseValidator, Finding, Severity
 

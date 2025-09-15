@@ -36,7 +36,7 @@ from .namespace import (
     detect_hard_collisions,
     detect_local_export_collisions,
 )
-from .plugin_runner import run_plugin_validation
+from .validation_engine import run_plugin_validation
 from .report import write_report_content
 from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .snapshot import create_snapshot
@@ -386,6 +386,12 @@ def cli(ctx: click.Context, debug: bool) -> None:
     vibelint - Check the vibe, visualize namespaces, and snapshot Python codebases.
 
     Run commands from the root of your project (where pyproject.toml or .git is located).
+    
+    Examples:
+        vibelint check src/ --rule ARCHITECTURE-LLM  # Check src with LLM analysis
+        vibelint check file.py                       # Check specific file
+        vibelint namespace                           # Show namespace visualization
+        vibelint snapshot                            # Create project snapshot
 
     vibelint/src/vibelint/cli.py
     """
@@ -454,6 +460,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
             )
 
         console.print("\nRun [bold cyan]vibelint --help[/bold cyan] for available commands.")
+        console.print("Common usage: [bold]vibelint check src/[/bold] or [bold]vibelint check file.py --rule ARCHITECTURE-LLM[/bold]")
         ctx.exit(0)
 
     # --- Subcommand Execution Check ---
@@ -465,6 +472,12 @@ def cli(ctx: click.Context, debug: bool) -> None:
 
 
 @cli.command("check")
+@click.argument(
+    "paths",
+    nargs=-1,
+    type=click.Path(exists=True, path_type=Path),
+    required=False,
+)
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt for large directories.")
 @click.option(
     "-o",
@@ -482,28 +495,58 @@ def cli(ctx: click.Context, debug: bool) -> None:
 )
 @click.option(
     "--categories",
-    default="core,static",
-    help="Comma-separated list of rule categories to run: core, static, ai, or 'all' for everything. Default: 'core,static' (excludes AI validators).",
+    default="all",
+    help="Comma-separated list of rule categories to run: core, static, ai, or 'all' for everything. Default: 'all' (respects pyproject.toml configuration).",
 )
 @click.option(
     "--exclude-ai",
     is_flag=True,
-    help="Exclude AI-powered validators (equivalent to --categories=core,static).",
+    help="Exclude AI-powered validators (equivalent to --categories=core,static). Use this if AI validators are too slow or unreliable.",
+)
+@click.option(
+    "--include-ai",
+    is_flag=True,
+    help="Explicitly include AI-powered validators (redundant since they're included by default now).",
+)
+@click.option(
+    "--rule",
+    "specific_rules",
+    multiple=True,
+    help="Run only specific rule(s). Can be used multiple times. Example: --rule=ARCHITECTURE-LLM --rule=SEMANTIC-SIMILARITY",
 )
 @click.pass_context
 def check(
     ctx: click.Context,
+    paths: tuple[Path, ...],
     yes: bool,
     output_report: Path | None,
     output_format: str,
     categories: str,
     exclude_ai: bool,
+    include_ai: bool,
+    specific_rules: tuple[str, ...],
 ) -> None:
     """
     Run a Vibe Check: Lint rules and namespace collision detection.
 
+    PATHS: Optional paths to files or directories to analyze. When provided,
+    these override the include_globs configuration and analyze only the specified paths.
+
     Fails if errors (like missing docstrings/`__all__`) or hard collisions are found.
     Warnings indicate potential vibe issues or areas for improvement.
+
+    By default, runs ALL rules configured in pyproject.toml including AI validators.
+    Use --exclude-ai if AI analysis is too slow for your workflow.
+
+    Examples:
+        vibelint check                               # Analyze entire project with all configured rules
+        vibelint check src/                          # Override: analyze only src directory  
+        vibelint check file.py                       # Override: analyze only single file
+        vibelint check src/ tests/                   # Override: analyze only these paths
+        
+        vibelint check --exclude-ai src/             # Skip AI validators for faster analysis
+        vibelint check --rule=ARCHITECTURE-LLM src/ # Run only specific rule
+        vibelint check --rule=SEMANTIC-SIMILARITY --rule=ARCHITECTURE-LLM src/  # Run multiple specific rules
 
     vibelint/src/vibelint/cli.py
     """
@@ -525,27 +568,47 @@ def check(
     # Use plugin system for validation combined with namespace collision detection
     result_data = CheckResult()
 
-    # Handle category filtering
+    # Handle category and rule filtering
     if exclude_ai:
         categories = "core,static"
-
-    # Parse and validate categories
-    if categories == "all":
-        enabled_categories = ["core", "static", "ai"]
+    elif include_ai:
+        categories = "all"  # Redundant since "all" is now the default
+    
+    # If specific rules are provided, use only those
+    if specific_rules:
+        enabled_categories = ["core", "static", "ai"]  # Allow all categories when filtering by specific rules
+        console.print(f"[bold blue]Running specific rules:[/bold blue] {', '.join(specific_rules)}")
     else:
-        enabled_categories = [cat.strip() for cat in categories.split(",")]
-        valid_categories = {"core", "static", "ai"}
-        invalid_categories = set(enabled_categories) - valid_categories
-        if invalid_categories:
-            console.print(
-                f"[bold red]Error:[/bold red] Invalid categories: {', '.join(invalid_categories)}"
-            )
-            console.print(f"Valid categories: {', '.join(valid_categories)}")
-            ctx.exit(1)
+        # Parse and validate categories
+        if categories == "all":
+            enabled_categories = ["core", "static", "ai"]
+        else:
+            enabled_categories = [cat.strip() for cat in categories.split(",")]
+            valid_categories = {"core", "static", "ai"}
+            invalid_categories = set(enabled_categories) - valid_categories
+            if invalid_categories:
+                console.print(
+                    f"[bold red]Error:[/bold red] Invalid categories: {', '.join(invalid_categories)}"
+                )
+                console.print(f"Valid categories: {', '.join(valid_categories)}")
+                ctx.exit(1)
 
-    # Filter config to only enable rules from selected categories
+    # Filter config to only enable rules from selected categories or specific rules
     config_dict = dict(config.settings)
-    if "rule_categories" in config_dict and enabled_categories != ["core", "static", "ai"]:
+    
+    if specific_rules:
+        # Enable only specific rules and disable all others
+        if "rules" in config_dict and isinstance(config_dict["rules"], dict):
+            for rule_id in list(config_dict["rules"].keys()):
+                if rule_id in specific_rules:
+                    config_dict["rules"][rule_id] = "WARN"  # Enable specified rules
+                else:
+                    config_dict["rules"][rule_id] = "OFF"   # Disable all other rules
+        else:
+            # Create rules dict with only specified rules
+            config_dict["rules"] = {rule_id: "WARN" for rule_id in specific_rules}
+    
+    elif "rule_categories" in config_dict and enabled_categories != ["core", "static", "ai"]:
         rule_categories = config_dict["rule_categories"]
         if isinstance(rule_categories, dict):
             enabled_rules = set()
@@ -562,7 +625,15 @@ def check(
     try:
         # Run plugin-based validation with filtered config
         logger_cli.debug(f"Running plugin-based validation with categories: {enabled_categories}")
-        plugin_runner = run_plugin_validation(config_dict, project_root)
+        
+        # Convert paths tuple to list for plugin runner
+        include_globs_override = list(paths) if paths else None
+        if include_globs_override:
+            logger_cli.info(f"Overriding include_globs: analyzing only specified paths: {[str(p) for p in include_globs_override]}")
+        else:
+            logger_cli.debug("Using configured include_globs for project-wide analysis")
+        
+        plugin_runner = run_plugin_validation(config_dict, project_root, include_globs_override)
 
         # For machine-readable formats, output just the validation results and exit
         if output_format not in ["human", "natural"]:

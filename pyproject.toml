@@ -30,7 +30,10 @@ dependencies = [
     "colorama>=0.4.0",
     "rich>=12.0.0",
     "libcst",
-    "requests>=2.25.0"
+    "requests>=2.25.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-core>=0.3.0"
 ]
 
 [project.optional-dependencies]
@@ -54,7 +57,7 @@ vibelint = "vibelint.cli:main"
 "DEAD-CODE-FOUND" = "vibelint.validators.dead_code:DeadCodeValidator"
 "ARCHITECTURE-INCONSISTENT" = "vibelint.validators.architecture.basic_patterns:ArchitectureValidator"
 "TYPING-POOR-PRACTICE" = "vibelint.validators.typing_quality:TypingQualityValidator"
-"ARCHITECTURE-LLM" = "vibelint.validators.architecture.llm_analysis:ArchitectureLLMValidator"
+"ARCHITECTURE-LLM" = "vibelint.validators.architecture.llm_analysis:LLMAnalysisValidator"
 "SEMANTIC-SIMILARITY" = "vibelint.validators.architecture.semantic_similarity:SemanticSimilarityValidator"
 "FALLBACK-SILENT-FAILURE" = "vibelint.validators.architecture.fallback_patterns:FallbackAnalyzer"
 
@@ -161,13 +164,30 @@ exclude_globs = [
 [tool.vibelint.llm_analysis]
 api_base_url = "http://100.94.250.88:11434"
 model = "/home/mithranmohanraj/models/gpt-oss-20b-mxfp4.gguf"
-max_tokens = 2048
-temperature = 0.3
+max_tokens = 4096
+max_context_tokens = 32768  # Total context window size
+max_prompt_tokens = 28672   # Reserve space for response (32768 - 4096)
+max_file_lines = 100        # Max lines per file to include
+max_files = 10              # Max number of files to analyze at once
+temperature = 0.1
 top_p = 0.9
 top_k = 40
 frequency_penalty = 0.1
 presence_penalty = 0.1
 timeout_seconds = 120
+
+# Compression strategies configuration
+enable_import_summary = true       # Summarize import dependencies
+enable_hierarchy_extraction = true # Extract class/function structure
+enable_pattern_detection = true    # Identify architectural patterns
+enable_complexity_analysis = true  # Analyze complexity indicators
+max_signature_lines = 20           # Max architectural signature lines per file
+max_hierarchy_depth = 15           # Max hierarchy levels to show
+
+# LLM response processing configuration
+remove_thinking_tokens = true      # Strip out thinking/reasoning tokens
+thinking_format = "harmony"        # Format: "harmony", "qwen", "openai", "custom"
+custom_thinking_patterns = []      # Only used if thinking_format = "custom"
 
 # Embedding-based semantic similarity analysis configuration
 [tool.vibelint.embedding_analysis]

@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
-from .discovery import discover_files
+from .discovery import discover_files, discover_files_from_paths
 from .formatters import BUILTIN_FORMATTERS
 from .plugin_system import Finding, Severity, plugin_manager
 from .rules import RuleEngine
@@ -47,6 +47,10 @@ class PluginValidationRunner:
 
         # Get enabled validators
         validators = self.rule_engine.get_enabled_validators()
+        
+        # Create extended config with analysis context
+        analysis_config = dict(self.config)
+        analysis_config["_analysis_files"] = file_paths  # Pass the actual files being analyzed
 
         for file_path in file_paths:
             if not file_path.exists() or not file_path.is_file():
@@ -64,7 +68,7 @@ class PluginValidationRunner:
             # Run all validators on this file
             for validator in validators:
                 try:
-                    for finding in validator.validate(file_path, content, self.config):
+                    for finding in validator.validate(file_path, content, analysis_config):
                         # Make path relative to project root
                         relative_path = file_path.relative_to(self.project_root)
                         finding.file_path = relative_path
@@ -114,7 +118,7 @@ class PluginValidationRunner:
 
 
 def run_plugin_validation(
-    config_dict: Dict[str, Any], project_root: Path
+    config_dict: Dict[str, Any], project_root: Path, include_globs_override: List[Path] | None = None
 ) -> PluginValidationRunner:
     """
     Run validation using the plugin system.
@@ -122,6 +126,9 @@ def run_plugin_validation(
     Args:
         config_dict: Configuration dictionary from pyproject.toml
         project_root: Project root path
+        include_globs_override: Optional list of paths to override include_globs.
+                               If provided, only these paths are analyzed instead of
+                               using the configured include_globs patterns.
 
     Returns:
         PluginValidationRunner with results
@@ -133,8 +140,21 @@ def run_plugin_validation(
     # Create a fake config object for discovery
     fake_config = Config(project_root, config_dict)
 
-    # Use discovery API properly
-    files = discover_files(paths=[project_root], config=fake_config, explicit_exclude_paths=set())
+    # Choose discovery method based on whether include_globs are overridden
+    if include_globs_override:
+        # Use custom path discovery (include_globs override)
+        files = discover_files_from_paths(
+            custom_paths=include_globs_override,
+            config=fake_config,
+            explicit_exclude_paths=set()
+        )
+    else:
+        # Use original discovery method with configured include_globs
+        files = discover_files(
+            paths=[project_root],
+            config=fake_config,
+            explicit_exclude_paths=set()
+        )
 
     # Run validation
     runner.run_validation(files)
