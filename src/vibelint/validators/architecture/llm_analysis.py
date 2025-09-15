@@ -61,38 +61,35 @@ class LLMAnalysisValidator(BaseValidator):
         self._analysis_completed = False
         self._analyzed_files: set[Path] = set()  # Track which files we've seen
 
-        # API configuration from environment or config
+        # API configuration from config with environment variable fallbacks
         llm_config = self.config.get("llm_analysis", {})
 
         self.api_url = os.getenv(
-            "OPENAI_BASE_URL", llm_config.get("api_base_url", "http://100.94.250.88:11434")
+            "OPENAI_BASE_URL", llm_config.get("api_base_url", "http://localhost:11434")
         )
-        self.model = os.getenv(
-            "OPENAI_MODEL",
-            llm_config.get("model", "/home/mithranmohanraj/models/gpt-oss-20b-mxfp4.gguf"),
-        )
+        self.model = os.getenv("OPENAI_MODEL", llm_config.get("model", "llama2"))
         self.api_key = os.getenv("OPENAI_API_KEY", "not-needed")
 
-        # Context window management
+        # Generation settings from config with sensible defaults
         self.max_tokens = llm_config.get("max_tokens", 4096)
+        self.temperature = llm_config.get("temperature", 0.1)
+
+        # Advanced settings with defaults (most users won't need to change these)
         self.max_context_tokens = llm_config.get("max_context_tokens", 32768)
         self.max_prompt_tokens = llm_config.get("max_prompt_tokens", 28672)
         self.max_file_lines = llm_config.get("max_file_lines", 100)
         self.max_files = llm_config.get("max_files", 10)
-        self.temperature = llm_config.get("temperature", 0.1)
-
-        # Compression strategies
-        self.enable_import_summary = llm_config.get("enable_import_summary", True)
-        self.enable_hierarchy_extraction = llm_config.get("enable_hierarchy_extraction", True)
-        self.enable_pattern_detection = llm_config.get("enable_pattern_detection", True)
-        self.enable_complexity_analysis = llm_config.get("enable_complexity_analysis", True)
-        self.max_signature_lines = llm_config.get("max_signature_lines", 20)
-        self.max_hierarchy_depth = llm_config.get("max_hierarchy_depth", 15)
-
-        # Response processing
         self.remove_thinking_tokens = llm_config.get("remove_thinking_tokens", True)
         self.thinking_format = llm_config.get("thinking_format", "harmony")
         self.custom_thinking_patterns = llm_config.get("custom_thinking_patterns", [])
+
+        # Enable all compression strategies by default
+        self.enable_import_summary = True
+        self.enable_hierarchy_extraction = True
+        self.enable_pattern_detection = True
+        self.enable_complexity_analysis = True
+        self.max_signature_lines = 20
+        self.max_hierarchy_depth = 15
 
         # Initialize langchain components for OpenAI-compatible API
         self.llm = ChatOpenAI(

@@ -78,127 +78,23 @@ where = ["src"]
 include = ["vibelint*"]
 
 [tool.vibelint]
-include_globs = [
-    "src/**/*.py",
-    "tests/**/*.py",
-    "pyproject.toml",
-    "VIBECHECKER.txt"
-]
-exclude_globs = [
-    "tests/fixtures/*"
-]
-peek_globs = ["coverage.xml"]
-allowed_shebangs = ["#!/usr/bin/env python3"]
-large_dir_threshold = 500
-error_on_missing_all_in_init = false
+# Simple configuration - most users just need this
+include_globs = ["src/**/*.py", "tests/**/*.py"]
+exclude_globs = ["tests/fixtures/*"]
 
-# Output configuration
-max_displayed_issues = 20  # Limit displayed issues to avoid stdout flooding (0 = no limit)
-
-# Rule configuration - can disable or change severity
-# Values: "OFF" (disabled), "INFO", "WARN", "BLOCK"
+# Rule severity levels: "OFF", "INFO", "WARN", "BLOCK"
 [tool.vibelint.rules]
-# Core validators (deterministic, high confidence)
-"DOCSTRING-MISSING" = "INFO"           # Missing docstrings
-"DOCSTRING-PATH-REFERENCE" = "INFO"    # Missing path reference in docstrings
-"EXPORTS-MISSING-ALL" = "INFO"         # Missing __all__
-"EXPORTS-MISSING-ALL-INIT" = "INFO"    # Missing __all__ in __init__.py
-"PRINT-STATEMENT" = "WARN"             # Print statements
-"EMOJI-IN-STRING" = "WARN"             # Emoji usage - important for MCP compatibility
+"PRINT-STATEMENT" = "WARN"
+"EMOJI-IN-STRING" = "WARN" 
+"DEAD-CODE-FOUND" = "INFO"
+"ARCHITECTURE-LLM" = "WARN"
 
-# Static analysis validators (deterministic)
-"DEAD-CODE-FOUND" = "INFO"             # Dead code detection - unused imports, unreferenced functions
-"ARCHITECTURE-INCONSISTENT" = "WARN"   # Architectural inconsistency detection
-"TYPING-POOR-PRACTICE" = "WARN"        # Poor typing practices - tuples instead of dataclasses, etc.
-"FALLBACK-SILENT-FAILURE" = "WARN"     # Detect problematic fallback patterns that mask errors
-
-# AI-powered validators (probabilistic, may need review)
-"ARCHITECTURE-LLM" = "WARN"            # LLM-powered architectural analysis (requires manual review)
-"SEMANTIC-SIMILARITY" = "WARN"         # Embedding-based semantic similarity analysis (requires manual review)
-
-# Rule categories for filtering
-[tool.vibelint.rule_categories]
-core = [
-    "DOCSTRING-MISSING",
-    "DOCSTRING-PATH-REFERENCE", 
-    "EXPORTS-MISSING-ALL",
-    "EXPORTS-MISSING-ALL-INIT",
-    "PRINT-STATEMENT",
-    "EMOJI-IN-STRING"
-]
-static = [
-    "DEAD-CODE-FOUND",
-    "ARCHITECTURE-INCONSISTENT", 
-    "TYPING-POOR-PRACTICE",
-    "FALLBACK-SILENT-FAILURE"
-]
-ai = [
-    "ARCHITECTURE-LLM",
-    "SEMANTIC-SIMILARITY"
-]
-
-
-# Configurable thresholds for rules
-[tool.vibelint.thresholds]
-max_function_parameters = 7        # Functions with more parameters get warnings
-keyword_only_parameter_count = 4   # Functions with this many params should use keyword-only
-positional_call_argument_limit = 3 # Function calls with more positional args get suggestions
-large_dir_file_count = 500         # General: Directory size threshold
-
-# Print statement validation configuration
-[tool.vibelint.print_validation]
-# Files matching these patterns are exempt from print statement validation
-exclude_globs = [
-    "test_*.py",
-    "*_test.py",
-    "conftest.py",
-    "tests/**/*.py",
-    "cli.py",
-    "main.py",
-    "__main__.py",
-    "*_cli.py",
-    "*_cmd.py"
-]
-
-# LLM-powered architectural analysis configuration
+# LLM configuration (required for AI analysis)
 [tool.vibelint.llm_analysis]
 api_base_url = "http://100.94.250.88:11434"
 model = "/home/mithranmohanraj/models/gpt-oss-20b-mxfp4.gguf"
-max_tokens = 4096
-max_context_tokens = 32768  # Total context window size
-max_prompt_tokens = 28672   # Reserve space for response (32768 - 4096)
-max_file_lines = 100        # Max lines per file to include
-max_files = 10              # Max number of files to analyze at once
 temperature = 0.1
-top_p = 0.9
-top_k = 40
-frequency_penalty = 0.1
-presence_penalty = 0.1
-timeout_seconds = 120
-
-# Compression strategies configuration
-enable_import_summary = true       # Summarize import dependencies
-enable_hierarchy_extraction = true # Extract class/function structure
-enable_pattern_detection = true    # Identify architectural patterns
-enable_complexity_analysis = true  # Analyze complexity indicators
-max_signature_lines = 20           # Max architectural signature lines per file
-max_hierarchy_depth = 15           # Max hierarchy levels to show
-
-# LLM response processing configuration
-remove_thinking_tokens = true      # Strip out thinking/reasoning tokens
-thinking_format = "harmony"        # Format: "harmony", "qwen", "openai", "custom"
-custom_thinking_patterns = []      # Only used if thinking_format = "custom"
-
-# Embedding-based semantic similarity analysis configuration
-[tool.vibelint.embedding_analysis]
-# Enable embedding analysis
-enabled = true
-# Model to use for embeddings (EmbeddingGemma recommended for code)
-model = "google/embeddinggemma-300m"
-# Similarity threshold (0.0-1.0, higher = more strict)
-similarity_threshold = 0.85
-# Hugging Face token (will be read from environment variable HF_TOKEN if not set)
-# hf_token = "your-hf-token-here"
+max_tokens = 4096
 
 [tool.black]
 target-version = ["py310", "py311", "py312"]
