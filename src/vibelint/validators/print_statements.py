@@ -9,6 +9,7 @@ vibelint/src/vibelint/validators/print_statements.py
 
 import ast
 import fnmatch
+import re
 from pathlib import Path
 from typing import Iterator
 
@@ -42,7 +43,11 @@ class PrintStatementValidator(BaseValidator):
         visitor = _PrintVisitor()
         visitor.visit(tree)
 
-        for line_num, context in visitor.print_calls:
+        for line_num, context, print_content in visitor.print_calls:
+            # Check if this looks like legitimate CLI output
+            if self._is_legitimate_cli_print(print_content, context, content, line_num):
+                continue
+
             message = (
                 f"Print statement found{context}. Replace with logging for better maintainability."
             )
@@ -91,6 +96,78 @@ class PrintStatementValidator(BaseValidator):
 
         return False
 
+    def _is_legitimate_cli_print(self, print_content: str, context: str, file_content: str, line_num: int) -> bool:
+        """Check if a print statement appears to be legitimate CLI output."""
+        # Patterns that suggest legitimate CLI usage
+        cli_indicators = [
+            # UI symbols and formatting
+            r'[📱🎵💡🌐🚨⭐🎉🚀]',  # Emoji indicators for user interface
+            r'^[-=]{3,}',  # Headers/separators (----, ====)
+            r'^\s*\*{2,}',  # Emphasis markers (***, etc.)
+            r'^\s*#{2,}',  # Section headers (##, ###)
+
+            # CLI instruction patterns
+            r'(run|execute|visit|go to|open)',
+            r'(http://|https://)',  # URLs
+            r'(localhost|127\.0\.0\.1)',  # Local server addresses
+            r'port\s+\d+',  # Port numbers
+
+            # Status/progress indicators
+            r'(starting|completed|finished|ready)',
+            r'(success|error|warning|info).*:',
+            r'^\s*\[.*\]',  # [INFO], [ERROR], etc.
+
+            # Calibration/setup specific
+            r'(calibration|configuration|setup)',
+            r'(device|microphone|audio)',
+            r'(instruction|step \d+)',
+        ]
+
+        # Function names that suggest CLI interface
+        cli_function_names = [
+            'show_', 'display_', 'print_', 'output_',
+            'start_', 'run_', 'main', 'cli',
+            'calibrat', 'setup', 'config',
+            'instruction', 'help', 'usage'
+        ]
+
+        # Check print content against CLI patterns
+        if print_content:
+            for pattern in cli_indicators:
+                if re.search(pattern, print_content, re.IGNORECASE | re.MULTILINE):
+                    return True
+
+        # Check if function name suggests CLI usage
+        if context:
+            func_name = context.replace(' in function ', '').lower()
+            for cli_pattern in cli_function_names:
+                if cli_pattern in func_name:
+                    return True
+
+        # Check file context - look for CLI-related imports or patterns
+        file_lines = file_content.split('\n')
+
+        # Look around the print statement for context clues
+        start_line = max(0, line_num - 5)
+        end_line = min(len(file_lines), line_num + 3)
+        surrounding_context = '\n'.join(file_lines[start_line:end_line])
+
+        # Check for CLI-related context around the print
+        context_patterns = [
+            r'def\s+(show|display|print|output|start|run|main|cli)',
+            r'(server|port|url|http)',
+            r'(calibration|setup|config)',
+            r'(instruction|help|usage)',
+            r'input\s*\(',  # User input nearby
+            r'argparse',    # Command line arguments
+        ]
+
+        for pattern in context_patterns:
+            if re.search(pattern, surrounding_context, re.IGNORECASE):
+                return True
+
+        return False
+
 
 class _PrintVisitor(ast.NodeVisitor):
     """AST visitor to detect print statements."""
@@ -103,7 +180,24 @@ class _PrintVisitor(ast.NodeVisitor):
         """Visit Call nodes to detect print() function calls."""
         if isinstance(node.func, ast.Name) and node.func.id == "print":
             context = f" in function {self.current_function}" if self.current_function else ""
-            self.print_calls.append((node.lineno, context))
+
+            # Extract print content for analysis
+            print_content = ""
+            if node.args:
+                try:
+                    # Try to extract string literals from print arguments
+                    for arg in node.args:
+                        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                            print_content += arg.value + " "
+                        elif isinstance(arg, ast.JoinedStr):  # f-strings
+                            for value in arg.values:
+                                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                                    print_content += value.value
+                except:
+                    # If we can't parse the content, just use empty string
+                    pass
+
+            self.print_calls.append((node.lineno, context, print_content.strip()))
         self.generic_visit(node)
 
     def visit_FunctionDef(self, node):
