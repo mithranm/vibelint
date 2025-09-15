@@ -96,39 +96,48 @@ class PrintStatementValidator(BaseValidator):
 
         return False
 
-    def _is_legitimate_cli_print(self, print_content: str, context: str, file_content: str, line_num: int) -> bool:
+    def _is_legitimate_cli_print(
+        self, print_content: str, context: str, file_content: str, line_num: int
+    ) -> bool:
         """Check if a print statement appears to be legitimate CLI output."""
         # Patterns that suggest legitimate CLI usage
         cli_indicators = [
             # UI symbols and formatting
-            r'[📱🎵💡🌐🚨⭐🎉🚀]',  # Emoji indicators for user interface
-            r'^[-=]{3,}',  # Headers/separators (----, ====)
-            r'^\s*\*{2,}',  # Emphasis markers (***, etc.)
-            r'^\s*#{2,}',  # Section headers (##, ###)
-
+            r"[📱🎵💡🌐🚨⭐🎉🚀]",  # Emoji indicators for user interface
+            r"^[-=]{3,}",  # Headers/separators (----, ====)
+            r"^\s*\*{2,}",  # Emphasis markers (***, etc.)
+            r"^\s*#{2,}",  # Section headers (##, ###)
             # CLI instruction patterns
-            r'(run|execute|visit|go to|open)',
-            r'(http://|https://)',  # URLs
-            r'(localhost|127\.0\.0\.1)',  # Local server addresses
-            r'port\s+\d+',  # Port numbers
-
+            r"(run|execute|visit|go to|open)",
+            r"(http://|https://)",  # URLs
+            r"(localhost|127\.0\.0\.1)",  # Local server addresses
+            r"port\s+\d+",  # Port numbers
             # Status/progress indicators
-            r'(starting|completed|finished|ready)',
-            r'(success|error|warning|info).*:',
-            r'^\s*\[.*\]',  # [INFO], [ERROR], etc.
-
+            r"(starting|completed|finished|ready)",
+            r"(success|error|warning|info).*:",
+            r"^\s*\[.*\]",  # [INFO], [ERROR], etc.
             # Calibration/setup specific
-            r'(calibration|configuration|setup)',
-            r'(device|microphone|audio)',
-            r'(instruction|step \d+)',
+            r"(calibration|configuration|setup)",
+            r"(device|microphone|audio)",
+            r"(instruction|step \d+)",
         ]
 
         # Function names that suggest CLI interface
         cli_function_names = [
-            'show_', 'display_', 'print_', 'output_',
-            'start_', 'run_', 'main', 'cli',
-            'calibrat', 'setup', 'config',
-            'instruction', 'help', 'usage'
+            "show_",
+            "display_",
+            "print_",
+            "output_",
+            "start_",
+            "run_",
+            "main",
+            "cli",
+            "calibrat",
+            "setup",
+            "config",
+            "instruction",
+            "help",
+            "usage",
         ]
 
         # Check print content against CLI patterns
@@ -139,27 +148,27 @@ class PrintStatementValidator(BaseValidator):
 
         # Check if function name suggests CLI usage
         if context:
-            func_name = context.replace(' in function ', '').lower()
+            func_name = context.replace(" in function ", "").lower()
             for cli_pattern in cli_function_names:
                 if cli_pattern in func_name:
                     return True
 
         # Check file context - look for CLI-related imports or patterns
-        file_lines = file_content.split('\n')
+        file_lines = file_content.split("\n")
 
         # Look around the print statement for context clues
         start_line = max(0, line_num - 5)
         end_line = min(len(file_lines), line_num + 3)
-        surrounding_context = '\n'.join(file_lines[start_line:end_line])
+        surrounding_context = "\n".join(file_lines[start_line:end_line])
 
         # Check for CLI-related context around the print
         context_patterns = [
-            r'def\s+(show|display|print|output|start|run|main|cli)',
-            r'(server|port|url|http)',
-            r'(calibration|setup|config)',
-            r'(instruction|help|usage)',
-            r'input\s*\(',  # User input nearby
-            r'argparse',    # Command line arguments
+            r"def\s+(show|display|print|output|start|run|main|cli)",
+            r"(server|port|url|http)",
+            r"(calibration|setup|config)",
+            r"(instruction|help|usage)",
+            r"input\s*\(",  # User input nearby
+            r"argparse",  # Command line arguments
         ]
 
         for pattern in context_patterns:
@@ -193,7 +202,7 @@ class _PrintVisitor(ast.NodeVisitor):
                             for value in arg.values:
                                 if isinstance(value, ast.Constant) and isinstance(value.value, str):
                                     print_content += value.value
-                except:
+                except (AttributeError, TypeError):
                     # If we can't parse the content, just use empty string
                     pass
 
