@@ -7,10 +7,9 @@ vibelint/src/vibelint/fix.py
 import logging
 import re
 from pathlib import Path
-from typing import Any
 
 from .config import Config
-from .plugin_system import Finding, Severity
+from .plugin_system import Finding
 
 __all__ = ["FixEngine", "can_fix_finding", "apply_fixes"]
 
@@ -26,7 +25,7 @@ class FixEngine:
         vibelint/src/vibelint/fix.py
         """
         self.config = config
-        self.llm_config = getattr(config, 'llm_analysis', {})
+        self.llm_config = getattr(config, "llm_analysis", {})
 
     def can_fix_finding(self, finding: Finding) -> bool:
         """Check if a finding can be automatically fixed.
@@ -55,18 +54,20 @@ class FixEngine:
 
         # Read current file content
         try:
-            original_content = file_path.read_text(encoding='utf-8')
+            original_content = file_path.read_text(encoding="utf-8")
         except Exception as e:
             logger.error(f"Could not read {file_path}: {e}")
             return False
 
         # Generate fixes using LLM
-        fixed_content = await self._generate_fixes_llm(file_path, original_content, fixable_findings)
+        fixed_content = await self._generate_fixes_llm(
+            file_path, original_content, fixable_findings
+        )
 
         if fixed_content and fixed_content != original_content:
             try:
                 # Write fixed content back to file
-                file_path.write_text(fixed_content, encoding='utf-8')
+                file_path.write_text(fixed_content, encoding="utf-8")
                 logger.info(f"Applied fixes to {file_path}")
                 return True
             except Exception as e:
@@ -75,12 +76,14 @@ class FixEngine:
 
         return False
 
-    async def _generate_fixes_llm(self, file_path: Path, content: str, findings: list[Finding]) -> str | None:
+    async def _generate_fixes_llm(
+        self, file_path: Path, content: str, findings: list[Finding]
+    ) -> str | None:
         """Generate fixes using the configured LLM.
 
         vibelint/src/vibelint/fix.py
         """
-        if not self.llm_config.get('api_base_url'):
+        if not self.llm_config.get("api_base_url"):
             logger.warning("LLM not configured, cannot generate fixes")
             return None
 
@@ -89,15 +92,15 @@ class FixEngine:
             from langchain_openai import ChatOpenAI
             from pydantic import SecretStr
 
-            api_key = self.llm_config.get('api_key', 'dummy-key')
-            base_url = self.llm_config.get('api_base_url')
-            model = self.llm_config.get('model', 'gpt-3.5-turbo')
+            api_key = self.llm_config.get("api_key", "dummy-key")
+            base_url = self.llm_config.get("api_base_url")
+            model = self.llm_config.get("model", "gpt-3.5-turbo")
 
             llm = ChatOpenAI(
                 base_url=base_url + "/v1" if not base_url.endswith("/v1") else base_url,
                 model=model,
-                temperature=self.llm_config.get('temperature', 0.1),  # Low temperature for fixes
-                max_completion_tokens=self.llm_config.get('max_tokens', 4000),
+                temperature=self.llm_config.get("temperature", 0.1),  # Low temperature for fixes
+                max_completion_tokens=self.llm_config.get("max_tokens", 4000),
                 api_key=SecretStr(api_key),
             )
 
@@ -121,10 +124,9 @@ class FixEngine:
 
         vibelint/src/vibelint/fix.py
         """
-        issues_description = "\n".join([
-            f"- Line {f.line}: {f.rule} - {f.message}"
-            for f in findings
-        ])
+        issues_description = "\n".join(
+            [f"- Line {f.line}: {f.rule} - {f.message}" for f in findings]
+        )
 
         return f"""Fix the following Python code issues automatically:
 
@@ -155,7 +157,7 @@ Please provide ONLY the fixed Python code without any explanation or markdown fo
         response = llm_response.strip()
 
         # Check for code blocks and extract
-        code_block_pattern = r'```(?:python)?\n?(.*?)\n?```'
+        code_block_pattern = r"```(?:python)?\n?(.*?)\n?```"
         match = re.search(code_block_pattern, response, re.DOTALL)
 
         if match:

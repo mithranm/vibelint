@@ -659,9 +659,11 @@ def check(
 
             # Collect fixable findings by file
             from collections import defaultdict
+
             file_findings = defaultdict(list)
 
             from .fix import can_fix_finding
+
             for finding in plugin_runner.findings:
                 if can_fix_finding(finding):
                     # Convert relative path back to absolute path
@@ -678,11 +680,17 @@ def check(
                     total_files = len(fix_results)
 
                     if fixed_count > 0:
-                        console.print(f"[green]Applied fixes to {fixed_count}/{total_files} files[/green]")
+                        console.print(
+                            f"[green]Applied fixes to {fixed_count}/{total_files} files[/green]"
+                        )
 
                         # Re-run validation to show updated results
-                        console.print("\n[bold blue]Re-running validation after fixes...[/bold blue]")
-                        plugin_runner = run_plugin_validation(config_dict, project_root, include_globs_override)
+                        console.print(
+                            "\n[bold blue]Re-running validation after fixes...[/bold blue]"
+                        )
+                        plugin_runner = run_plugin_validation(
+                            config_dict, project_root, include_globs_override
+                        )
                     else:
                         console.print("[yellow]No fixes could be applied automatically[/yellow]")
 
