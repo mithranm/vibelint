@@ -212,7 +212,9 @@ Please provide ONLY the fixed Python code without any explanation or markdown fo
                 raw_content = analysis_match.group(1).strip()
                 # Remove any remaining harmony tokens from the extracted content
                 cleaned_content = re.sub(r"<\|[^|]*\|>[^<]*", "", raw_content).strip()
-                logger.info(f"Extracted content after analysis channel ({len(cleaned_content)} chars)")
+                logger.info(
+                    f"Extracted content after analysis channel ({len(cleaned_content)} chars)"
+                )
                 return cleaned_content
 
         # Get patterns for the configured format

@@ -44,7 +44,7 @@ class PrintStatementValidator(BaseValidator):
         visitor.visit(tree)
 
         # Split content into lines for suppression comment checking
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         for line_num, context, print_content in visitor.print_calls:
             # Check for suppression comments on the same line
@@ -120,12 +120,12 @@ class PrintStatementValidator(BaseValidator):
 
         # Check for suppression patterns in comments
         suppression_patterns = [
-            r'#\s*vibelint:\s*stdout',     # Explicit stdout marker
-            r'#\s*vibelint:\s*ignore',     # General vibelint ignore
-            r'#\s*noqa:\s*print',           # Specific print suppression
-            r'#\s*noqa(?:\s|$)',            # General noqa
-            r'#\s*type:\s*ignore',          # Type ignore (sometimes used for prints)
-            r'#\s*pragma:\s*no\s*cover',   # Coverage pragma
+            r"#\s*vibelint:\s*stdout",  # Explicit stdout marker
+            r"#\s*vibelint:\s*ignore",  # General vibelint ignore
+            r"#\s*noqa:\s*print",  # Specific print suppression
+            r"#\s*noqa(?:\s|$)",  # General noqa
+            r"#\s*type:\s*ignore",  # Type ignore (sometimes used for prints)
+            r"#\s*pragma:\s*no\s*cover",  # Coverage pragma
         ]
 
         for pattern in suppression_patterns:
