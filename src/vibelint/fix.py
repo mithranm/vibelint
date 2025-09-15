@@ -37,7 +37,7 @@ class FixEngine:
             "DOCSTRING-PATH-REFERENCE",
             "EXPORTS-MISSING-ALL",
         }
-        return finding.rule in fixable_rules
+        return finding.rule_id in fixable_rules
 
     async def fix_file(self, file_path: Path, findings: list[Finding]) -> bool:
         """Fix all fixable issues in a file.
@@ -125,7 +125,7 @@ class FixEngine:
         vibelint/src/vibelint/fix.py
         """
         issues_description = "\n".join(
-            [f"- Line {f.line}: {f.rule} - {f.message}" for f in findings]
+            [f"- Line {f.line}: {f.rule_id} - {f.message}" for f in findings]
         )
 
         return f"""Fix the following Python code issues automatically:
@@ -172,8 +172,12 @@ def can_fix_finding(finding: Finding) -> bool:
 
     vibelint/src/vibelint/fix.py
     """
-    engine = FixEngine(Config())  # Basic config for rule check
-    return engine.can_fix_finding(finding)
+    fixable_rules = {
+        "DOCSTRING-MISSING",
+        "DOCSTRING-PATH-REFERENCE",
+        "EXPORTS-MISSING-ALL",
+    }
+    return finding.rule_id in fixable_rules
 
 
 async def apply_fixes(config: Config, file_findings: dict[Path, list[Finding]]) -> dict[Path, bool]:
