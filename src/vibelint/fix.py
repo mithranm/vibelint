@@ -205,13 +205,15 @@ Please provide ONLY the fixed Python code without any explanation or markdown fo
                 return result
 
             # If no final channel, try to extract content after analysis channel
-            analysis_end_pattern = r"<\|channel\|>analysis<\|message\|>.*?<\|end\|>(.+)$"
+            analysis_end_pattern = r"<\|channel\|>analysis<\|message\|>.*?<\|end\|>(.*?)$"
             analysis_match = re.search(analysis_end_pattern, text, re.DOTALL)
 
             if analysis_match:
-                result = analysis_match.group(1).strip()
-                logger.info(f"Extracted content after analysis channel ({len(result)} chars)")
-                return result
+                raw_content = analysis_match.group(1).strip()
+                # Remove any remaining harmony tokens from the extracted content
+                cleaned_content = re.sub(r"<\|[^|]*\|>[^<]*", "", raw_content).strip()
+                logger.info(f"Extracted content after analysis channel ({len(cleaned_content)} chars)")
+                return cleaned_content
 
         # Get patterns for the configured format
         if thinking_format in format_patterns:
