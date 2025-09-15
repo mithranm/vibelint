@@ -40,7 +40,7 @@ Modern Python development involves both human developers and AI assistants. Code
 
 ### 🤖 **AI Integration**
 - **Emoji Usage**: Characters that break text encoding in AI tools
-- **Print Statements**: Debug code left in production
+- **Print Statements**: Debug code left in production (with suppression support)
 - **Semantic Similarity**: Duplicate functionality across modules
 
 ## Key Features

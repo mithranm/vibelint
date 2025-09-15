@@ -43,7 +43,14 @@ class PrintStatementValidator(BaseValidator):
         visitor = _PrintVisitor()
         visitor.visit(tree)
 
+        # Split content into lines for suppression comment checking
+        lines = content.split('\n')
+
         for line_num, context, print_content in visitor.print_calls:
+            # Check for suppression comments on the same line
+            if self._has_suppression_comment(lines, line_num):
+                continue
+
             # Check if this looks like legitimate CLI output
             if self._is_legitimate_cli_print(print_content, context, content, line_num):
                 continue
@@ -93,6 +100,37 @@ class PrintStatementValidator(BaseValidator):
                 parent_relative = str(file_path.relative_to(parent)).replace("\\", "/")
                 if fnmatch.fnmatch(parent_relative, pattern):
                     return True
+
+        return False
+
+    def _has_suppression_comment(self, lines: list[str], line_num: int) -> bool:
+        """Check if the line has a suppression comment for print statements.
+
+        Supports:
+        - # vibelint: stdout  - Explicit stdout communication marker
+        - # vibelint: ignore  - General vibelint suppression
+        - # noqa: print       - Specific print suppression
+        - # noqa              - General linting suppression
+        """
+        # Line numbers in AST are 1-indexed
+        if line_num <= 0 or line_num > len(lines):
+            return False
+
+        line = lines[line_num - 1]
+
+        # Check for suppression patterns in comments
+        suppression_patterns = [
+            r'#\s*vibelint:\s*stdout',     # Explicit stdout marker
+            r'#\s*vibelint:\s*ignore',     # General vibelint ignore
+            r'#\s*noqa:\s*print',           # Specific print suppression
+            r'#\s*noqa(?:\s|$)',            # General noqa
+            r'#\s*type:\s*ignore',          # Type ignore (sometimes used for prints)
+            r'#\s*pragma:\s*no\s*cover',   # Coverage pragma
+        ]
+
+        for pattern in suppression_patterns:
+            if re.search(pattern, line, re.IGNORECASE):
+                return True
 
         return False
 
