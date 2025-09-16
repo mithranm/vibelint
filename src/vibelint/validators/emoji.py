@@ -29,9 +29,25 @@ class EmojiUsageValidator(BaseValidator):
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Check for emoji usage in code."""
-        # Emoji regex pattern - matches most common emojis
+        # Comprehensive emoji regex pattern - matches ALL possible emojis
         emoji_pattern = re.compile(
-            r"[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\U00002600-\U000026FF\U00002700-\U000027BF]"
+            r"[\U0001F600-\U0001F64F"  # Emoticons
+            r"\U0001F300-\U0001F5FF"  # Misc Symbols and Pictographs
+            r"\U0001F680-\U0001F6FF"  # Transport and Map Symbols
+            r"\U0001F1E0-\U0001F1FF"  # Regional Indicator Symbols
+            r"\U0001F700-\U0001F77F"  # Alchemical Symbols
+            r"\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+            r"\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+            r"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+            r"\U0001FA00-\U0001FA6F"  # Chess Symbols
+            r"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+            r"\U00002600-\U000026FF"  # Miscellaneous Symbols
+            r"\U00002700-\U000027BF"  # Dingbats
+            r"\U0000FE00-\U0000FE0F"  # Variation Selectors
+            r"\U0001F018-\U0001F270"  # Various Asian characters
+            r"\U0000238C-\U00002454"  # Misc technical (fixed)
+            r"\U000020D0-\U000020FF"  # Combining Diacritical Marks for Symbols (fixed)
+            r"]+"
         )
 
         lines = content.splitlines()
@@ -57,6 +73,47 @@ class EmojiUsageValidator(BaseValidator):
                         line=line_num,
                         suggestion="Replace emojis with text descriptions to avoid encoding issues in MCP and Windows shells",
                     )
+
+    def can_fix(self, finding: "Finding") -> bool:
+        """Check if this finding can be automatically fixed."""
+        return finding.rule_id == self.rule_id
+
+    def apply_fix(self, content: str, finding: "Finding") -> str:
+        """Automatically remove emojis from content."""
+        lines = content.splitlines(True)  # Keep line endings
+        if finding.line <= len(lines):
+            line = lines[finding.line - 1]
+
+            # Comprehensive emoji pattern for removal
+            emoji_pattern = re.compile(
+                r"[\U0001F600-\U0001F64F"  # Emoticons
+                r"\U0001F300-\U0001F5FF"  # Misc Symbols and Pictographs
+                r"\U0001F680-\U0001F6FF"  # Transport and Map Symbols
+                r"\U0001F1E0-\U0001F1FF"  # Regional Indicator Symbols
+                r"\U0001F700-\U0001F77F"  # Alchemical Symbols
+                r"\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+                r"\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+                r"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+                r"\U0001FA00-\U0001FA6F"  # Chess Symbols
+                r"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+                r"\U00002600-\U000026FF"  # Miscellaneous Symbols
+                r"\U00002700-\U000027BF"  # Dingbats
+                r"\U0000FE00-\U0000FE0F"  # Variation Selectors
+                r"\U0001F018-\U0001F270"  # Various Asian characters
+                r"\U238C-\U2454"  # Misc technical
+                r"\U20D0-\U20FF"  # Combining Diacritical Marks for Symbols
+                r"]+"
+            )
+
+            # Remove emojis from the line
+            fixed_line = emoji_pattern.sub("", line)
+
+            # Clean up any double spaces that might result
+            fixed_line = re.sub(r"\s+", " ", fixed_line)
+
+            lines[finding.line - 1] = fixed_line
+
+        return "".join(lines)
 
     def _is_emoji_in_code_context(self, line: str) -> bool:
         """

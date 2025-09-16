@@ -1,12 +1,13 @@
 """
-Automatic fix functionality for vibelint using LLM integration.
+Automatic fix functionality for vibelint using deterministic fixes and LLM for docstring generation only.
 
 vibelint/src/vibelint/fix.py
 """
 
+import ast
 import logging
-import re
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from .config import Config
 from .plugin_system import Finding
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class FixEngine:
-    """Engine for automatically fixing vibelint issues using LLM."""
+    """Engine for automatically fixing vibelint issues with deterministic code changes."""
 
     def __init__(self, config: Config):
         """Initialize fix engine with configuration.
@@ -40,7 +41,7 @@ class FixEngine:
         return finding.rule_id in fixable_rules
 
     async def fix_file(self, file_path: Path, findings: list[Finding]) -> bool:
-        """Fix all fixable issues in a file.
+        """Fix all fixable issues in a file deterministically.
 
         Returns True if any fixes were applied.
 
@@ -59,8 +60,8 @@ class FixEngine:
             logger.error(f"Could not read {file_path}: {e}")
             return False
 
-        # Generate fixes using LLM
-        fixed_content = await self._generate_fixes_llm(
+        # Apply deterministic fixes
+        fixed_content = await self._apply_deterministic_fixes(
             file_path, original_content, fixable_findings
         )
 
@@ -76,19 +77,96 @@ class FixEngine:
 
         return False
 
-    async def _generate_fixes_llm(
+    async def _apply_deterministic_fixes(
         self, file_path: Path, content: str, findings: list[Finding]
-    ) -> str | None:
-        """Generate fixes using the configured LLM.
+    ) -> str:
+        """Apply deterministic fixes without LLM file rewriting.
 
         vibelint/src/vibelint/fix.py
         """
+        try:
+            # Parse the AST to understand the code structure
+            tree = ast.parse(content)
+        except SyntaxError as e:
+            logger.error(f"Cannot parse {file_path}: {e}")
+            return content
+
+        # Track modifications by line number
+        lines = content.splitlines()
+        modifications = {}
+
+        # Group findings by type for efficient processing
+        findings_by_type = {}
+        for finding in findings:
+            rule_id = finding.rule_id
+            if rule_id not in findings_by_type:
+                findings_by_type[rule_id] = []
+            findings_by_type[rule_id].append(finding)
+
+        # Apply fixes by type
+        if "DOCSTRING-MISSING" in findings_by_type:
+            await self._fix_missing_docstrings(
+                tree, lines, modifications, findings_by_type["DOCSTRING-MISSING"], file_path
+            )
+
+        if "DOCSTRING-PATH-REFERENCE" in findings_by_type:
+            self._fix_docstring_path_references(
+                lines, modifications, findings_by_type["DOCSTRING-PATH-REFERENCE"], file_path
+            )
+
+        if "EXPORTS-MISSING-ALL" in findings_by_type:
+            self._fix_missing_exports(
+                tree, lines, modifications, findings_by_type["EXPORTS-MISSING-ALL"]
+            )
+
+        # Apply all modifications to create fixed content
+        return self._apply_modifications(lines, modifications)
+
+    async def _fix_missing_docstrings(
+        self,
+        tree: ast.AST,
+        lines: List[str],
+        modifications: Dict[int, str],
+        findings: List[Finding],
+        file_path: Path,
+    ) -> None:
+        """Add missing docstrings using LLM for content generation only."""
+
+        # Find functions and classes that need docstrings
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                # Check if this node needs a docstring based on findings
+                node_line = node.lineno
+                needs_docstring = any(
+                    abs(f.line - node_line) <= 2 for f in findings  # Allow some line tolerance
+                )
+
+                if needs_docstring and not ast.get_docstring(node):
+                    # Generate docstring content using LLM (safe - only returns text)
+                    docstring_content = await self._generate_docstring_content(node, file_path)
+
+                    if docstring_content:
+                        # Deterministically insert the docstring
+                        indent = self._get_indent_for_line(lines, node.lineno)
+                        docstring_line = (
+                            f'{indent}"""{docstring_content}\n\n{indent}{file_path}\n{indent}"""'
+                        )
+
+                        # Insert after the function/class definition line
+                        insert_line = node.lineno  # Insert after the def line
+                        modifications[insert_line] = docstring_line
+
+    async def _generate_docstring_content(self, node: ast.AST, file_path: Path) -> Optional[str]:
+        """Generate only docstring text content using LLM (safe operation)."""
         if not self.llm_config.get("api_base_url"):
-            logger.warning("LLM not configured, cannot generate fixes")
-            return None
+            # Fallback to simple docstring without LLM
+            if isinstance(node, ast.ClassDef):
+                return f"{node.name} class implementation."
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return f"{node.name} function implementation."
+            return "Implementation."
 
         try:
-            # Initialize LLM using langchain (same as the validators)
             from langchain_openai import ChatOpenAI
             from pydantic import SecretStr
 
@@ -99,141 +177,141 @@ class FixEngine:
             llm = ChatOpenAI(
                 base_url=base_url + "/v1" if not base_url.endswith("/v1") else base_url,
                 model=model,
-                temperature=self.llm_config.get("temperature", 0.1),  # Low temperature for fixes
-                max_completion_tokens=self.llm_config.get("max_tokens", 4000),
+                temperature=0.1,
+                max_completion_tokens=200,  # Small limit for docstring only
                 api_key=SecretStr(api_key),
             )
 
-            # Build fix prompt
-            prompt = self._build_fix_prompt(file_path, content, findings)
+            # Safe prompt - only asks for docstring text, never code
+            if isinstance(node, ast.ClassDef):
+                prompt = f"Write a brief docstring for a Python class named '{node.name}'. Return only the docstring text without quotes or formatting."
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                args = [arg.arg for arg in node.args.args] if hasattr(node, "args") else []
+                prompt = f"Write a brief docstring for a Python function named '{node.name}' with parameters {args}. Return only the docstring text without quotes or formatting."
+            else:
+                return "Implementation."
 
-            # Call LLM
             response = await llm.ainvoke(prompt)
-
             if response and response.content:
-                # Extract fixed code from response
-                return self._extract_fixed_code(response.content)
+                # Clean the response to ensure it's just text
+                content = response.content.strip()
+                # Remove any quotes or markdown that might have been added
+                content = content.replace('"""', "").replace("'''", "").replace("`", "")
+                return content[:200]  # Limit length
 
         except Exception as e:
-            logger.error(f"LLM fix generation failed: {e}")
+            logger.warning(f"LLM docstring generation failed: {e}, using fallback")
+            # Safe fallback
+            if isinstance(node, ast.ClassDef):
+                return f"{node.name} class implementation."
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return f"{node.name} function implementation."
+            return "Implementation."
 
-        return None
+    def _fix_docstring_path_references(
+        self,
+        lines: List[str],
+        modifications: Dict[int, str],
+        findings: List[Finding],
+        file_path: Path,
+    ) -> None:
+        """Add path references to existing docstrings."""
+        for finding in findings:
+            line_idx = finding.line - 1  # Convert to 0-based index
+            if 0 <= line_idx < len(lines):
+                line = lines[line_idx]
+                # If this is a docstring line, ensure it has path reference
+                if '"""' in line or "'''" in line:
+                    # Add path reference if not already present
+                    if str(file_path) not in line:
+                        # Modify the docstring to include path
+                        indent = self._get_indent_for_line(lines, finding.line)
+                        if line.strip().endswith('"""') or line.strip().endswith("'''"):
+                            # Single line docstring - expand it
+                            quote = '"""' if '"""' in line else "'''"
+                            content = line.strip().replace(quote, "").strip()
+                            new_docstring = (
+                                f"{indent}{quote}{content}\n\n{indent}{file_path}\n{indent}{quote}"
+                            )
+                            modifications[finding.line - 1] = new_docstring
 
-    def _build_fix_prompt(self, file_path: Path, content: str, findings: list[Finding]) -> str:
-        """Build a prompt for the LLM to fix the issues.
+    def _fix_missing_exports(
+        self,
+        tree: ast.AST,
+        lines: List[str],
+        modifications: Dict[int, str],
+        findings: List[Finding],
+    ) -> None:
+        """Add missing __all__ exports."""
+        # Find all public functions and classes
+        public_names = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if not node.name.startswith("_"):  # Public items
+                    public_names.append(node.name)
 
-        vibelint/src/vibelint/fix.py
-        """
-        issues_description = "\n".join(
-            [f"- Line {f.line}: {f.rule_id} - {f.message}" for f in findings]
-        )
-
-        return f"""Fix the following Python code issues automatically:
-
-FILE: {file_path}
-
-ISSUES TO FIX:
-{issues_description}
-
-RULES:
-1. For DOCSTRING-MISSING: Add proper docstrings with path references
-2. For DOCSTRING-PATH-REFERENCE: Add the file path at the end of docstrings like: "filename.py"
-3. For EXPORTS-MISSING-ALL: Add __all__ = [...] with public functions/classes
-
-ORIGINAL CODE:
-```python
-{content}
-```
-
-Please provide ONLY the fixed Python code without any explanation or markdown formatting. The response should be valid Python code that can be written directly to the file.
-"""
-
-    def _extract_fixed_code(self, llm_response: str) -> str:
-        """Extract the fixed code from LLM response.
-
-        vibelint/src/vibelint/fix.py
-        """
-        # First remove thinking tokens if enabled
-        cleaned_response = self._remove_thinking_tokens(llm_response)
-
-        # Remove markdown code blocks if present
-        response = cleaned_response.strip()
-
-        # Check for code blocks and extract
-        code_block_pattern = r"```(?:python)?\n?(.*?)\n?```"
-        match = re.search(code_block_pattern, response, re.DOTALL)
-
-        if match:
-            return match.group(1).strip()
-
-        # If no code blocks, return the response as-is (assume it's all code)
-        return response
-
-    def _remove_thinking_tokens(self, text: str) -> str:
-        """Remove thinking tokens from LLM response based on configured format."""
-        remove_thinking = self.llm_config.get("remove_thinking_tokens", True)
-        if not remove_thinking:
-            return text
-
-        thinking_format = self.llm_config.get("thinking_format", "harmony")
-
-        # Built-in format patterns
-        format_patterns = {
-            "harmony": [
-                r"<\|channel\|>analysis<\|message\|>.*?(?=<\|channel\|>|<\|end\|>|$)",
-                r"<\|channel\|>commentary<\|message\|>.*?(?=<\|channel\|>|<\|end\|>|$)",
-                r"<\|[^|]*\|>",
-            ],
-            "qwen": [
-                r"<think>.*?</think>",
-                r"<思考>.*?</思考>",
-                r"\[思考\].*?\[/思考\]",
-                r"思考：.*?(?=\n|\r|\r\n|$)",
-            ],
-        }
-
-        # Special handling for Harmony format - try to extract final channel first
-        if thinking_format == "harmony":
-            # Try to extract explicit final channel content
-            final_pattern = r"<\|channel\|>final<\|message\|>(.*?)(?:<\|end\|>|$)"
-            final_matches = re.findall(final_pattern, text, re.DOTALL)
-
-            if final_matches:
-                # Found explicit final channel content
-                result = final_matches[-1].strip()
-                logger.info(f"Extracted final channel content ({len(result)} chars)")
-                return result
-
-            # If no final channel, try to extract content after analysis channel
-            analysis_end_pattern = r"<\|channel\|>analysis<\|message\|>.*?<\|end\|>(.*?)$"
-            analysis_match = re.search(analysis_end_pattern, text, re.DOTALL)
-
-            if analysis_match:
-                raw_content = analysis_match.group(1).strip()
-                # Remove any remaining harmony tokens from the extracted content
-                cleaned_content = re.sub(r"<\|[^|]*\|>[^<]*", "", raw_content).strip()
-                logger.info(
-                    f"Extracted content after analysis channel ({len(cleaned_content)} chars)"
+        if public_names:
+            # Check if __all__ already exists
+            has_all = any(
+                isinstance(node, ast.Assign)
+                and any(
+                    isinstance(target, ast.Name) and target.id == "__all__"
+                    for target in node.targets
                 )
-                return cleaned_content
+                for node in ast.walk(tree)
+            )
 
-        # Get patterns for the configured format
-        if thinking_format in format_patterns:
-            patterns = format_patterns[thinking_format]
-        else:
-            # Use custom patterns if format not recognized
-            patterns = self.llm_config.get("custom_thinking_patterns", [])
+            if not has_all:
+                # Add __all__ at the top of the file after imports
+                exports_line = f"__all__ = {public_names!r}"
 
-        # Remove all patterns
-        cleaned_text = text
-        for pattern in patterns:
-            cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.DOTALL | re.IGNORECASE)
+                # Find a good place to insert (after imports)
+                insert_line = 0
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("import ") or line.strip().startswith("from "):
+                        insert_line = i + 1
+                    elif line.strip() and not line.strip().startswith("#"):
+                        break
 
-        # Clean up extra whitespace
-        cleaned_text = re.sub(r"\n\s*\n", "\n\n", cleaned_text)
-        cleaned_text = cleaned_text.strip()
+                modifications[insert_line] = exports_line
 
-        return cleaned_text
+    def _get_indent_for_line(self, lines: List[str], line_number: int) -> str:
+        """Get the indentation for a given line number."""
+        if 1 <= line_number <= len(lines):
+            line = lines[line_number - 1]
+            return line[: len(line) - len(line.lstrip())]
+        return "    "  # Default 4-space indent
+
+    def _apply_modifications(self, lines: List[str], modifications: Dict[int, str]) -> str:
+        """Apply all modifications to the lines and return the fixed content."""
+        # Sort modifications by line number in reverse order to avoid index shifting
+        sorted_modifications = sorted(modifications.items(), reverse=True)
+
+        result_lines = lines[:]
+        for line_num, new_content in sorted_modifications:
+            if line_num < len(result_lines):
+                result_lines[line_num] = new_content
+            else:
+                # Insert at end
+                result_lines.append(new_content)
+
+        return "\n".join(result_lines)
+
+
+# Convenience functions for the CLI
+async def apply_fixes(config: Config, file_findings: dict[Path, list[Finding]]) -> int:
+    """Apply fixes to all files with fixable findings.
+
+    vibelint/src/vibelint/fix.py
+    """
+    engine = FixEngine(config)
+    fixed_count = 0
+
+    for file_path, findings in file_findings.items():
+        if await engine.fix_file(file_path, findings):
+            fixed_count += 1
+
+    return fixed_count
 
 
 def can_fix_finding(finding: Finding) -> bool:
@@ -241,29 +319,8 @@ def can_fix_finding(finding: Finding) -> bool:
 
     vibelint/src/vibelint/fix.py
     """
-    fixable_rules = {
+    return finding.rule_id in {
         "DOCSTRING-MISSING",
         "DOCSTRING-PATH-REFERENCE",
         "EXPORTS-MISSING-ALL",
     }
-    return finding.rule_id in fixable_rules
-
-
-async def apply_fixes(config: Config, file_findings: dict[Path, list[Finding]]) -> dict[Path, bool]:
-    """Apply fixes to multiple files.
-
-    Returns dict mapping file paths to whether fixes were applied.
-
-    vibelint/src/vibelint/fix.py
-    """
-    engine = FixEngine(config)
-    results = {}
-
-    for file_path, findings in file_findings.items():
-        try:
-            results[file_path] = await engine.fix_file(file_path, findings)
-        except Exception as e:
-            logger.error(f"Error fixing {file_path}: {e}")
-            results[file_path] = False
-
-    return results

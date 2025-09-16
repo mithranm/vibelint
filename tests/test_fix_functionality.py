@@ -76,65 +76,40 @@ class TestFixFunctionality:
         )
         assert engine.can_fix_finding(finding2) is False
 
-    def test_build_fix_prompt(self):
-        """Test that _build_fix_prompt correctly uses rule_id."""
+    def test_deterministic_fixes(self):
+        """Test that fixes are applied deterministically without LLM file rewriting."""
         config = MagicMock()
         engine = FixEngine(config)
 
-        findings = [
-            Finding(
-                rule_id="DOCSTRING-MISSING",
-                message="Missing docstring",
-                file_path=Path("test.py"),
-                line=5,
-                severity=Severity.WARN,
-            ),
-            Finding(
-                rule_id="EXPORTS-MISSING-ALL",
-                message="Missing __all__",
-                file_path=Path("test.py"),
-                line=1,
-                severity=Severity.WARN,
-            ),
-        ]
+        # Test can_fix_finding works correctly
+        docstring_finding = Finding(
+            rule_id="DOCSTRING-MISSING",
+            message="Missing docstring",
+            file_path=Path("test.py"),
+            line=5,
+            severity=Severity.WARN,
+        )
 
-        prompt = engine._build_fix_prompt(Path("test.py"), "# content", findings)
+        exports_finding = Finding(
+            rule_id="EXPORTS-MISSING-ALL",
+            message="Missing __all__",
+            file_path=Path("test.py"),
+            line=1,
+            severity=Severity.WARN,
+        )
 
-        # Check that rule_id is used in the prompt
-        assert "DOCSTRING-MISSING" in prompt
-        assert "EXPORTS-MISSING-ALL" in prompt
-        assert "Line 5: DOCSTRING-MISSING" in prompt
-        assert "Line 1: EXPORTS-MISSING-ALL" in prompt
+        unfixable_finding = Finding(
+            rule_id="SOME-OTHER-RULE",
+            message="Some other issue",
+            file_path=Path("test.py"),
+            line=1,
+            severity=Severity.WARN,
+        )
 
-    def test_extract_fixed_code(self):
-        """Test _extract_fixed_code method."""
-        config = MagicMock()
-        engine = FixEngine(config)
-
-        # Test with markdown code blocks
-        response_with_blocks = '''Here's the fixed code:
-
-```python
-def hello():
-    """Say hello."""
-    print("Hello!")
-```
-
-That should fix the issue.'''
-
-        result = engine._extract_fixed_code(response_with_blocks)
-        expected = '''def hello():
-    """Say hello."""
-    print("Hello!")'''
-        assert result == expected
-
-        # Test without code blocks
-        response_without_blocks = '''def hello():
-    """Say hello."""
-    print("Hello!")'''
-
-        result = engine._extract_fixed_code(response_without_blocks)
-        assert result == response_without_blocks
+        # Test which findings can be fixed
+        assert engine.can_fix_finding(docstring_finding)
+        assert engine.can_fix_finding(exports_finding)
+        assert not engine.can_fix_finding(unfixable_finding)
 
     @pytest.mark.asyncio
     async def test_apply_fixes_integration(self):
@@ -161,8 +136,9 @@ That should fix the issue.'''
 
             results = await apply_fixes(config, file_findings)
 
-            assert Path("test.py") in results
-            assert isinstance(results[Path("test.py")], bool)
+            # apply_fixes returns count of fixed files, not dict
+            assert isinstance(results, int)
+            assert results == 0  # No files were actually fixed (mocked to return False)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .snapshot import create_snapshot
 from .utils import find_project_root, get_relative_path
 from .validation_engine import run_plugin_validation
+from .diagnostics import run_benchmark, run_diagnostics
 
 
 class VibelintContext:
@@ -1084,6 +1085,43 @@ custom_thinking_patterns = {suggestions}"""
         console.print("  • [bold]Claude/Anthropic models:[/bold] Use default (harmony format)")
         console.print('  • [bold]Qwen models:[/bold] Set thinking_format = "qwen"')
         console.print('  • [bold]Other models:[/bold] Set thinking_format = "custom" + patterns')
+
+
+@cli.command("diagnostics")
+@click.option("--benchmark", is_flag=True, help="Run LLM performance benchmark")
+@click.option("--test", is_flag=True, help="Run diagnostic tests")
+def diagnostics_cmd(benchmark: bool, test: bool) -> None:
+    """
+    Run vibelint diagnostics and performance tests.
+
+    Examples:
+        vibelint diagnostics --benchmark    # Benchmark LLM performance
+        vibelint diagnostics --test         # Run diagnostic tests
+        vibelint diagnostics --benchmark --test  # Run both
+
+    tools/vibelint/src/vibelint/cli.py
+    """
+    if not benchmark and not test:
+        # Run both by default
+        benchmark = test = True
+
+    if benchmark:
+        console.print("[bold blue]Running LLM performance benchmark...[/bold blue]")
+        try:
+            run_benchmark()
+            console.print("[green]Benchmark completed successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]Benchmark failed: {e}[/red]")
+            sys.exit(1)
+
+    if test:
+        console.print("[bold blue]Running diagnostic tests...[/bold blue]")
+        try:
+            run_diagnostics()
+            console.print("[green]Diagnostics completed successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]Diagnostics failed: {e}[/red]")
+            sys.exit(1)
 
 
 def main() -> None:

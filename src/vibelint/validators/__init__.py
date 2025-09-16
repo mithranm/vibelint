@@ -11,6 +11,7 @@ from .dead_code import DeadCodeValidator
 from .docstring import DocstringPathValidator, MissingDocstringValidator
 from .emoji import EmojiUsageValidator
 from .exports import InitAllValidator, MissingAllValidator
+from .logger_names import LoggerNameValidator
 from .print_statements import PrintStatementValidator
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "EmojiUsageValidator",
     "MissingAllValidator",
     "InitAllValidator",
+    "LoggerNameValidator",
     "PrintStatementValidator",
     "DeadCodeValidator",
     "ArchitectureValidator",
