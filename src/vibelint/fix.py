@@ -160,16 +160,9 @@ class FixEngine:
     async def _generate_docstring_content(self, node: ast.AST, file_path: Path) -> Optional[str]:
         """Generate only docstring text content using LLM (safe operation)."""
         if not self.llm_config.get("api_base_url"):
-            # Generate basic docstring without LLM
-            if isinstance(node, ast.ClassDef):
-                return f"{node.name} class."
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                args = [arg.arg for arg in node.args.args] if hasattr(node, "args") else []
-                if args:
-                    return f"{node.name} function with parameters: {', '.join(args)}."
-                else:
-                    return f"{node.name} function."
-            return "Module implementation."
+            # Can't generate docstrings without LLM - skip fix
+            logger.debug("No LLM API configured, skipping docstring generation")
+            return None
 
         try:
             from langchain_openai import ChatOpenAI
@@ -180,7 +173,8 @@ class FixEngine:
             model = self.llm_config.get("model", "gpt-3.5-turbo")
 
             if not base_url:
-                return "Module implementation."  # No LLM available
+                logger.debug("No LLM base URL configured, skipping docstring generation")
+                return None
 
             llm = ChatOpenAI(
                 base_url=base_url + "/v1" if not base_url.endswith("/v1") else base_url,
@@ -197,7 +191,8 @@ class FixEngine:
                 args = [arg.arg for arg in node.args.args] if hasattr(node, "args") else []
                 prompt = f"Write a brief docstring for a Python function named '{node.name}' with parameters {args}. Return only the docstring text without quotes or formatting."
             else:
-                return "Module implementation."
+                logger.debug("Unknown node type for docstring generation")
+                return None
 
             response = await llm.ainvoke(prompt)
             if response and response.content:

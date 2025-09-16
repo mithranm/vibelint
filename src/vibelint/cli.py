@@ -60,7 +60,7 @@ class VibelintContext:
 
 __all__ = ["snapshot", "check", "cli", "namespace", "main", "VibelintContext"]
 
-logger_cli = logging.getLogger("vibelint")
+logger_cli = logging.getLogger(__name__)
 
 # --- Helper messages ---
 VIBE_CHECK_PASS_MESSAGES = [
@@ -400,7 +400,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
     vibelint_ctx.project_root = project_root
 
     log_level = logging.DEBUG if debug else logging.INFO
-    app_logger = logging.getLogger("vibelint")
+    app_logger = logging.getLogger(__name__)
 
     # Simplified Logging Setup: Configure once based on the initial debug flag.
     # Remove existing handlers to prevent duplicates if run multiple times (e.g., in tests)
@@ -1134,7 +1134,7 @@ def main() -> None:
         sys.exit(e.code)
     except (RuntimeError, ValueError, OSError, ImportError) as e:
         console.print(f"[bold red]An unexpected error occurred: {e}[/bold red]")
-        logger = logging.getLogger("vibelint")
+        logger = logging.getLogger(__name__)
         # Check if logger was configured before logging error
         if logger.hasHandlers():
             logger.error("Unhandled exception in CLI execution.", exc_info=True)
