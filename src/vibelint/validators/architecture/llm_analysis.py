@@ -7,7 +7,6 @@ to detect design issues, inconsistencies, and improvement opportunities.
 vibelint/validators/architecture/llm_analysis.py
 """
 
-import json
 import logging
 import os
 import re
@@ -61,6 +60,13 @@ class LLMAnalysisValidator(BaseValidator):
         self._llm_available = False
         self._analysis_completed = False
         self._analyzed_files: set[Path] = set()  # Track which files we've seen
+        self._global_analysis_done: bool = False  # Track if global analysis has run
+
+        # Multi-phase analysis state
+        self._file_summaries: dict[Path, str] = {}  # File path -> summary
+        self._file_embeddings: dict[Path, list[float]] = {}  # File path -> embedding vector
+        self._similarity_clusters: list[list[Path]] = []  # Groups of similar files
+        self._pairwise_analyses: dict[tuple[Path, Path], str] = {}  # Pair -> analysis
 
         # API configuration from config with environment variable fallbacks
         llm_config = self.config.get("llm_analysis", {})
@@ -83,6 +89,20 @@ class LLMAnalysisValidator(BaseValidator):
         self.remove_thinking_tokens = llm_config.get("remove_thinking_tokens", True)
         self.thinking_format = llm_config.get("thinking_format", "harmony")
         self.custom_thinking_patterns = llm_config.get("custom_thinking_patterns", [])
+
+        # Diagnostics for optimal LLM utilization
+        self.enable_token_diagnostics = llm_config.get("enable_token_diagnostics", False)
+        self.token_usage_stats = {
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "calls": 0,
+            "context_efficiency": [],
+        }
+
+        # Dynamic context discovery
+        self.enable_context_probing = llm_config.get("enable_context_probing", False)
+        self.discovered_context_limit = None
+        self.context_probe_cache = {}
 
         # Enable all compression strategies by default
         self.enable_import_summary = True
@@ -161,6 +181,12 @@ Return your response as valid JSON with this structure:
 
         self._analyzed_files.add(file_path)
 
+        # Skip if global analysis has already run
+        if self._global_analysis_done:
+            return
+
+        self._global_analysis_done = True
+
         # Get the actual files being analyzed from the validation engine
         analysis_files = config.get("_analysis_files", [file_path]) if config else [file_path]
 
@@ -190,10 +216,250 @@ Return your response as valid JSON with this structure:
         try:
             # Simple connectivity test with ChatOpenAI
             self.llm.invoke("Test connectivity")
+
+            # If context probing is enabled, discover real limits
+            if self.enable_context_probing:
+                self._discover_context_limits()
+
             return True
         except Exception as e:
             logger.debug(f"LLM connectivity test failed: {e}")
             return False
+
+    def _discover_context_limits(self) -> None:
+        """Dynamically discover the LLM's actual context window limits."""
+        if self.discovered_context_limit is not None:
+            logger.debug(f"Using cached context limit: {self.discovered_context_limit}")
+            return
+
+        logger.info("Probing LLM for actual context window limits...")
+
+        # Binary search for maximum context size
+        min_tokens = 1000
+        max_tokens = 200000  # Start with a high upper bound
+        working_limit = min_tokens
+
+        # Quick test sizes to find rough range
+        test_sizes = [4000, 8000, 16000, 32000, 64000, 128000]
+
+        for test_size in test_sizes:
+            if self._test_context_size(test_size):
+                working_limit = test_size
+                logger.debug(f"PASS - Context size {test_size} tokens: PASSED")
+            else:
+                logger.debug(f"FAIL - Context size {test_size} tokens: FAILED")
+                max_tokens = test_size
+                break
+
+        # Binary search within the working range
+        min_tokens = working_limit
+        attempts = 0
+        max_attempts = 8  # Limit binary search iterations
+
+        while min_tokens < max_tokens - 1000 and attempts < max_attempts:
+            mid_tokens = (min_tokens + max_tokens) // 2
+
+            if self._test_context_size(mid_tokens):
+                min_tokens = mid_tokens
+                working_limit = mid_tokens
+                logger.debug(f"PASS - Binary search {mid_tokens} tokens: PASSED")
+            else:
+                max_tokens = mid_tokens
+                logger.debug(f"FAIL - Binary search {mid_tokens} tokens: FAILED")
+
+            attempts += 1
+
+        self.discovered_context_limit = working_limit
+        efficiency_gain = (working_limit / self.max_context_tokens) * 100
+
+        if working_limit > self.max_context_tokens:
+            logger.info(
+                f"SUCCESS - Discovered larger context window: {working_limit:,} tokens (configured: {self.max_context_tokens:,})"
+            )
+            logger.info(
+                f"TIP - OPTIMIZATION: Increase max_context_tokens to {working_limit} for {efficiency_gain:.0f}% better utilization"
+            )
+        elif working_limit < self.max_context_tokens:
+            logger.warning(
+                f"WARNING - Actual context limit lower than configured: {working_limit:,} tokens vs {self.max_context_tokens:,}"
+            )
+            logger.warning("TIP - RECOMMENDATION: Reduce max_context_tokens to avoid errors")
+        else:
+            logger.info(f"OK - Context configuration optimal: {working_limit:,} tokens")
+
+    def _test_context_size(self, token_count: int) -> bool:
+        """Test if the LLM can handle a specific context size."""
+        # Use cache to avoid repeated tests
+        if token_count in self.context_probe_cache:
+            return self.context_probe_cache[token_count]
+
+        # Generate test content roughly matching token count
+        # Approximate 4 characters per token for English text
+        char_count = token_count * 4
+        test_content = "def test_function():\n    pass\n\n" * (char_count // 30)
+
+        test_prompt = f"""Analyze this code for basic issues. Respond with just "OK" if analysis completes successfully.
+
+CODE TO ANALYZE:
+{test_content[:char_count]}
+
+Respond with exactly: OK"""
+
+        try:
+            response = self.llm.invoke(test_prompt)
+            success = "OK" in str(response).upper()
+            self.context_probe_cache[token_count] = success
+            return success
+
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Check for context-related errors
+            context_errors = [
+                "context length",
+                "token limit",
+                "max tokens",
+                "context window",
+                "input too long",
+                "maximum context",
+                "context exceeded",
+            ]
+
+            is_context_error = any(err in error_msg for err in context_errors)
+            if is_context_error:
+                logger.debug(f"Context limit reached at {token_count} tokens: {e}")
+            else:
+                logger.debug(f"Non-context error at {token_count} tokens: {e}")
+
+            self.context_probe_cache[token_count] = False
+            return False
+
+    def _get_effective_context_limit(self) -> int:
+        """Get the actual usable context limit (discovered or configured)."""
+        if self.enable_context_probing and self.discovered_context_limit:
+            return self.discovered_context_limit
+        return self.max_context_tokens
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Rough token estimation (4 chars per token for English)."""
+        return max(1, len(text) // 4)
+
+    def _optimize_context_usage(self, prompt: str) -> tuple[str, dict]:
+        """Optimize prompt for maximum context utilization while tracking metrics."""
+        estimated_input_tokens = self._estimate_tokens(prompt)
+
+        # Use discovered context limit if available
+        effective_context_limit = self._get_effective_context_limit()
+
+        # Calculate optimal generation tokens based on actual context limits
+        available_tokens = effective_context_limit - estimated_input_tokens
+        optimal_generation_tokens = min(
+            self.max_tokens, available_tokens - 500
+        )  # 500 token safety buffer
+
+        context_efficiency = estimated_input_tokens / effective_context_limit
+
+        metrics = {
+            "estimated_input_tokens": estimated_input_tokens,
+            "optimal_generation_tokens": optimal_generation_tokens,
+            "context_efficiency": context_efficiency,
+            "context_utilization_percent": context_efficiency * 100,
+            "effective_context_limit": effective_context_limit,
+            "using_discovered_limit": self.discovered_context_limit is not None,
+        }
+
+        if self.enable_token_diagnostics:
+            limit_source = "discovered" if self.discovered_context_limit else "configured"
+            logger.info(
+                f"Context utilization: {context_efficiency:.1%} ({estimated_input_tokens:,}/{effective_context_limit:,} tokens, {limit_source})"
+            )
+            if context_efficiency > 0.8:
+                logger.warning(
+                    f"High context usage ({context_efficiency:.1%}) - consider reducing batch size"
+                )
+            elif context_efficiency < 0.3:
+                logger.info(
+                    f"Low context usage ({context_efficiency:.1%}) - could increase batch size for efficiency"
+                )
+
+        return prompt, metrics
+
+    def _invoke_with_diagnostics(self, prompt: str) -> str:
+        """Invoke LLM with optimal context usage and diagnostics."""
+        optimized_prompt, metrics = self._optimize_context_usage(prompt)
+
+        try:
+            response = self.global_chain.invoke({"code_content": optimized_prompt})
+            cleaned_response = self._clean_response(response)
+
+            # Track usage statistics
+            if self.enable_token_diagnostics:
+                estimated_output_tokens = self._estimate_tokens(cleaned_response)
+                self.token_usage_stats["total_input_tokens"] += metrics["estimated_input_tokens"]
+                self.token_usage_stats["total_output_tokens"] += estimated_output_tokens
+                self.token_usage_stats["calls"] += 1
+                self.token_usage_stats["context_efficiency"].append(metrics["context_efficiency"])
+
+                logger.debug(
+                    f"Call {self.token_usage_stats['calls']}: {metrics['estimated_input_tokens']}→{estimated_output_tokens} tokens"
+                )
+
+            return cleaned_response
+
+        except Exception as e:
+            logger.warning(f"LLM call failed: {e}")
+            if self.enable_token_diagnostics:
+                self.token_usage_stats["calls"] += 1
+            return f"Error: LLM analysis failed - {e}"
+
+    def _log_final_diagnostics(self):
+        """Log final token usage diagnostics."""
+        if not self.enable_token_diagnostics or self.token_usage_stats["calls"] == 0:
+            return
+
+        stats = self.token_usage_stats
+        avg_efficiency = (
+            sum(stats["context_efficiency"]) / len(stats["context_efficiency"])
+            if stats["context_efficiency"]
+            else 0
+        )
+
+        effective_limit = self._get_effective_context_limit()
+        limit_source = "discovered" if self.discovered_context_limit else "configured"
+
+        logger.info("=== LLM Usage Diagnostics ===")
+        logger.info(f"Context window: {effective_limit:,} tokens ({limit_source})")
+        logger.info(f"Total LLM calls: {stats['calls']}")
+        logger.info(f"Total input tokens: {stats['total_input_tokens']:,}")
+        logger.info(f"Total output tokens: {stats['total_output_tokens']:,}")
+        logger.info(f"Average context efficiency: {avg_efficiency:.1%}")
+        logger.info(
+            f"Estimated cost efficiency: {(stats['total_input_tokens'] + stats['total_output_tokens']) / (stats['calls'] * effective_limit):.1%}"
+        )
+
+        if (
+            self.discovered_context_limit
+            and self.discovered_context_limit != self.max_context_tokens
+        ):
+            improvement = (self.discovered_context_limit / self.max_context_tokens - 1) * 100
+            if improvement > 0:
+                logger.info(
+                    f"SUCCESS - Context discovery found {improvement:.0f}% larger window than configured!"
+                )
+            else:
+                logger.warning(
+                    f"WARNING - Context discovery found {abs(improvement):.0f}% smaller window than configured"
+                )
+
+        if avg_efficiency < 0.5:
+            logger.info(
+                "TIP: Context usage is low - consider increasing batch sizes for better LLM utilization"
+            )
+        elif avg_efficiency > 0.9:
+            logger.warning(
+                "WARNING: Context usage is very high - consider reducing batch sizes or file content"
+            )
+        else:
+            logger.info("OK - Context usage is well-optimized")
 
     def _remove_thinking_tokens(self, text: str) -> str:
         """Remove thinking tokens from LLM response based on configured format."""
@@ -318,111 +584,371 @@ Return your response as valid JSON with this structure:
     def _analyze_global_structure(
         self, current_file: Path, analysis_files: list[Path]
     ) -> Iterator[Finding]:
-        """Analyze overall codebase architecture using intelligent multi-phase langchain approach."""
+        """Multi-phase intelligent analysis: file summaries → embedding similarity → pairwise comparison → global synthesis."""
 
         if not analysis_files:
             logger.warning("No analysis files provided")
             return
 
-        logger.info(f"Phase 1: Running global structure analysis on {len(analysis_files)} files")
+        logger.info(f"Starting multi-phase architectural analysis on {len(analysis_files)} files")
 
-        # Phase 1: Create code context for LLM
-        code_content = self._create_structured_summary(analysis_files)
+        # Phase 1: Generate individual file summaries using DFS traversal
+        yield from self._phase1_generate_summaries(analysis_files)
 
-        # Phase 1: Global analysis with raw channel response (not JSON)
-        phase1_prompt = f"""Analyze this Python codebase structure for potential architectural issues:
+        # Phase 2: Compute embeddings and find semantic similarities
+        yield from self._phase2_semantic_clustering(analysis_files)
 
-{code_content}
+        # Phase 3: Pairwise analysis of similar files
+        yield from self._phase3_pairwise_analysis()
 
-Look for patterns that indicate:
-1. Code duplication across files
-2. Overly similar functionality suggesting redundant code
-3. Poor separation of concerns
-4. Missing abstractions where there should be shared code
-5. Architectural anti-patterns
+        # Phase 4: Global synthesis of all findings
+        yield from self._phase4_global_synthesis(current_file)
 
-This is Phase 1 of a multi-phase analysis. Provide your analysis as natural language commentary about what you observe."""
+        # Log final token usage diagnostics
+        self._log_final_diagnostics()
+
+        logger.info(f"Multi-phase architectural analysis COMPLETED on {len(analysis_files)} files")
+
+    def _phase1_generate_summaries(self, analysis_files: list[Path]) -> Iterator[Finding]:
+        """Phase 1: Generate file summaries in efficient batches."""
+        logger.info(f"Phase 1: Generating summaries for {len(analysis_files)} files")
+
+        # Sort files by depth for DFS-like processing (deeper files first)
+        sorted_files = sorted(analysis_files, key=lambda p: len(p.parts), reverse=True)
+
+        # Batch files for efficiency (process 8 files per LLM call)
+        batch_size = 8
+        batches = [
+            sorted_files[i : i + batch_size] for i in range(0, len(sorted_files), batch_size)
+        ]
+
+        for batch_idx, batch in enumerate(batches):
+            try:
+                # Create batch prompt with multiple files
+                batch_content = []
+                for file_path in batch:
+                    try:
+                        content = file_path.read_text(encoding="utf-8")
+                        batch_content.append(f"FILE: {file_path}\n{content[:1500]}")
+                    except Exception as e:
+                        batch_content.append(f"FILE: {file_path}\nERROR: Could not read file - {e}")
+
+                batch_prompt = f"""Analyze these Python files and provide concise summaries for each:
+
+{chr(10).join(batch_content)}
+
+For each file, provide a summary in this format:
+FILE: [filename]
+PURPOSE: What this file does
+EXPORTS: Key classes/functions it exports
+DEPENDENCIES: What it imports/depends on
+CONCERNS: Any potential issues
+---
+"""
+
+                batch_summaries = self._invoke_with_diagnostics(batch_prompt)
+
+                # Parse batch response and assign to individual files
+                self._parse_batch_summaries(batch, batch_summaries)
+                logger.debug(f"Processed batch {batch_idx + 1}/{len(batches)} ({len(batch)} files)")
+
+            except Exception as e:
+                logger.warning(f"Failed to process batch {batch_idx + 1}: {e}")
+                # Fall back to individual error summaries
+                for file_path in batch:
+                    self._file_summaries[file_path] = f"ERROR: Batch processing failed - {e}"
+
+        logger.info(f"Phase 1 complete: Generated {len(self._file_summaries)} summaries")
+        return iter([])  # No findings yet, just building state
+
+    def _parse_batch_summaries(self, batch_files: list[Path], batch_response: str) -> None:
+        """Parse batch summary response and assign to individual files."""
+        # Split by file markers
+        file_sections = re.split(r"FILE:\s*([^\n]+)", batch_response)
+
+        # file_sections[0] is empty, then alternates between filename and content
+
+        for i in range(1, len(file_sections), 2):
+            if i + 1 < len(file_sections):
+                filename_part = file_sections[i].strip()
+                summary_content = file_sections[i + 1].split("---")[0].strip()
+
+                # Find matching file by name
+                for file_path in batch_files:
+                    if file_path.name in filename_part or str(file_path) in filename_part:
+                        self._file_summaries[file_path] = summary_content
+                        break
+
+        # Ensure all files have summaries (fallback)
+        for file_path in batch_files:
+            if file_path not in self._file_summaries:
+                self._file_summaries[file_path] = (
+                    "ERROR: Could not parse summary from batch response"
+                )
+
+    def _parse_batch_pairwise(
+        self, batch_pairs: list[tuple[Path, Path]], batch_response: str
+    ) -> None:
+        """Parse batch pairwise response and assign to individual pairs."""
+        # Split by comparison markers
+        comparison_sections = re.split(r"COMPARISON\s*(\d+):", batch_response)
+
+        # comparison_sections[0] is empty, then alternates between comparison number and content
+        for i in range(1, len(comparison_sections), 2):
+            if i + 1 < len(comparison_sections):
+                comparison_num = int(comparison_sections[i].strip()) - 1  # Convert to 0-based index
+                analysis_content = comparison_sections[i + 1].split("---")[0].strip()
+
+                # Assign to corresponding pair
+                if 0 <= comparison_num < len(batch_pairs):
+                    file1, file2 = batch_pairs[comparison_num]
+                    self._pairwise_analyses[(file1, file2)] = analysis_content
+
+        # Ensure all pairs have analyses (fallback)
+        for file1, file2 in batch_pairs:
+            if (file1, file2) not in self._pairwise_analyses:
+                self._pairwise_analyses[(file1, file2)] = (
+                    "ERROR: Could not parse pairwise analysis from batch response"
+                )
+
+    def _phase2_semantic_clustering(self, analysis_files: list[Path]) -> Iterator[Finding]:
+        """Phase 2: Compute embeddings and find semantically similar files."""
+        logger.info(f"Phase 2: Computing semantic similarities for {len(analysis_files)} files")
 
         try:
-            # Phase 1: Use langchain for initial analysis (expects channel/message format)
-            phase1_response = self.global_chain.invoke({"code_content": phase1_prompt})
+            # Get the shared embedding model
+            embedding_model = self._get_embedding_model()
+            if not embedding_model:
+                logger.warning("Embedding model not available, skipping semantic clustering")
+                return iter([])
 
-            # Extract and clean raw response content
-            response_text = (
-                phase1_response.content
-                if hasattr(phase1_response, "content")
-                else str(phase1_response)
-            )
-            if not isinstance(response_text, str):
-                response_text = str(response_text)
-            cleaned_response = self._remove_thinking_tokens(response_text)
-            self._warn_about_unremoved_tokens(cleaned_response)
-            logger.info(f"Phase 1 complete: {cleaned_response[:200]}...")
+            # Extract embeddings from summaries
+            for file_path, summary in self._file_summaries.items():
+                if summary and not summary.startswith("ERROR:"):
+                    # Use the embedding model to get vector representation
+                    embedding = embedding_model.encode([summary])[0].tolist()
+                    self._file_embeddings[file_path] = embedding
 
-            # Phase 2: Follow up with structured JSON request
-            phase2_prompt = f"""Based on your previous analysis:
+            # Find similar file pairs using cosine similarity
+            from itertools import combinations
 
-{cleaned_response}
+            import numpy as np
 
-Now provide specific architectural findings as valid JSON with this structure:
-{{
-    "findings": [
-        {{
-            "message": "Description of the issue",
-            "suggestion": "How to fix it",
-            "line": 1,
-            "severity": "info"
-        }}
-    ]
-}}
+            similar_pairs = []
+            files_with_embeddings = list(self._file_embeddings.keys())
 
-Return ONLY the JSON, no other text."""
+            for file1, file2 in combinations(files_with_embeddings, 2):
+                emb1 = np.array(self._file_embeddings[file1])
+                emb2 = np.array(self._file_embeddings[file2])
 
-            # Phase 2: Get structured JSON response
-            phase2_response = self.global_chain.invoke({"code_content": phase2_prompt})
+                # Cosine similarity
+                similarity = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
 
-            json_text = (
-                phase2_response.content
-                if hasattr(phase2_response, "content")
-                else str(phase2_response)
-            )
-
-            # Ensure we have a string for JSON parsing and clean thinking tokens
-            if not isinstance(json_text, str):
-                json_text = str(json_text)
-            cleaned_json_text = self._remove_thinking_tokens(json_text)
-            self._warn_about_unremoved_tokens(cleaned_json_text)
-
-            try:
-                analysis_data = json.loads(cleaned_json_text)
-                findings_list = analysis_data.get("findings", [])
-
-                # Convert findings to plugin system findings
-                for finding_data in findings_list:
-                    yield self.create_finding(
-                        message=f"{finding_data.get('message', '')} {finding_data.get('suggestion', '')}".strip(),
-                        file_path=current_file,  # Report on current file being processed
-                        line=finding_data.get("line", 1),
+                # Group files with >70% similarity for pairwise analysis
+                if similarity > 0.7:
+                    similar_pairs.append((file1, file2, similarity))
+                    logger.debug(
+                        f"Found similar files: {file1.name} <-> {file2.name} ({similarity:.3f})"
                     )
 
-            except json.JSONDecodeError as e:
-                logger.warning(f"Phase 2 JSON parsing failed: {e}")
+            # Create clusters from similar pairs
+            clusters = []
+            for file1, file2, sim in similar_pairs:
+                # Find existing cluster or create new one
+                placed = False
+                for cluster in clusters:
+                    if file1 in cluster or file2 in cluster:
+                        cluster.update([file1, file2])
+                        placed = True
+                        break
+                if not placed:
+                    clusters.append({file1, file2})
+
+            self._similarity_clusters = [list(cluster) for cluster in clusters]
+            logger.info(
+                f"Phase 2 complete: Found {len(self._similarity_clusters)} similarity clusters"
+            )
+
+        except Exception as e:
+            logger.warning(f"Phase 2 semantic clustering failed: {e}")
+
+        return iter([])  # No findings yet
+
+    def _phase3_pairwise_analysis(self) -> Iterator[Finding]:
+        """Phase 3: Deep pairwise analysis of semantically similar files (batched for efficiency)."""
+        logger.info(f"Phase 3: Analyzing {len(self._similarity_clusters)} similarity clusters")
+
+        # Collect all pairs from all clusters
+        all_pairs = []
+        for cluster in self._similarity_clusters:
+            if len(cluster) < 2:
+                continue
+
+            from itertools import combinations
+
+            cluster_pairs = list(combinations(cluster, 2))
+            all_pairs.extend(cluster_pairs)
+
+        if not all_pairs:
+            logger.info("Phase 3 complete: No similarity pairs found")
+            return iter([])
+
+        logger.info(f"Phase 3: Analyzing {len(all_pairs)} similarity pairs")
+
+        # Batch pairs for efficiency (process 4 pairs per LLM call)
+        batch_size = 4
+        pair_batches = [all_pairs[i : i + batch_size] for i in range(0, len(all_pairs), batch_size)]
+
+        for batch_idx, batch in enumerate(pair_batches):
+            try:
+                # Create batch prompt with multiple pairs
+                batch_comparisons = []
+                for file1, file2 in batch:
+                    summary1 = self._file_summaries.get(file1, "No summary")
+                    summary2 = self._file_summaries.get(file2, "No summary")
+
+                    comparison = f"""COMPARISON {len(batch_comparisons) + 1}:
+FILE 1: {file1}
+{summary1[:400]}
+
+FILE 2: {file2}
+{summary2[:400]}
+"""
+                    batch_comparisons.append(comparison)
+
+                batch_prompt = f"""Analyze these file pairs for duplication and refactoring opportunities:
+
+{chr(10).join(batch_comparisons)}
+
+For each comparison, analyze:
+- Code duplication opportunities
+- Potential for shared abstractions
+- Redundant functionality
+- Refactoring suggestions
+
+Format for each:
+COMPARISON [N]:
+DUPLICATION: What's duplicated
+ABSTRACTION: What could be abstracted
+REFACTOR: How to refactor
+---
+"""
+
+                batch_analyses = self._invoke_with_diagnostics(batch_prompt)
+
+                # Parse batch response and assign to individual pairs
+                self._parse_batch_pairwise(batch, batch_analyses)
                 logger.debug(
-                    f"Failed to parse JSON response (length: {len(cleaned_json_text)}): {cleaned_json_text[:200]}..."
+                    f"Processed pair batch {batch_idx + 1}/{len(pair_batches)} ({len(batch)} pairs)"
                 )
-                # Fallback: create finding from Phase 1 analysis
+
+            except Exception as e:
+                logger.warning(f"Failed to process pair batch {batch_idx + 1}: {e}")
+                # Fall back to individual error analyses
+                for file1, file2 in batch:
+                    self._pairwise_analyses[(file1, file2)] = f"Error analyzing pair: {e}"
+
+        logger.info(f"Phase 3 complete: Analyzed {len(self._pairwise_analyses)} file pairs")
+        return iter([])  # No findings yet
+
+    def _phase4_global_synthesis(self, current_file: Path) -> Iterator[Finding]:
+        """Phase 4: Synthesize all findings into global architectural insights."""
+        logger.info("Phase 4: Synthesizing global architectural findings")
+
+        # Combine all summaries and pairwise analyses
+        all_summaries = "\n\n".join(
+            [f"{path}: {summary}" for path, summary in self._file_summaries.items()]
+        )
+        all_pairwise = "\n\n".join(
+            [f"{p1} <-> {p2}: {analysis}" for (p1, p2), analysis in self._pairwise_analyses.items()]
+        )
+
+        synthesis_prompt = f"""Based on individual file summaries and pairwise comparisons, identify architectural issues:
+
+FILE SUMMARIES:
+{all_summaries[:3000]}
+
+PAIRWISE ANALYSES:
+{all_pairwise[:2000]}
+
+Identify systemic issues in this format:
+
+ISSUE: Architectural problem description
+SUGGESTION: How to fix it
+---
+ISSUE: Another architectural problem
+SUGGESTION: Another solution
+---
+
+Focus on:
+- Widespread code duplication patterns
+- Missing architectural layers
+- Inconsistent patterns across the codebase
+- Opportunities for shared abstractions
+"""
+
+        try:
+            cleaned_response = self._invoke_with_diagnostics(synthesis_prompt)
+
+            # Parse findings using regex
+            import re
+
+            issue_pattern = r"ISSUE:\s*(.*?)\s*SUGGESTION:\s*(.*?)(?=---|\s*$)"
+            findings = re.findall(issue_pattern, cleaned_response, re.DOTALL | re.IGNORECASE)
+
+            if findings:
+                for issue, suggestion in findings:
+                    issue = issue.strip()
+                    suggestion = suggestion.strip()
+                    if issue and suggestion:
+                        yield self.create_finding(
+                            message=f"[ARCHITECTURAL] {issue} - {suggestion}",
+                            file_path=current_file,
+                            line=1,
+                        )
+            else:
+                # Fallback
                 yield self.create_finding(
-                    message=f"Architectural analysis: {cleaned_response[:300]}...",
+                    message=f"Global architectural analysis: {cleaned_response[:400]}...",
                     file_path=current_file,
                     line=1,
                 )
 
         except Exception as e:
-            logger.warning(f"Global LLM analysis failed: {e}")
+            logger.warning(f"Phase 4 synthesis failed: {e}")
 
-        # Analysis completion indicator
-        logger.info(f"LLM architectural analysis COMPLETED on {len(analysis_files)} files")
-        logger.info("Status: Analysis finished successfully (not interrupted)")
+        logger.info("Phase 4 complete: Global synthesis finished")
+
+    def _clean_response(self, response) -> str:
+        """Clean and extract response content."""
+        response_text = response.content if hasattr(response, "content") else str(response)
+        if not isinstance(response_text, str):
+            response_text = str(response_text)
+        cleaned = self._remove_thinking_tokens(response_text)
+        self._warn_about_unremoved_tokens(cleaned)
+        return cleaned
+
+    def _get_embedding_model(self):
+        """Get the shared embedding model from the rules engine."""
+        try:
+            # Check if the model was passed in config
+            if self.config and hasattr(self.config, "get"):
+                shared_model = self.config.get("_shared_model")
+                if shared_model:
+                    return shared_model
+
+            # Try to load the model directly
+            from sentence_transformers import SentenceTransformer
+
+            # Use the default EmbeddingGemma model
+            model_name = "google/embeddinggemma-300m"
+            logger.info(f"Loading embedding model: {model_name}")
+            model = SentenceTransformer(model_name)
+            return model
+
+        except Exception as e:
+            logger.warning(f"Could not access embedding model: {e}")
+            return None
 
     def _create_structured_summary(self, file_paths: list[Path]) -> str:
         """Create a structured summary optimized for LLM analysis with advanced compression strategies."""

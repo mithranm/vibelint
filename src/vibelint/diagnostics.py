@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Tuple
 
 __all__ = ["LLMBenchmark", "VibelintDiagnostics"]
 
@@ -61,7 +61,7 @@ def medium_function(data: Dict[str, Any]) -> List[str]:
 
         return test_files
 
-    def benchmark_llm_speed(self, categories: List[str] = None) -> Dict[str, Any]:
+    def benchmark_llm_speed(self, categories: List[str] | None = None) -> Dict[str, Any]:
         """Benchmark LLM analysis speed across different file sizes."""
         if categories is None:
             categories = ["ai"]

@@ -28,20 +28,17 @@ from rich.table import Table
 from .ascii import scale_to_terminal_by_height
 from .config import Config, load_config
 from .console_utils import console
+from .diagnostics import run_benchmark, run_diagnostics
 from .formatters import DEFAULT_FORMAT, FORMAT_CHOICES
-from .namespace import (
-    NamespaceCollision,
-    build_namespace_tree,
-    detect_global_definition_collisions,
-    detect_hard_collisions,
-    detect_local_export_collisions,
-)
+from .namespace import (NamespaceCollision, build_namespace_tree,
+                        detect_global_definition_collisions,
+                        detect_hard_collisions, detect_local_export_collisions)
 from .report import write_report_content
-from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
+from .results import (CheckResult, CommandResult, NamespaceResult,
+                      SnapshotResult)
 from .snapshot import create_snapshot
 from .utils import find_project_root, get_relative_path
 from .validation_engine import run_plugin_validation
-from .diagnostics import run_benchmark, run_diagnostics
 
 
 class VibelintContext:
@@ -656,10 +653,10 @@ def check(
         if fix:
             console.print("\n[bold blue]Applying automatic fixes...[/bold blue]")
             import asyncio
-            from .fix import apply_fixes
-
             # Collect fixable findings by file
             from collections import defaultdict
+
+            from .fix import apply_fixes
 
             file_findings = defaultdict(list)
 
@@ -677,8 +674,8 @@ def check(
                     fix_results = asyncio.run(apply_fixes(config, file_findings))
 
                     # Report fix results
-                    fixed_count = sum(1 for was_fixed in fix_results.values() if was_fixed)
-                    total_files = len(fix_results)
+                    fixed_count = fix_results  # apply_fixes returns int count of fixed files
+                    total_files = len(file_findings)
 
                     if fixed_count > 0:
                         console.print(
@@ -1024,7 +1021,8 @@ thinking_format = "harmony"      # Options: "harmony", "qwen", "custom"
             content = detect.read_text(encoding="utf-8")
 
             # Import the detection logic
-            from .validators.architecture.llm_analysis import LLMAnalysisValidator
+            from .validators.architecture.llm_analysis import \
+                LLMAnalysisValidator
 
             # Create a temporary validator instance to use detection method
             validator = LLMAnalysisValidator()
@@ -1062,7 +1060,7 @@ custom_thinking_patterns = {suggestions}"""
 
             else:
                 console.print(
-                    "\n[bold green]✓ No thinking tokens detected in this file.[/bold green]"
+                    "\n[bold green]OK - No thinking tokens detected in this file.[/bold green]"
                 )
 
         except Exception as e:

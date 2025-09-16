@@ -1,1 +1,0 @@
-"""Built-in validators for vibelint."""

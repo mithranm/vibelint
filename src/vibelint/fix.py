@@ -26,7 +26,8 @@ class FixEngine:
         vibelint/src/vibelint/fix.py
         """
         self.config = config
-        self.llm_config = config.settings.get("llm_analysis", {})
+        llm_config_raw = config.settings.get("llm_analysis", {})
+        self.llm_config = llm_config_raw if isinstance(llm_config_raw, dict) else {}
 
     def can_fix_finding(self, finding: Finding) -> bool:
         """Check if a finding can be automatically fixed.
@@ -159,12 +160,16 @@ class FixEngine:
     async def _generate_docstring_content(self, node: ast.AST, file_path: Path) -> Optional[str]:
         """Generate only docstring text content using LLM (safe operation)."""
         if not self.llm_config.get("api_base_url"):
-            # Fallback to simple docstring without LLM
+            # Generate basic docstring without LLM
             if isinstance(node, ast.ClassDef):
-                return f"{node.name} class implementation."
+                return f"{node.name} class."
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                return f"{node.name} function implementation."
-            return "Implementation."
+                args = [arg.arg for arg in node.args.args] if hasattr(node, "args") else []
+                if args:
+                    return f"{node.name} function with parameters: {', '.join(args)}."
+                else:
+                    return f"{node.name} function."
+            return "Module implementation."
 
         try:
             from langchain_openai import ChatOpenAI
@@ -173,6 +178,9 @@ class FixEngine:
             api_key = self.llm_config.get("api_key", "dummy-key")
             base_url = self.llm_config.get("api_base_url")
             model = self.llm_config.get("model", "gpt-3.5-turbo")
+
+            if not base_url:
+                return "Module implementation."  # No LLM available
 
             llm = ChatOpenAI(
                 base_url=base_url + "/v1" if not base_url.endswith("/v1") else base_url,
@@ -189,12 +197,12 @@ class FixEngine:
                 args = [arg.arg for arg in node.args.args] if hasattr(node, "args") else []
                 prompt = f"Write a brief docstring for a Python function named '{node.name}' with parameters {args}. Return only the docstring text without quotes or formatting."
             else:
-                return "Implementation."
+                return "Module implementation."
 
             response = await llm.ainvoke(prompt)
             if response and response.content:
                 # Clean the response to ensure it's just text
-                content = response.content.strip()
+                content = str(response.content).strip()
                 # Remove any quotes or markdown that might have been added
                 content = content.replace('"""', "").replace("'''", "").replace("`", "")
                 return content[:200]  # Limit length

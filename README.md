@@ -52,8 +52,10 @@ Modern Python development involves both human developers and AI assistants. Code
 - **Export Management**: Validates `__all__` declarations
 
 ### 🧠 **AI-Powered Analysis**
-- **Semantic Similarity**: Uses embeddings to find functionally similar code
-- **LLM Architecture Review**: Detects over-engineering and unnecessary abstractions
+- **Multi-Phase Architecture Review**: 4-phase analysis pipeline with batched processing
+- **Semantic Similarity**: Uses EmbeddingGemma to find functionally similar code
+- **Dynamic Context Discovery**: Automatically probes LLM for real context window limits
+- **Token Usage Optimization**: Real-time diagnostics for optimal LLM utilization
 - **Fallback Pattern Analysis**: Identifies problematic exception handling
 
 ### 📊 **Project Intelligence**
@@ -93,6 +95,10 @@ vibelint snapshot
 
 # Visualize project structure
 vibelint namespace
+
+# Enable context discovery when switching LLM providers
+# Edit pyproject.toml: enable_context_probing = true
+# Then run: vibelint check --rule ARCHITECTURE-LLM
 ```
 
 ## Core Commands
@@ -229,14 +235,22 @@ similarity_threshold = 0.85
 ```
 
 ### 🤖 **LLM Architecture Review**
-Connects to local LLM endpoints for architectural analysis:
+Connects to local LLM endpoints for sophisticated multi-phase architectural analysis:
 
 ```toml
 [tool.vibelint.llm_analysis]
 api_base_url = "http://localhost:11434"
 model = "codellama:13b"
 temperature = 0.3
+max_tokens = 2048            # Generation limit (must be < context window)
+max_context_tokens = 4000    # Actual discovered context window
 ```
+
+**Multi-Phase Analysis Pipeline:**
+1. **Phase 1**: Generate file summaries using DFS traversal (batched for efficiency)
+2. **Phase 2**: Compute embeddings with EmbeddingGemma for semantic clustering
+3. **Phase 3**: Pairwise analysis of semantically similar files
+4. **Phase 4**: Global synthesis of architectural patterns and issues
 
 ### 🧠 **Thinking Token Management**
 vibelint automatically removes "thinking" tokens from LLM responses to provide clean analysis output:
@@ -266,6 +280,46 @@ thinking_format = "harmony"      # Options: "harmony", "qwen", "custom"
 vibelint thinking-tokens --show-formats  # Show all supported formats
 vibelint thinking-tokens --detect file   # Detect tokens in a file
 ```
+
+### 📊 **Token Usage Diagnostics & Context Discovery**
+Automatically optimizes LLM utilization and discovers real context limits:
+
+```toml
+[tool.vibelint.llm_analysis]
+# Token usage diagnostics (for optimal LLM utilization)
+enable_token_diagnostics = true        # Enable detailed token usage analysis
+max_context_tokens = 4000             # Model's maximum context window (discovered)
+max_prompt_tokens = 3500              # Reserve tokens for generation
+
+# Dynamic context discovery (discovers actual LLM limits)
+enable_context_probing = false        # Set to true when switching providers to re-discover limits
+```
+
+**What it provides:**
+- **Real-time Context Monitoring**: Shows actual token usage vs. available context
+- **Dynamic Context Discovery**: Probes LLM to find real context window size (not just configured)
+- **Efficiency Warnings**: Alerts when context usage is too low (<30%) or too high (>80%)
+- **Cost Optimization**: Tracks total input/output tokens and provides utilization recommendations
+- **Batch Size Optimization**: Suggests optimal batch sizes based on discovered limits
+
+**Example output:**
+```
+🔍 Probing LLM for actual context window limits...
+⚠️ Actual context limit lower than configured: 4,000 tokens vs 32,768
+💡 RECOMMENDATION: Reduce max_context_tokens to avoid errors
+
+Context utilization: 11.7% (469/4,000 tokens, discovered)
+=== LLM Usage Diagnostics ===
+Context window: 4,000 tokens (discovered)
+Average context efficiency: 7.8%
+⚠️ Context discovery found 88% smaller window than configured
+```
+
+**Why this matters:**
+- **Prevents Failures**: Discovers real limits before hitting context overflow errors
+- **Optimizes Costs**: Maximizes token utilization within actual constraints
+- **Saves Time**: Avoids failed analysis runs due to incorrect assumptions
+- **Provider Agnostic**: Works with any OpenAI-compatible API endpoint
 
 ### ⚡ **Performance Analysis**
 Detects common performance anti-patterns and suggests optimizations.
@@ -378,6 +432,18 @@ api_base_url = "http://localhost:11434"
 model = "codellama:13b"
 max_tokens = 2048
 temperature = 0.3
+max_context_tokens = 4000             # Model's maximum context window (discovered)
+max_prompt_tokens = 3500              # Reserve tokens for generation
+
+# Token usage diagnostics (for optimal LLM utilization)
+enable_token_diagnostics = true        # Enable detailed token usage analysis
+
+# Dynamic context discovery (discovers actual LLM limits)
+enable_context_probing = false         # Set to true when switching providers to re-discover limits
+
+# Thinking token removal configuration
+remove_thinking_tokens = true          # Set to false to keep all model output
+thinking_format = "harmony"            # Options: "harmony", "qwen", "custom"
 
 # Rule categories for targeted analysis
 [tool.vibelint.rule_categories]

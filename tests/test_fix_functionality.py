@@ -1,12 +1,13 @@
 """Tests for the --fix functionality to ensure it works correctly."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from vibelint.fix import FixEngine, can_fix_finding, apply_fixes
-from vibelint.plugin_system import Finding, Severity
+import pytest
+
 from vibelint.config import Config
+from vibelint.fix import FixEngine, apply_fixes, can_fix_finding
+from vibelint.plugin_system import Finding, Severity
 
 
 class TestFixFunctionality:
