@@ -18,7 +18,6 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from ...config import Config
 from ...plugin_system import BaseValidator, Finding, Severity
 
 __all__ = ["IntelligentLLMValidator"]
@@ -47,7 +46,7 @@ class IntelligentLLMValidator(BaseValidator):
         self._project_files: List[Path] = []
         self._analysis_cache: Dict[str, Any] = {}
 
-    def _setup_llm_client(self, config: Config) -> bool:
+    def _setup_llm_client(self, config: Dict[str, Any]) -> bool:
         """Initialize LLM client with configuration."""
         llm_config = config.get("llm_analysis", {})
 
@@ -320,7 +319,7 @@ Respond with JSON:
         self._analysis_completed = True
 
         # Collect all project files
-        project_root = config.project_root if config else file_path.parent
+        project_root = config.get("project_root", file_path.parent) if config else file_path.parent
         self._project_files = list(project_root.rglob("*.py"))
 
         logger.info(

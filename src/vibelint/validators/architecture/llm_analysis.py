@@ -753,7 +753,7 @@ CONCERNS: Any potential issues
 
             # Create clusters from similar pairs
             clusters = []
-            for file1, file2, sim in similar_pairs:
+            for file1, file2, _sim in similar_pairs:
                 # Find existing cluster or create new one
                 placed = False
                 for cluster in clusters:
