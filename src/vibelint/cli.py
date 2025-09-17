@@ -897,7 +897,7 @@ def namespace(ctx: click.Context, output: Path | None) -> None:
         # Use the non-None project_root for target_paths
         target_paths: list[Path] = [project_root]
         logger_cli.info("Building namespace tree...")
-        from .namespace import build_namespace_tree
+        from .validators.namespace_collisions import build_namespace_tree
 
         # Pass the non-None target_paths here too
         root_node, intra_file_collisions = build_namespace_tree(target_paths, config)
