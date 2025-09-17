@@ -7,7 +7,7 @@ vibelint/src/vibelint/fix.py
 import ast
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .config import Config
 from .plugin_system import Finding
@@ -359,6 +359,107 @@ async def regenerate_all_docstrings(config: Config, file_paths: List[Path]) -> i
     return processed_count
 
 
+async def preview_docstring_changes(config: Config, file_paths: List[Path]) -> Dict[str, Any]:
+    """Preview what docstring changes would be made without modifying files.
+
+    Returns a dictionary containing:
+    - files_analyzed: list of files that would be changed
+    - total_changes: total number of docstring changes
+    - preview_samples: dict of file -> list of preview changes
+
+    vibelint/src/vibelint/fix.py
+    """
+    engine = FixEngine(config)
+    preview_results = {
+        "files_analyzed": [],
+        "total_changes": 0,
+        "preview_samples": {},
+        "errors": []
+    }
+
+    if not engine.llm_config.get("api_base_url"):
+        preview_results["errors"].append("No LLM API configured. Cannot preview docstring changes.")
+        return preview_results
+
+    for file_path in file_paths:
+        try:
+            file_preview = await _preview_docstrings_in_file(engine, file_path)
+            if file_preview["changes"]:
+                preview_results["files_analyzed"].append(str(file_path))
+                preview_results["total_changes"] += len(file_preview["changes"])
+                preview_results["preview_samples"][str(file_path)] = file_preview["changes"]
+        except Exception as e:
+            preview_results["errors"].append(f"Failed to preview {file_path}: {e}")
+
+    return preview_results
+
+
+async def _preview_docstrings_in_file(engine: FixEngine, file_path: Path) -> Dict[str, Any]:
+    """Preview docstring changes for a single file without modifying it.
+
+    Returns dict with 'changes' list containing preview information.
+    """
+    file_preview = {"changes": []}
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        lines = content.splitlines()
+
+        # Parse the file to find all functions and classes
+        tree = ast.parse(content)
+
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                change_preview = await _preview_node_docstring(engine, node, lines, file_path)
+                if change_preview:
+                    file_preview["changes"].append(change_preview)
+
+    except (OSError, UnicodeDecodeError, SyntaxError) as e:
+        logger.error(f"Error previewing {file_path}: {e}")
+
+    return file_preview
+
+
+async def _preview_node_docstring(
+    engine: FixEngine,
+    node: ast.AST,
+    lines: List[str],
+    file_path: Path,
+) -> Optional[Dict[str, Any]]:
+    """Preview what docstring change would be made for a specific AST node.
+
+    Returns preview dict with change information, or None if no change.
+    """
+    # SAFETY CHECK: Only process functions and classes that we can safely identify
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return None
+
+    # Get current docstring if it exists
+    current_docstring = ast.get_docstring(node)
+
+    # Generate new docstring content (this calls the LLM)
+    new_docstring_content = await engine._generate_docstring_content(node, file_path)
+    if not new_docstring_content:
+        return None
+
+    # SAFETY VALIDATION: Check that generated content is reasonable
+    if not _validate_docstring_content(new_docstring_content):
+        return None
+
+    # Determine what type of change this would be
+    change_type = "add" if not current_docstring else "modify"
+    node_type = "function" if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else "class"
+
+    return {
+        "node_name": node.name,
+        "node_type": node_type,
+        "line_number": node.lineno,
+        "change_type": change_type,
+        "current_docstring": current_docstring[:100] + "..." if current_docstring and len(current_docstring) > 100 else current_docstring,
+        "new_docstring": new_docstring_content[:100] + "..." if len(new_docstring_content) > 100 else new_docstring_content
+    }
+
+
 async def _regenerate_docstrings_in_file(engine: FixEngine, file_path: Path) -> bool:
     """Regenerate all docstrings in a single file.
 
@@ -398,20 +499,31 @@ async def _regenerate_node_docstring(
     modifications: Dict[int, str],
     file_path: Path,
 ) -> None:
-    """Regenerate docstring for a specific AST node.
+    """Regenerate docstring for a specific AST node with strict safety validation.
+
+    SAFETY CRITICAL: This function must NEVER modify any Python code, only docstring content.
 
     vibelint/src/vibelint/fix.py
     """
+    # SAFETY CHECK: Only process functions and classes that we can safely identify
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        logger.warning(f"Skipping unsafe node type {type(node)} for safety")
+        return
+
     # Get current docstring if it exists
     current_docstring = ast.get_docstring(node)
 
-    # Generate new docstring content
+    # SAFETY CHECK: Validate LLM-generated content before using it
     new_docstring_content = await engine._generate_docstring_content(node, file_path)
-
     if not new_docstring_content:
         return
 
-    # Determine indentation
+    # SAFETY VALIDATION: Check that generated content is reasonable
+    if not _validate_docstring_content(new_docstring_content):
+        logger.warning(f"Generated docstring failed safety validation for {node.name}")
+        return
+
+    # Determine indentation safely
     node_line = node.lineno - 1
     if node_line < len(lines):
         indent = len(lines[node_line]) - len(lines[node_line].lstrip())
@@ -419,46 +531,132 @@ async def _regenerate_node_docstring(
     else:
         indent_str = "    "  # Default indentation
 
-    # Format the new docstring with path reference
+    # Format the new docstring with path reference and safety warning
     new_docstring = (
-        f'{indent_str}"""{new_docstring_content}\n\n{indent_str}{file_path}\n{indent_str}"""'
+        f'{indent_str}"""{new_docstring_content}\n\n'
+        f'{indent_str}⚠️  CRITICAL WARNING: This docstring was auto-generated by LLM and MUST be reviewed.\n'
+        f'{indent_str}Inaccurate documentation can cause security vulnerabilities, system failures,\n'
+        f'{indent_str}and data corruption. Verify all parameters, return types, and behavior descriptions.\n\n'
+        f'{indent_str}{file_path}\n{indent_str}"""'
     )
 
     if current_docstring:
-        # Replace existing docstring - NEVER touch the function/class definition line
-        docstring_start_line = None
-        docstring_end_line = None
+        # ULTRA SAFE: Find docstring using multiple validation methods
+        docstring_lines = _find_docstring_lines_safely(node, lines)
 
-        # Find the actual docstring lines (not the function/class definition)
-        for i in range(node.lineno, len(lines)):  # Start AFTER the def/class line
-            line = lines[i].strip()
-            if line.startswith('"""') or line.startswith("'''"):
-                docstring_start_line = i
-                # Find the end of this docstring
-                quote_type = '"""' if line.startswith('"""') else "'''"
-                quote_count = line.count(quote_type)
+        if docstring_lines:
+            # SAFETY CHECK: Verify we're only modifying docstring lines
+            for line_num in docstring_lines:
+                if line_num < len(lines):
+                    line_content = lines[line_num]
+                    # CRITICAL: Only modify lines that are clearly part of docstring
+                    if not _is_safe_docstring_line(line_content):
+                        logger.error(f"SAFETY VIOLATION: Attempted to modify non-docstring line {line_num}: {line_content}")
+                        return  # Abort entire operation for safety
 
-                if quote_count >= 2:  # Single-line docstring
-                    docstring_end_line = i
-                    break
-                else:  # Multi-line docstring
-                    for j in range(i + 1, len(lines)):
-                        if quote_type in lines[j]:
-                            docstring_end_line = j
-                            break
-                break
-
-        if docstring_start_line is not None and docstring_end_line is not None:
-            # Replace only the docstring lines, never the function/class definition
-            for line_num in range(docstring_start_line, docstring_end_line + 1):
-                if line_num == docstring_start_line:
+            # Safe to proceed - modify only the first docstring line, remove others
+            for i, line_num in enumerate(docstring_lines):
+                if i == 0:
                     modifications[line_num] = new_docstring
                 else:
-                    modifications[line_num] = ""  # Remove other docstring lines
+                    modifications[line_num] = ""  # Remove continuation lines
+        else:
+            logger.warning(f"Could not safely locate docstring for {node.name}")
     else:
         # Add new docstring after function/class definition
         insert_line = node.lineno  # Line after def/class
         modifications[insert_line] = new_docstring
+
+
+def _validate_docstring_content(content: str) -> bool:
+    """Validate that LLM-generated docstring content is safe and reasonable.
+
+    vibelint/src/vibelint/fix.py
+    """
+    if not content or not isinstance(content, str):
+        return False
+
+    # Check for dangerous content
+    dangerous_patterns = [
+        'import ', 'exec(', 'eval(', '__import__',
+        'subprocess', 'os.system', 'shell=True',
+        'DELETE', 'DROP TABLE', 'rm -rf'
+    ]
+
+    content_lower = content.lower()
+    for pattern in dangerous_patterns:
+        if pattern.lower() in content_lower:
+            logger.error(f"SAFETY: Dangerous pattern '{pattern}' found in generated docstring")
+            return False
+
+    # Check reasonable length (docstrings shouldn't be huge)
+    if len(content) > 2000:
+        logger.warning("Generated docstring is suspiciously long")
+        return False
+
+    return True
+
+
+def _find_docstring_lines_safely(node: ast.AST, lines: List[str]) -> List[int]:
+    """Safely find the exact line numbers of a docstring using multiple validation methods.
+
+    vibelint/src/vibelint/fix.py
+    """
+    # Method 1: Use AST to find docstring node
+    docstring_node = None
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.Expr) and isinstance(child.value, ast.Constant):
+            if isinstance(child.value.value, str):
+                docstring_node = child
+                break
+
+    if not docstring_node:
+        return []
+
+    # Get line range from AST
+    start_line = docstring_node.lineno - 1  # Convert to 0-based
+    end_line = docstring_node.end_lineno - 1 if docstring_node.end_lineno else start_line
+
+    # Method 2: Verify by examining actual line content
+    docstring_lines = []
+    for line_num in range(start_line, end_line + 1):
+        if line_num < len(lines):
+            if _is_safe_docstring_line(lines[line_num]):
+                docstring_lines.append(line_num)
+            else:
+                # If any line in the range is not a docstring line, abort for safety
+                logger.error(f"SAFETY: Line {line_num} in docstring range is not a docstring line")
+                return []
+
+    return docstring_lines
+
+
+def _is_safe_docstring_line(line: str) -> bool:
+    """Check if a line is definitely part of a docstring and safe to modify.
+
+    vibelint/src/vibelint/fix.py
+    """
+    stripped = line.strip()
+
+    # Must contain quotes or be empty/whitespace (for multi-line docstrings)
+    if not stripped:
+        return True  # Empty line within docstring
+
+    # Must contain docstring quotes
+    if '"""' in stripped or "'''" in stripped:
+        return True
+
+    # If it doesn't start with quotes, it might be docstring content
+    # But we need to be very careful - check it doesn't look like code
+    if any(pattern in stripped for pattern in ['def ', 'class ', 'import ', '=', 'return ', 'if ', 'for ', 'while ']):
+        return False
+
+    # If it's indented and looks like text, probably docstring content
+    if line.startswith('    ') and not stripped.startswith(('#', '//')):
+        return True
+
+    # Default to false for safety
+    return False
 
 
 def _apply_line_modifications(lines: List[str], modifications: Dict[int, str]) -> str:
