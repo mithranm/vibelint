@@ -7,7 +7,7 @@ vibelint/src/vibelint/results.py
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .namespace import NamespaceCollision, NamespaceNode
+from .validators.namespace_collisions import NamespaceCollision, NamespaceNode
 from .plugin_system import Finding
 
 __all__ = ["CheckResult", "CommandResult", "NamespaceResult", "SnapshotResult"]

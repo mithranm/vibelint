@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from .discovery import discover_files, discover_files_from_paths
-from .formatters import BUILTIN_FORMATTERS
+from .reporting import BUILTIN_FORMATTERS
 from .plugin_system import Finding, Severity, plugin_manager
 from .rules import RuleEngine
 

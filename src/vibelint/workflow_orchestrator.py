@@ -1,10 +1,10 @@
 """
-Multi-level analysis orchestrator for comprehensive code quality assessment.
+Multi-level workflow orchestrator for comprehensive code quality assessment.
 
 Coordinates tree-level, content-level, and deep analysis using specialized
 LLM agents to catch organizational violations at different granularities.
 
-vibelint/src/vibelint/analysis_orchestrator.py
+vibelint/src/vibelint/workflow_orchestrator.py
 """
 
 import json

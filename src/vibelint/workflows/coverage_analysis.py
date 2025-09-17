@@ -1,11 +1,11 @@
 """
-Agentic coverage vibe checking for vibelint.
+Coverage analysis workflow for comprehensive test coverage evaluation.
 
 AI-powered coverage analysis, edge case detection, and automated
-code generation using dual LLM architecture. Checks the "vibe" of your
-coverage and suggests improvements.
+test generation using dual LLM architecture. Analyzes coverage gaps
+and suggests targeted improvements.
 
-tools/vibelint/src/vibelint/coverage_analysis.py
+vibelint/src/vibelint/workflows/coverage_analysis.py
 """
 
 import ast
@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .llm_manager import LLMRequest, create_llm_manager
+from ..llm import LLMRequest, LLMManager
+from .base import BaseWorkflow, WorkflowResult, WorkflowStatus, WorkflowConfig
 
 logger = logging.getLogger(__name__)
 

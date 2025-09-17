@@ -27,7 +27,7 @@ from rich.table import Table
 # Core imports needed at module level
 from .config import Config, load_config
 from .console_utils import console
-from .namespace import NamespaceCollision
+from .validators.namespace_collisions import NamespaceCollision
 from .results import (CheckResult, CommandResult, NamespaceResult,
                       SnapshotResult)
 from .utils import get_relative_path
@@ -774,7 +774,7 @@ def check(
         # Then check for namespace collisions
         logger_cli.debug("Checking for namespace vibe collisions...")
         target_paths: list[Path] = [project_root]
-        from .namespace import (detect_global_definition_collisions,
+        from .validators.namespace_collisions import (detect_global_definition_collisions,
                                 detect_hard_collisions,
                                 detect_local_export_collisions)
 
@@ -807,7 +807,7 @@ def check(
             logger_cli.info(f"Generating detailed Vibe Report to {report_path}...")
             try:
                 report_path.parent.mkdir(parents=True, exist_ok=True)
-                from .namespace import build_namespace_tree
+                from .validators.namespace_collisions import build_namespace_tree
                 from .report import write_report_content
 
                 # Pass the non-None target_paths here too
