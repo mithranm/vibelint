@@ -9,7 +9,6 @@ vibelint/src/vibelint/cli.py
 
 import logging
 import random
-import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -1155,20 +1154,18 @@ custom_thinking_patterns = {suggestions}"""
 
 
 @cli.command("diagnostics")
-@click.option("--probe", is_flag=True, help="Run context probing (default)")
-@click.option("--benchmark", is_flag=True, help="Run routing benchmark")
 @click.pass_context
-def diagnostics_cmd(ctx: click.Context, probe: bool, benchmark: bool) -> None:
+def diagnostics_cmd(ctx: click.Context) -> None:
     """
-    Run dual LLM diagnostics with context probing.
+    Run comprehensive dual LLM diagnostics.
 
-    Discovers actual context limits for both primary (vLLM) and
-    orchestrator (llama.cpp) LLMs using systematic testing.
+    Combines context probing and routing benchmarks into one operation:
+    - Discovers actual context limits for both fast and orchestrator LLMs
+    - Tests routing accuracy between vLLM and llama.cpp engines
+    - Measures performance metrics and generates calibration report
 
-    Examples:
-        vibelint diagnostics           # Run both probing and benchmark
-        vibelint diagnostics --probe   # Context probing only
-        vibelint diagnostics --benchmark  # Routing benchmark only
+    Example:
+        vibelint diagnostics    # Complete dual LLM diagnostic suite
 
     tools/vibelint/src/vibelint/cli.py
     """
@@ -1184,34 +1181,32 @@ def diagnostics_cmd(ctx: click.Context, probe: bool, benchmark: bool) -> None:
 
     config_dict = config.settings if isinstance(config.settings, dict) else {}
 
-    # Default: run both
-    if not probe and not benchmark:
-        probe = benchmark = True
-
     import asyncio
 
-    async def run_diagnostics_async():
-        from .diagnostics import run_diagnostics, run_benchmark
+    async def run_complete_diagnostics():
+        from .diagnostics import run_diagnostics
 
-        if probe:
-            console.print("[bold blue]🔍 Running LLM context probing...[/bold blue]")
-            probe_results = await run_diagnostics(config_dict)
+        console.print("[bold blue]🔍 Running comprehensive LLM diagnostics...[/bold blue]")
+        console.print("  • Context probing for both LLMs")
+        console.print("  • Performance benchmarking")
+        console.print("  • Routing accuracy testing\n")
 
-            if not probe_results.get("success"):
-                console.print(f"[red]❌ Context probing failed: {probe_results.get('error', 'Unknown error')}[/red]")
-                return False
+        results = await run_diagnostics(config_dict)
 
-        if benchmark:
-            console.print("[bold blue]⚡ Running LLM routing benchmark...[/bold blue]")
-            await run_benchmark(config_dict)
-
-        return True
+        if results.get("success"):
+            console.print("\n[bold green]✅ Diagnostics completed successfully![/bold green]")
+            console.print("📄 Check LLM_CALIBRATION_RESULTS.md for detailed results")
+            return True
+        else:
+            console.print(
+                f"\n[red]❌ Diagnostics failed: {results.get('error', 'Unknown error')}[/red]"
+            )
+            return False
 
     try:
-        success = asyncio.run(run_diagnostics_async())
-        if success:
-            console.print("\n[bold green]✅ Diagnostics completed![/bold green]")
-            console.print("📄 Check LLM_CALIBRATION_RESULTS.md for details")
+        success = asyncio.run(run_complete_diagnostics())
+        if not success:
+            ctx.exit(1)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]⚠️  Cancelled by user[/yellow]")
@@ -1230,10 +1225,16 @@ def diagnostics_cmd(ctx: click.Context, probe: bool, benchmark: bool) -> None:
     required=False,
 )
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
-@click.option("--dry-run", is_flag=True, help="Preview changes without modifying files (RECOMMENDED for safety).")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview changes without modifying files (RECOMMENDED for safety).",
+)
 @click.option("--backup", is_flag=True, help="Create backup files before modification.")
 @click.pass_context
-def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool, dry_run: bool, backup: bool) -> None:
+def regen_docstrings_cmd(
+    ctx: click.Context, paths: tuple[Path, ...], yes: bool, dry_run: bool, backup: bool
+) -> None:
     """
     Regenerate ALL docstrings in Python files using LLM.
 
@@ -1269,8 +1270,12 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
         console.print("\n[bold green]🔍 DRY RUN MODE - No files will be modified[/bold green]\n")
     else:
         console.print("\n[bold red]⚠️  DANGER: This will modify your source code files![/bold red]")
-        console.print("[bold red]⚠️  LLM-generated docstrings may be inaccurate or misleading![/bold red]")
-        console.print("[bold yellow]💡 Consider using --dry-run first to preview changes[/bold yellow]\n")
+        console.print(
+            "[bold red]⚠️  LLM-generated docstrings may be inaccurate or misleading![/bold red]"
+        )
+        console.print(
+            "[bold yellow]💡 Consider using --dry-run first to preview changes[/bold yellow]\n"
+        )
 
     config: Config = load_config(project_root)
     if config.project_root is None:
@@ -1302,7 +1307,9 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
         # Use project include_globs
         from .discovery import discover_files
 
-        target_files = list(discover_files([project_root], config, default_includes_if_missing=["**/*.py"]))
+        target_files = list(
+            discover_files([project_root], config, default_includes_if_missing=["**/*.py"])
+        )
         logger_cli.info(f"Processing {len(target_files)} files from project include_globs")
 
     if not target_files:
@@ -1312,14 +1319,18 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
     # Enhanced confirmation with safety warnings
     if not yes and not dry_run:
         console.print("\n[bold red]⚠️  CRITICAL SAFETY WARNING ⚠️[/bold red]")
-        console.print(f"This will modify {len(target_files)} Python files with LLM-generated content.")
+        console.print(
+            f"This will modify {len(target_files)} Python files with LLM-generated content."
+        )
         console.print("[bold red]Generated docstrings may be WRONG and could cause:[/bold red]")
         console.print("  • Security vulnerabilities")
         console.print("  • System failures")
         console.print("  • Data corruption")
         console.print("  • Production incidents")
         console.print("\n[bold yellow]STRONGLY RECOMMENDED:[/bold yellow] Use --dry-run first!")
-        console.print("[bold yellow]MANDATORY:[/bold yellow] Review ALL generated docstrings before committing to version control!")
+        console.print(
+            "[bold yellow]MANDATORY:[/bold yellow] Review ALL generated docstrings before committing to version control!"
+        )
 
         if not click.confirm("\nDo you understand the risks and want to proceed?"):
             console.print("Operation cancelled. Use --dry-run to preview changes safely.")
@@ -1332,11 +1343,13 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
     try:
         import asyncio
 
-        from .fix import regenerate_all_docstrings, preview_docstring_changes
+        from .fix import preview_docstring_changes, regenerate_all_docstrings
 
         if dry_run:
             # Execute dry-run preview
-            console.print("[bold yellow]🔍 PREVIEWING CHANGES: Analyzing what docstrings would be modified...[/bold yellow]")
+            console.print(
+                "[bold yellow]🔍 PREVIEWING CHANGES: Analyzing what docstrings would be modified...[/bold yellow]"
+            )
 
             preview_results = asyncio.run(preview_docstring_changes(config, target_files))
 
@@ -1345,9 +1358,13 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
                     console.print(f"[bold red]Error:[/bold red] {error}")
 
             if preview_results["total_changes"] == 0:
-                console.print("[bold green]✓ No docstring changes needed in the analyzed files.[/bold green]")
+                console.print(
+                    "[bold green]✓ No docstring changes needed in the analyzed files.[/bold green]"
+                )
             else:
-                console.print(f"[bold yellow]📋 Found {preview_results['total_changes']} docstring changes across {len(preview_results['files_analyzed'])} files:[/bold yellow]\n")
+                console.print(
+                    f"[bold yellow]📋 Found {preview_results['total_changes']} docstring changes across {len(preview_results['files_analyzed'])} files:[/bold yellow]\n"
+                )
 
                 # Show detailed preview for first few files
                 files_shown = 0
@@ -1357,8 +1374,14 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
 
                     console.print(f"[bold blue]📁 {file_path}:[/bold blue]")
                     for change in changes[:5]:  # Show first 5 changes per file
-                        action = "[green]ADD[/green]" if change["change_type"] == "add" else "[yellow]MODIFY[/yellow]"
-                        console.print(f"  {action} {change['node_type']} '{change['node_name']}' (line {change['line_number']})")
+                        action = (
+                            "[green]ADD[/green]"
+                            if change["change_type"] == "add"
+                            else "[yellow]MODIFY[/yellow]"
+                        )
+                        console.print(
+                            f"  {action} {change['node_type']} '{change['node_name']}' (line {change['line_number']})"
+                        )
 
                         if change["current_docstring"]:
                             console.print(f"    [dim]Current: {change['current_docstring']}[/dim]")
@@ -1366,7 +1389,9 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
                         console.print()
 
                     if len(changes) > 5:
-                        console.print(f"    [dim]... and {len(changes) - 5} more changes in this file[/dim]\n")
+                        console.print(
+                            f"    [dim]... and {len(changes) - 5} more changes in this file[/dim]\n"
+                        )
                     files_shown += 1
 
                 if len(preview_results["files_analyzed"]) > 3:
@@ -1374,32 +1399,48 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
                     console.print(f"[dim]... and {remaining} more files with changes[/dim]\n")
 
             console.print("[bold green]🔍 DRY RUN COMPLETE:[/bold green] No files were modified.")
-            console.print("[bold yellow]💡 Remove --dry-run to apply these changes (review carefully first!).[/bold yellow]")
+            console.print(
+                "[bold yellow]💡 Remove --dry-run to apply these changes (review carefully first!).[/bold yellow]"
+            )
         else:
             # Create backups if requested
             backup_manifest = []
             if backup:
                 console.print("[bold blue]Creating backup files...[/bold blue]")
                 import datetime
+
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
                 for file_path in target_files:
-                    backup_path = file_path.with_suffix(f'.{timestamp}.bak')
+                    backup_path = file_path.with_suffix(f".{timestamp}.bak")
                     try:
-                        backup_path.write_text(file_path.read_text(encoding='utf-8'), encoding='utf-8')
-                        backup_manifest.append({"original": str(file_path), "backup": str(backup_path)})
+                        backup_path.write_text(
+                            file_path.read_text(encoding="utf-8"), encoding="utf-8"
+                        )
+                        backup_manifest.append(
+                            {"original": str(file_path), "backup": str(backup_path)}
+                        )
                     except (OSError, UnicodeDecodeError) as e:
-                        console.print(f"[bold red]Warning: Failed to backup {file_path}: {e}[/bold red]")
+                        console.print(
+                            f"[bold red]Warning: Failed to backup {file_path}: {e}[/bold red]"
+                        )
 
                 # Save backup manifest for rollback functionality
                 if backup_manifest:
                     manifest_path = Path(f".vibelint_backup_{timestamp}.json")
                     import json
+
                     try:
-                        manifest_path.write_text(json.dumps(backup_manifest, indent=2), encoding='utf-8')
-                        console.print(f"[bold blue]📝 Backup manifest saved: {manifest_path}[/bold blue]")
+                        manifest_path.write_text(
+                            json.dumps(backup_manifest, indent=2), encoding="utf-8"
+                        )
+                        console.print(
+                            f"[bold blue]📝 Backup manifest saved: {manifest_path}[/bold blue]"
+                        )
                     except (OSError, ValueError) as e:
-                        console.print(f"[bold red]Warning: Failed to save backup manifest: {e}[/bold red]")
+                        console.print(
+                            f"[bold red]Warning: Failed to save backup manifest: {e}[/bold red]"
+                        )
 
             processed_count = asyncio.run(regenerate_all_docstrings(config, target_files))
 
@@ -1407,10 +1448,16 @@ def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool,
                 console.print(
                     f"[green]Successfully regenerated docstrings in {processed_count} files.[/green]"
                 )
-                console.print("[bold yellow]⚠️  IMPORTANT: Review all changes manually for accuracy![/bold yellow]")
+                console.print(
+                    "[bold yellow]⚠️  IMPORTANT: Review all changes manually for accuracy![/bold yellow]"
+                )
                 if backup and backup_manifest:
-                    console.print(f"[bold blue]💾 Backup files created with timestamp: {timestamp}[/bold blue]")
-                    console.print(f"[bold green]🔄 To rollback: vibelint rollback .vibelint_backup_{timestamp}.json[/bold green]")
+                    console.print(
+                        f"[bold blue]💾 Backup files created with timestamp: {timestamp}[/bold blue]"
+                    )
+                    console.print(
+                        f"[bold green]🔄 To rollback: vibelint rollback .vibelint_backup_{timestamp}.json[/bold green]"
+                    )
             else:
                 console.print("[yellow]No docstrings were regenerated.[/yellow]")
 
@@ -1440,10 +1487,13 @@ def rollback_cmd(ctx: click.Context, manifest: Path, yes: bool) -> None:
 
     try:
         import json
-        manifest_data = json.loads(manifest.read_text(encoding='utf-8'))
+
+        manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
 
         if not isinstance(manifest_data, list):
-            console.print("[bold red]Error: Invalid manifest format - expected list of backup entries[/bold red]")
+            console.print(
+                "[bold red]Error: Invalid manifest format - expected list of backup entries[/bold red]"
+            )
             ctx.exit(1)
 
         # Validate all backup files exist before starting rollback
@@ -1464,12 +1514,14 @@ def rollback_cmd(ctx: click.Context, manifest: Path, yes: bool) -> None:
             ctx.exit(1)
 
         # Show what will be rolled back
-        console.print(f"\n[bold yellow]This will restore {len(manifest_data)} files from backup:[/bold yellow]")
+        console.print(
+            f"\n[bold yellow]This will restore {len(manifest_data)} files from backup:[/bold yellow]"
+        )
         for entry in manifest_data:
             console.print(f"  • {entry['original']} ← {entry['backup']}")
 
         if not yes:
-            console.print(f"\n[bold red]⚠️  WARNING: This will overwrite current files![/bold red]")
+            console.print("\n[bold red]⚠️  WARNING: This will overwrite current files![/bold red]")
             if not click.confirm("Are you sure you want to proceed with rollback?"):
                 console.print("Rollback cancelled.")
                 ctx.exit(0)
@@ -1482,18 +1534,24 @@ def rollback_cmd(ctx: click.Context, manifest: Path, yes: bool) -> None:
 
             try:
                 # Restore from backup
-                backup_content = backup_path.read_text(encoding='utf-8')
-                original_path.write_text(backup_content, encoding='utf-8')
+                backup_content = backup_path.read_text(encoding="utf-8")
+                original_path.write_text(backup_content, encoding="utf-8")
                 success_count += 1
                 console.print(f"[green]✓[/green] Restored {original_path}")
             except (OSError, UnicodeDecodeError) as e:
                 console.print(f"[red]✗[/red] Failed to restore {original_path}: {e}")
 
         if success_count == len(manifest_data):
-            console.print(f"\n[bold green]🎉 Successfully rolled back all {success_count} files![/bold green]")
-            console.print("[bold blue]💡 Consider removing backup files and manifest if no longer needed.[/bold blue]")
+            console.print(
+                f"\n[bold green]🎉 Successfully rolled back all {success_count} files![/bold green]"
+            )
+            console.print(
+                "[bold blue]💡 Consider removing backup files and manifest if no longer needed.[/bold blue]"
+            )
         else:
-            console.print(f"\n[bold yellow]⚠️  Partial rollback: {success_count}/{len(manifest_data)} files restored[/bold yellow]")
+            console.print(
+                f"\n[bold yellow]⚠️  Partial rollback: {success_count}/{len(manifest_data)} files restored[/bold yellow]"
+            )
 
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         console.print(f"[bold red]Error reading manifest file: {e}[/bold red]")

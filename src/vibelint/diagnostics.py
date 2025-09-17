@@ -69,11 +69,20 @@ class DualLLMDiagnostics:
             # Set timeout based on LLM type
             model_name = config["model"].lower()
             if "gpt-oss-20b" in model_name and "120b" not in model_name:  # Fast vLLM model
-                timeout_seconds = 10  # Fast model should be quick
-                context_sizes = [100, 300, 500, 800, 1000]  # Conservative for vLLM
+                timeout_seconds = 15  # Fast model should be quick
+                context_sizes = [100, 500, 1000, 2000, 4000, 8000, 16000]  # Test higher contexts
             else:  # 120B orchestrator model
-                timeout_seconds = 60  # 120B model needs much more time
-                context_sizes = [100, 500, 1000, 2000, 4000]  # Conservative ramp for 120B
+                timeout_seconds = 90  # 120B model needs more time for large contexts
+                context_sizes = [
+                    100,
+                    1000,
+                    4000,
+                    8000,
+                    16000,
+                    24000,
+                    32000,
+                    40000,
+                ]  # Test higher with stable system
 
             max_working_context = 0
             total_duration = 0

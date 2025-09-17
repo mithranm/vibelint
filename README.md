@@ -222,7 +222,170 @@ vibelint namespace -o structure.txt
 
 ## AI-Powered Analysis
 
-vibelint includes cutting-edge AI analysis capabilities:
+vibelint features a sophisticated dual-LLM architecture analysis system with intelligent routing and context discovery:
+
+### 🏗️ **Architecture Analysis Workflow**
+
+vibelint uses a **dual LLM architecture** with intelligent routing between fast and orchestrator LLMs for optimal performance:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    vibelint Architecture Analysis            │
+├─────────────────────────────────────────────────────────────┤
+│  1. File Discovery & Batching                               │
+│     • Discovers Python files via include_globs             │
+│     • Batches files for efficient processing               │
+│     • Estimates analysis time and warns about timeouts     │
+│                                                             │
+│  2. Dual LLM System Initialization                         │
+│     ┌──────────────────┐    ┌─────────────────────────────┐ │
+│     │   FAST LLM       │    │   ORCHESTRATOR LLM          │ │
+│     │   (vLLM)         │    │   (llama.cpp)               │ │
+│     │                  │    │                             │ │
+│     │ • Small context  │    │ • Large context (32k+)     │ │
+│     │ • Quick response │    │ • Complex reasoning         │ │
+│     │ • Docstrings     │    │ • Architecture analysis    │ │
+│     │ • Simple tasks   │    │ • Multi-file synthesis     │ │
+│     └──────────────────┘    └─────────────────────────────┘ │
+│              │                           │                  │
+│              └──────── Smart Router ─────┘                  │
+│                        (Context-aware)                      │
+│                                                             │
+│  3. Context Discovery & Calibration                        │
+│     • Linear ramp-up testing (100→500→1k→2k→4k tokens)    │
+│     • Discovers actual hardware limits                     │
+│     • Handles timeout gracefully (30s fast, 60s orchestrator)│
+│     • Generates assessment report with recommendations     │
+│                                                             │
+│  4. Multi-Phase Analysis Pipeline                          │
+│     Phase 1: File Summarization (Fast LLM)                │
+│     Phase 2: Semantic Similarity (Embeddings)             │
+│     Phase 3: Pairwise Analysis (Orchestrator LLM)         │
+│     Phase 4: Global Synthesis (Orchestrator LLM)          │
+│                                                             │
+│  5. Intelligent Routing Logic                              │
+│     ┌─────────────────────────────────────────────────────┐ │
+│     │ Task Type        → LLM Selection                    │ │
+│     │                                                     │ │
+│     │ • Small content  → Fast LLM                        │ │
+│     │ • >3000 tokens   → Orchestrator LLM               │ │
+│     │ • Architecture   → Orchestrator LLM               │ │
+│     │ • Planning       → Orchestrator LLM               │ │
+│     │ • Multi-file     → Orchestrator LLM               │ │
+│     │ • Docstrings     → Fast LLM                        │ │
+│     └─────────────────────────────────────────────────────┘ │
+│                                                             │
+│  6. Diagnostic & Assessment System                         │
+│     • Real-time context monitoring                         │
+│     • Performance benchmarking                             │
+│     • Configuration assessment vs actual performance       │
+│     • Provides recommendations without modifying files    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 🚀 **Dual LLM Configuration**
+Clean, intuitive configuration supporting two complementary LLMs:
+
+```toml
+[tool.vibelint.llm]
+# Fast LLM: High-speed inference for quick tasks (vLLM)
+fast_api_url = "http://100.94.250.88:8001"
+fast_model = "openai/gpt-oss-20b"
+fast_temperature = 0.1
+fast_max_tokens = 2048
+
+# Orchestrator LLM: Large context for complex reasoning (llama.cpp)
+orchestrator_api_url = "http://100.116.54.128:11434"
+orchestrator_model = "llama3.2:latest"
+orchestrator_temperature = 0.2
+orchestrator_max_tokens = 8192
+orchestrator_max_context_tokens = 3600  # Discovered via diagnostics
+
+# Automatic routing (when to use which LLM)
+context_threshold = 3000              # Use orchestrator for >3k tokens
+enable_context_probing = true         # Auto-discover actual limits
+enable_fallback = true                # Fallback between LLMs on failure
+```
+
+### 🔍 **Context Discovery & Calibration**
+
+vibelint automatically discovers real hardware limits through systematic testing:
+
+```bash
+# Run diagnostics to discover optimal configuration
+vibelint diagnostics
+
+# Output:
+🔍 Testing ORCHESTRATOR LLM context limits...
+  Testing 100 tokens... ✅ 1.5s
+  Testing 500 tokens... ✅ 2.3s
+  Testing 1000 tokens... ✅ 2.1s
+  Testing 2000 tokens... ✅ 2.9s
+  Testing 4000 tokens... ✅ 4.4s
+  📊 Result: 4000 tokens max, 2632ms avg, 100% success
+
+=== LLM Routing Benchmark ===
+Routing Accuracy: 100.0%
+  ✓ docstring: fast (expected: fast)
+  ✓ analysis: orchestrator (expected: orchestrator)
+  ✓ architecture: orchestrator (expected: orchestrator)
+
+✅ Assessment completed successfully!
+📄 Check LLM_ASSESSMENT_RESULTS.md for detailed results
+```
+
+**Key Benefits:**
+- **Hardware-Aware**: Discovers actual RTX 5090/128GB limits, not theoretical maximums
+- **Engine-Agnostic**: Works with vLLM, llama.cpp, Ollama, OpenAI-compatible APIs
+- **Assessment-Based**: Warns about misconfigurations without modifying files
+- **Performance-Optimized**: Linear ramp-up minimizes token waste and timeouts
+
+### 📊 **GPT-OSS Benchmark Results**
+
+Based on comprehensive testing with real hardware configurations:
+
+**GPT-OSS-20B (Fast LLM via vLLM):**
+- **Hardware**: RTX 5060 Ti 16GB + 32GB DDR5-6000 + AM5 processor
+- **Context Limit**: 1,000 tokens confirmed
+- **Performance**:
+  - 100 tokens: 0.7 seconds
+  - 500 tokens: 0.5 seconds
+  - 1,000 tokens: 0.5 seconds
+- **Success Rate**: 75.0% (limited by vLLM context configuration)
+- **Average Latency**: 569ms
+- **Use Cases**: Ultra-fast docstring generation, quick code analysis, simple refactoring
+
+**GPT-OSS-120B (Orchestrator LLM via llama.cpp):**
+- **Hardware**: RTX 5090 + 128GB DDR5-3600 + AM5 processor
+- **Context Limit**: 32,000 tokens confirmed (theoretical: 131k)
+- **Context Processing Performance** (with minimal 20-token output):
+  - 1,000 tokens: 3.2 seconds
+  - 4,000 tokens: 5.6 seconds
+  - 8,000 tokens: 7.0 seconds
+  - 16,000 tokens: 11.9 seconds
+  - 24,000 tokens: 12.3 seconds
+  - 32,000 tokens: 13.8 seconds
+- **Token Generation Performance**:
+  - **Speed**: ~13.6 tokens/second
+  - **Context Processing**: ~27.5 tokens/second
+  - **Example**: 120 tokens generated in ~8.8 seconds
+- **Success Rate**: 87.5% at maximum context
+- **Use Cases**: Complex architecture analysis, large context summarization, multi-file analysis
+
+**Recommended Configuration:**
+```toml
+[tool.vibelint.llm]
+# Fast LLM for quick tasks
+fast_api_url = "http://your-vllm-server:8001"
+fast_model = "openai/gpt-oss-20b"
+fast_max_tokens = 2048
+
+# Orchestrator LLM for complex analysis
+orchestrator_api_url = "http://your-llamacpp-server:11434"
+orchestrator_model = "openai_gpt-oss-120b-MXFP4.gguf"
+orchestrator_max_context_tokens = 28800  # 32k with 10% safety margin
+context_threshold = 3000  # Route to orchestrator for >3k tokens
+```
 
 ### 🔗 **Semantic Similarity Detection**
 Uses sentence transformers to find functionally duplicate code:
@@ -234,23 +397,28 @@ model = "google/embeddinggemma-300m"
 similarity_threshold = 0.85
 ```
 
-### 🤖 **LLM Architecture Review**
-Connects to local LLM endpoints for sophisticated multi-phase architectural analysis:
+### 🎯 **Multi-Phase Analysis Pipeline**
+Sophisticated architectural analysis with intelligent LLM routing:
 
-```toml
-[tool.vibelint.llm_analysis]
-api_base_url = "http://localhost:11434"
-model = "codellama:13b"
-temperature = 0.3
-max_tokens = 2048            # Generation limit (must be < context window)
-max_context_tokens = 4000    # Actual discovered context window
-```
+1. **Phase 1: File Summarization** (Fast LLM)
+   - Generate concise summaries of each Python file
+   - Extract key functions, classes, and patterns
+   - Optimized for speed with small context LLM
 
-**Multi-Phase Analysis Pipeline:**
-1. **Phase 1**: Generate file summaries using DFS traversal (batched for efficiency)
-2. **Phase 2**: Compute embeddings with EmbeddingGemma for semantic clustering
-3. **Phase 3**: Pairwise analysis of semantically similar files
-4. **Phase 4**: Global synthesis of architectural patterns and issues
+2. **Phase 2: Semantic Clustering** (Local Embeddings)
+   - Compute embeddings using EmbeddingGemma-300M
+   - Identify semantically similar code groups
+   - No LLM API calls required
+
+3. **Phase 3: Pairwise Analysis** (Orchestrator LLM)
+   - Deep analysis of similar file pairs
+   - Detect architectural inconsistencies
+   - Uses large context LLM for complex reasoning
+
+4. **Phase 4: Global Synthesis** (Orchestrator LLM)
+   - Synthesize findings across the entire codebase
+   - Generate architectural recommendations
+   - Produce comprehensive quality assessment
 
 ### 🧠 **Thinking Token Management**
 vibelint automatically removes "thinking" tokens from LLM responses to provide clean analysis output:
@@ -421,29 +589,35 @@ exclude_globs = [
 "EMOJI-IN-STRING" = "BLOCK"
 "DOCSTRING-MISSING" = "INFO"
 
+# Dual LLM Configuration - Clean and Intuitive
+[tool.vibelint.llm]
+# Fast LLM: High-speed inference for quick tasks (vLLM)
+fast_api_url = "http://100.94.250.88:8001"
+fast_model = "openai/gpt-oss-20b"
+fast_temperature = 0.1
+fast_max_tokens = 2048
+
+# Orchestrator LLM: Large context for complex reasoning (llama.cpp)
+orchestrator_api_url = "http://100.116.54.128:11434"
+orchestrator_model = "llama3.2:latest"
+orchestrator_temperature = 0.2
+orchestrator_max_tokens = 8192
+orchestrator_max_context_tokens = 3600  # Discovered via diagnostics
+
+# Automatic routing (when to use which LLM)
+context_threshold = 3000              # Use orchestrator for >3k tokens
+enable_context_probing = true         # Auto-discover actual limits
+enable_fallback = true                # Fallback between LLMs on failure
+
+# Thinking token removal configuration
+remove_thinking_tokens = true        # Set to false to keep all model output
+thinking_format = "harmony"          # Options: "harmony", "qwen", "custom"
+
 # AI Analysis Configuration
 [tool.vibelint.embedding_analysis]
 enabled = true
 model = "google/embeddinggemma-300m"
 similarity_threshold = 0.85
-
-[tool.vibelint.llm_analysis]
-api_base_url = "http://localhost:11434"
-model = "codellama:13b"
-max_tokens = 2048
-temperature = 0.3
-max_context_tokens = 4000             # Model's maximum context window (discovered)
-max_prompt_tokens = 3500              # Reserve tokens for generation
-
-# Token usage diagnostics (for optimal LLM utilization)
-enable_token_diagnostics = true        # Enable detailed token usage analysis
-
-# Dynamic context discovery (discovers actual LLM limits)
-enable_context_probing = false         # Set to true when switching providers to re-discover limits
-
-# Thinking token removal configuration
-remove_thinking_tokens = true          # Set to false to keep all model output
-thinking_format = "harmony"            # Options: "harmony", "qwen", "custom"
 
 # Rule categories for targeted analysis
 [tool.vibelint.rule_categories]

@@ -29,12 +29,9 @@ class FixEngine:
 
         # Initialize LLM manager for dual LLM support
         from .llm_manager import create_llm_manager
+
         config_dict = config.settings if isinstance(config.settings, dict) else {}
         self.llm_manager = create_llm_manager(config_dict)
-
-        # Legacy LLM config support (for backward compatibility)
-        legacy_llm_config = config.settings.get("llm_analysis", {})
-        self.llm_config = legacy_llm_config if isinstance(legacy_llm_config, dict) else {}
 
     def can_fix_finding(self, finding: Finding) -> bool:
         """Check if a finding can be automatically fixed.
@@ -165,31 +162,13 @@ class FixEngine:
                         modifications[insert_line] = docstring_line
 
     async def _generate_docstring_content(self, node: ast.AST, file_path: Path) -> Optional[str]:
-        """Generate only docstring text content using LLM (safe operation)."""
-        if not self.llm_config.get("api_base_url"):
-            # Can't generate docstrings without LLM - skip fix
-            logger.debug("No LLM API configured, skipping docstring generation")
+        """Generate only docstring text content using dual LLM system (safe operation)."""
+        if not self.llm_manager:
+            logger.debug("No LLM manager configured, skipping docstring generation")
             return None
 
         try:
-            from langchain_openai import ChatOpenAI
-            from pydantic import SecretStr
-
-            api_key = self.llm_config.get("api_key", "dummy-key")
-            base_url = self.llm_config.get("api_base_url")
-            model = self.llm_config.get("model", "gpt-3.5-turbo")
-
-            if not base_url:
-                logger.debug("No LLM base URL configured, skipping docstring generation")
-                return None
-
-            llm = ChatOpenAI(
-                base_url=base_url + "/v1" if not base_url.endswith("/v1") else base_url,
-                model=model,
-                temperature=0.1,
-                max_completion_tokens=200,  # Small limit for docstring only
-                api_key=SecretStr(api_key),
-            )
+            from .llm_manager import LLMRequest
 
             # Safe prompt - only asks for docstring text, never code
             if isinstance(node, ast.ClassDef):
@@ -201,22 +180,32 @@ class FixEngine:
                 logger.debug("Unknown node type for docstring generation")
                 return None
 
-            response = await llm.ainvoke(prompt)
-            if response and response.content:
+            # Use fast LLM for quick docstring generation
+            request = LLMRequest(
+                content=prompt,
+                task_type="docstring_generation",
+                max_tokens=200,
+                temperature=0.1
+            )
+
+            response = await self.llm_manager.process_request(request)
+
+            if response["success"] and response["content"]:
                 # Clean the response to ensure it's just text
-                content = str(response.content).strip()
+                content = str(response["content"]).strip()
                 # Remove any quotes or markdown that might have been added
                 content = content.replace('"""', "").replace("'''", "").replace("`", "")
                 return content[:200]  # Limit length
 
         except Exception as e:
             logger.warning(f"LLM docstring generation failed: {e}, using fallback")
-            # Safe fallback
-            if isinstance(node, ast.ClassDef):
-                return f"{node.name} class implementation."
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                return f"{node.name} function implementation."
-            return "Implementation."
+
+        # Safe fallback
+        if isinstance(node, ast.ClassDef):
+            return f"{node.name} class implementation."
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return f"{node.name} function implementation."
+        return "Implementation."
 
     def _fix_docstring_path_references(
         self,
@@ -225,7 +214,20 @@ class FixEngine:
         findings: List[Finding],
         file_path: Path,
     ) -> None:
-        """Add path references to existing docstrings."""
+        """Add path references to existing docstrings based on configuration."""
+        # Get docstring configuration
+        config_dict = self.config.settings if isinstance(self.config.settings, dict) else {}
+        docstring_config = config_dict.get("docstring", {})
+        require_path_references = docstring_config.get("require_path_references", False)
+
+        # Skip fix if path references are not required
+        if not require_path_references:
+            return
+
+        # Get path format configuration
+        path_format = docstring_config.get("path_reference_format", "relative")
+        expected_path = self._get_expected_path_for_fix(file_path, path_format)
+
         for finding in findings:
             line_idx = finding.line - 1  # Convert to 0-based index
             if 0 <= line_idx < len(lines):
@@ -233,7 +235,7 @@ class FixEngine:
                 # If this is a docstring line, ensure it has path reference
                 if '"""' in line or "'''" in line:
                     # Add path reference if not already present
-                    if str(file_path) not in line:
+                    if expected_path not in line:
                         # Modify the docstring to include path
                         indent = self._get_indent_for_line(lines, finding.line)
                         if line.strip().endswith('"""') or line.strip().endswith("'''"):
@@ -241,9 +243,47 @@ class FixEngine:
                             quote = '"""' if '"""' in line else "'''"
                             content = line.strip().replace(quote, "").strip()
                             new_docstring = (
-                                f"{indent}{quote}{content}\n\n{indent}{file_path}\n{indent}{quote}"
+                                f"{indent}{quote}{content}\n\n{indent}{expected_path}\n{indent}{quote}"
                             )
                             modifications[finding.line - 1] = new_docstring
+
+    def _get_expected_path_for_fix(self, file_path: Path, path_format: str) -> str:
+        """Get expected path reference for fix based on format configuration."""
+        if path_format == "absolute":
+            return str(file_path)
+        elif path_format == "module_path":
+            # Convert to Python module path (e.g., vibelint.validators.docstring)
+            parts = file_path.parts
+            if "src" in parts:
+                src_idx = parts.index("src")
+                module_parts = parts[src_idx + 1:]
+            else:
+                module_parts = parts
+
+            # Remove .py extension and convert to module path
+            if module_parts and module_parts[-1].endswith(".py"):
+                module_parts = module_parts[:-1] + (module_parts[-1][:-3],)
+
+            return ".".join(module_parts)
+        else:  # relative format (default)
+            # Get relative path, removing project root and src/ prefix
+            relative_path = str(file_path)
+            try:
+                # Try to find project root by looking for common markers
+                current = file_path.parent
+                while current.parent != current:
+                    if any((current / marker).exists() for marker in ["pyproject.toml", "setup.py", ".git"]):
+                        relative_path = str(file_path.relative_to(current))
+                        break
+                    current = current.parent
+            except ValueError:
+                pass
+
+            # Remove src/ prefix if present
+            if relative_path.startswith("src/"):
+                relative_path = relative_path[4:]
+
+            return relative_path
 
     def _fix_missing_exports(
         self,
@@ -381,7 +421,7 @@ async def preview_docstring_changes(config: Config, file_paths: List[Path]) -> D
         "files_analyzed": [],
         "total_changes": 0,
         "preview_samples": {},
-        "errors": []
+        "errors": [],
     }
 
     if not engine.llm_config.get("api_base_url"):
@@ -462,8 +502,16 @@ async def _preview_node_docstring(
         "node_type": node_type,
         "line_number": node.lineno,
         "change_type": change_type,
-        "current_docstring": current_docstring[:100] + "..." if current_docstring and len(current_docstring) > 100 else current_docstring,
-        "new_docstring": new_docstring_content[:100] + "..." if len(new_docstring_content) > 100 else new_docstring_content
+        "current_docstring": (
+            current_docstring[:100] + "..."
+            if current_docstring and len(current_docstring) > 100
+            else current_docstring
+        ),
+        "new_docstring": (
+            new_docstring_content[:100] + "..."
+            if len(new_docstring_content) > 100
+            else new_docstring_content
+        ),
     }
 
 
@@ -541,9 +589,9 @@ async def _regenerate_node_docstring(
     # Format the new docstring with path reference and safety warning
     new_docstring = (
         f'{indent_str}"""{new_docstring_content}\n\n'
-        f'{indent_str}⚠️  CRITICAL WARNING: This docstring was auto-generated by LLM and MUST be reviewed.\n'
-        f'{indent_str}Inaccurate documentation can cause security vulnerabilities, system failures,\n'
-        f'{indent_str}and data corruption. Verify all parameters, return types, and behavior descriptions.\n\n'
+        f"{indent_str}⚠️  CRITICAL WARNING: This docstring was auto-generated by LLM and MUST be reviewed.\n"
+        f"{indent_str}Inaccurate documentation can cause security vulnerabilities, system failures,\n"
+        f"{indent_str}and data corruption. Verify all parameters, return types, and behavior descriptions.\n\n"
         f'{indent_str}{file_path}\n{indent_str}"""'
     )
 
@@ -558,7 +606,9 @@ async def _regenerate_node_docstring(
                     line_content = lines[line_num]
                     # CRITICAL: Only modify lines that are clearly part of docstring
                     if not _is_safe_docstring_line(line_content):
-                        logger.error(f"SAFETY VIOLATION: Attempted to modify non-docstring line {line_num}: {line_content}")
+                        logger.error(
+                            f"SAFETY VIOLATION: Attempted to modify non-docstring line {line_num}: {line_content}"
+                        )
                         return  # Abort entire operation for safety
 
             # Safe to proceed - modify only the first docstring line, remove others
@@ -585,9 +635,16 @@ def _validate_docstring_content(content: str) -> bool:
 
     # Check for dangerous content
     dangerous_patterns = [
-        'import ', 'exec(', 'eval(', '__import__',
-        'subprocess', 'os.system', 'shell=True',
-        'DELETE', 'DROP TABLE', 'rm -rf'
+        "import ",
+        "exec(",
+        "eval(",
+        "__import__",
+        "subprocess",
+        "os.system",
+        "shell=True",
+        "DELETE",
+        "DROP TABLE",
+        "rm -rf",
     ]
 
     content_lower = content.lower()
@@ -655,11 +712,14 @@ def _is_safe_docstring_line(line: str) -> bool:
 
     # If it doesn't start with quotes, it might be docstring content
     # But we need to be very careful - check it doesn't look like code
-    if any(pattern in stripped for pattern in ['def ', 'class ', 'import ', '=', 'return ', 'if ', 'for ', 'while ']):
+    if any(
+        pattern in stripped
+        for pattern in ["def ", "class ", "import ", "=", "return ", "if ", "for ", "while "]
+    ):
         return False
 
     # If it's indented and looks like text, probably docstring content
-    if line.startswith('    ') and not stripped.startswith(('#', '//')):
+    if line.startswith("    ") and not stripped.startswith(("#", "//")):
         return True
 
     # Default to false for safety

@@ -93,23 +93,34 @@ exclude_globs = ["tests/fixtures/*"]
 # Rule severity levels: "OFF", "INFO", "WARN", "BLOCK"
 [tool.vibelint.rules]
 "PRINT-STATEMENT" = "WARN"
-"EMOJI-IN-STRING" = "WARN" 
+"EMOJI-IN-STRING" = "WARN"
 "DEAD-CODE-FOUND" = "INFO"
 "ARCHITECTURE-LLM" = "WARN"
 
+# Docstring configuration
+[tool.vibelint.docstring]
+require_path_references = false         # Set to true to require filepath at end of docstrings
+require_module_docstrings = true        # Require module-level docstrings
+require_class_docstrings = true         # Require class docstrings
+require_function_docstrings = false     # Require function docstrings (can be noisy)
+path_reference_format = "relative"      # Options: "relative", "absolute", "module_path"
+include_private_functions = false       # Check docstrings for _private functions
+
 # Dual LLM configuration - clean and simple
 [tool.vibelint.llm]
-# Primary LLM: Fast inference for quick tasks (vLLM)
-primary_api_url = "http://100.94.250.88:8001"
-primary_model = "openai/gpt-oss-20b"
-primary_temperature = 0.1
-primary_max_tokens = 2048
+# Fast LLM: High-speed inference for quick tasks (vLLM)
+fast_api_url = "http://100.94.250.88:8001"
+fast_model = "openai/gpt-oss-20b"
+fast_temperature = 0.1
+fast_max_tokens = 2048
 
 # Orchestrator LLM: Large context for complex reasoning (llama.cpp)
 orchestrator_api_url = "http://100.116.54.128:11434"
-orchestrator_model = "llama3.2:latest"
+orchestrator_model = "C:\\dev\\openai_gpt-oss-120b-MXFP4.gguf"
 orchestrator_temperature = 0.2
 orchestrator_max_tokens = 8192
+orchestrator_max_context_tokens = 28800  # Discovered via diagnostics (32k with 10% safety margin)
+fast_max_context_tokens = 900  # Discovered via diagnostics (1k with 10% safety margin)
 
 # Automatic routing (when to use which LLM)
 context_threshold = 3000              # Use orchestrator for >3k tokens

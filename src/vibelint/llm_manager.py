@@ -123,7 +123,11 @@ class LLMManager:
                     result["original_llm"] = selected_llm.value
                     return result
 
-                except (requests.exceptions.RequestException, ValueError, KeyError) as fallback_error:
+                except (
+                    requests.exceptions.RequestException,
+                    ValueError,
+                    KeyError,
+                ) as fallback_error:
                     logger.error(f"Fallback also failed: {fallback_error}")
 
             raise e
