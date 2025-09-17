@@ -26,8 +26,15 @@ class FixEngine:
         vibelint/src/vibelint/fix.py
         """
         self.config = config
-        llm_config_raw = config.settings.get("llm_analysis", {})
-        self.llm_config = llm_config_raw if isinstance(llm_config_raw, dict) else {}
+
+        # Initialize LLM manager for dual LLM support
+        from .llm_manager import create_llm_manager
+        config_dict = config.settings if isinstance(config.settings, dict) else {}
+        self.llm_manager = create_llm_manager(config_dict)
+
+        # Legacy LLM config support (for backward compatibility)
+        legacy_llm_config = config.settings.get("llm_analysis", {})
+        self.llm_config = legacy_llm_config if isinstance(legacy_llm_config, dict) else {}
 
     def can_fix_finding(self, finding: Finding) -> bool:
         """Check if a finding can be automatically fixed.

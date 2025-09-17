@@ -97,20 +97,24 @@ exclude_globs = ["tests/fixtures/*"]
 "DEAD-CODE-FOUND" = "INFO"
 "ARCHITECTURE-LLM" = "WARN"
 
-# LLM configuration (required for AI analysis)
-[tool.vibelint.llm_analysis]
-api_base_url = "http://100.94.250.88:8001"
-model = "openai/gpt-oss-20b"
-temperature = 0.1
-max_tokens = 2048
+# Dual LLM configuration - clean and simple
+[tool.vibelint.llm]
+# Primary LLM: Fast inference for quick tasks (vLLM)
+primary_api_url = "http://100.94.250.88:8001"
+primary_model = "openai/gpt-oss-20b"
+primary_temperature = 0.1
+primary_max_tokens = 2048
 
-# Token usage diagnostics (for optimal LLM utilization)
-enable_token_diagnostics = true        # Enable detailed token usage analysis
-max_context_tokens = 4000             # Model's maximum context window (discovered: 4,000 tokens on 2025-09-16)
-max_prompt_tokens = 3500              # Reserve tokens for generation (adjusted for discovered limit)
+# Orchestrator LLM: Large context for complex reasoning (llama.cpp)
+orchestrator_api_url = "http://100.116.54.128:11434"
+orchestrator_model = "llama3.2:latest"
+orchestrator_temperature = 0.2
+orchestrator_max_tokens = 8192
 
-# Dynamic context discovery (discovers actual LLM limits)
-enable_context_probing = false        # Set to true when switching providers to re-discover limits
+# Automatic routing (when to use which LLM)
+context_threshold = 3000              # Use orchestrator for >3k tokens
+enable_context_probing = true         # Auto-discover actual limits
+enable_fallback = true                # Fallback between LLMs on failure
 
 # Thinking token removal configuration
 remove_thinking_tokens = true        # Set to false to keep all model output

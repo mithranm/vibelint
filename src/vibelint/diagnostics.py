@@ -1,290 +1,234 @@
 """
-Vibelint diagnostics and benchmarking utilities.
+Simple diagnostics for dual LLM setup with context probing.
 
-This module provides diagnostic tools for testing vibelint's performance,
-LLM integration, and analysis quality.
+Discovers actual context limits for both primary and orchestrator LLMs
+using systematic testing approaches.
 
 tools/vibelint/src/vibelint/diagnostics.py
 """
 
+import asyncio
+import json
 import logging
-import subprocess
-import sys
-import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional
+
+from .context_probing import run_context_probing, ProbeConfig, ProbeResult
+from .llm_manager import create_llm_manager, LLMRole
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["LLMBenchmark", "VibelintDiagnostics"]
+__all__ = ["run_diagnostics", "run_benchmark"]
 
 
-class LLMBenchmark:
-    """Benchmark vibelint's LLM performance and generation parameters."""
+class DualLLMDiagnostics:
+    """Simple diagnostics for dual LLM setup."""
 
-    def __init__(self):
-        self.temp_dir = Path(tempfile.gettempdir()) / "vibelint_benchmark"
-        self.temp_dir.mkdir(exist_ok=True)
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize with vibelint configuration."""
+        self.config = config
+        self.llm_manager = create_llm_manager(config)
 
-    def create_test_files(self) -> List[Tuple[str, Path, int]]:
-        """Create test files of various sizes for benchmarking."""
-        test_files = []
+    def _extract_llm_configs(self) -> Dict[str, Dict[str, Any]]:
+        """Extract LLM configurations for probing."""
+        llm_config = self.config.get("llm", {})
+        configs = {}
 
-        # Small file (~500 chars)
-        small_content = '''
-def small_function(x: int) -> str:
-    """Small test function."""
-    return f"result: {x}"
-
-class TestClass:
-    def method(self):
-        pass
-'''
-        small_file = self.temp_dir / "small_test.py"
-        small_file.write_text(small_content)
-        test_files.append(("small", small_file, len(small_content)))
-
-        # Medium file (~2000 chars)
-        medium_content = (
-            small_content * 4
-            + '''
-def medium_function(data: Dict[str, Any]) -> List[str]:
-    """Process data and return results."""
-    results = []
-    for key, value in data.items():
-        if isinstance(value, str):
-            results.append(f"{key}: {value}")
-    return results
-'''
-        )
-        medium_file = self.temp_dir / "medium_test.py"
-        medium_file.write_text(medium_content)
-        test_files.append(("medium", medium_file, len(medium_content)))
-
-        return test_files
-
-    def benchmark_llm_speed(self, categories: List[str] | None = None) -> Dict[str, Any]:
-        """Benchmark LLM analysis speed across different file sizes."""
-        if categories is None:
-            categories = ["ai"]
-
-        test_files = self.create_test_files()
-        results = {"benchmark_results": [], "summary": {}}
-
-        for size_name, file_path, char_count in test_files:
-            logger.info(f"Benchmarking {size_name} file ({char_count} chars)...")
-
-            start_time = time.time()
-            try:
-                cmd = [
-                    sys.executable,
-                    "-m",
-                    "vibelint",
-                    "check",
-                    str(file_path),
-                    "--categories",
-                    ",".join(categories),
-                    "--format",
-                    "json",
-                ]
-
-                env = {"PYTHONPATH": "tools/vibelint/src"}
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
-
-                end_time = time.time()
-                duration = end_time - start_time
-
-                benchmark_result = {
-                    "file_size": size_name,
-                    "char_count": char_count,
-                    "duration_seconds": duration,
-                    "success": result.returncode == 0,
-                    "stdout_length": len(result.stdout),
-                    "stderr_length": len(result.stderr),
-                }
-
-                results["benchmark_results"].append(benchmark_result)
-                logger.info(f"  Duration: {duration:.2f}s")
-
-            except subprocess.TimeoutExpired:
-                logger.warning("  TIMEOUT after 120s")
-                results["benchmark_results"].append(
-                    {
-                        "file_size": size_name,
-                        "char_count": char_count,
-                        "duration_seconds": 120,
-                        "success": False,
-                        "error": "timeout",
-                    }
-                )
-
-        # Calculate summary stats
-        successful_runs = [r for r in results["benchmark_results"] if r["success"]]
-        if successful_runs:
-            durations = [r["duration_seconds"] for r in successful_runs]
-            results["summary"] = {
-                "total_runs": len(results["benchmark_results"]),
-                "successful_runs": len(successful_runs),
-                "avg_duration": sum(durations) / len(durations),
-                "min_duration": min(durations),
-                "max_duration": max(durations),
+        # Primary LLM
+        if llm_config.get("primary_api_url"):
+            configs["primary"] = {
+                "api_base_url": llm_config["primary_api_url"],
+                "model": llm_config["primary_model"],
+                "temperature": llm_config.get("primary_temperature", 0.1)
             }
 
-        return results
+        # Orchestrator LLM
+        if llm_config.get("orchestrator_api_url"):
+            configs["orchestrator"] = {
+                "api_base_url": llm_config["orchestrator_api_url"],
+                "model": llm_config["orchestrator_model"],
+                "temperature": llm_config.get("orchestrator_temperature", 0.2)
+            }
 
-    def cleanup(self):
-        """Clean up temporary test files."""
-        import shutil
+        return configs
 
-        if self.temp_dir.exists():
-            shutil.rmtree(self.temp_dir)
+    async def run_context_probing(self) -> Dict[str, ProbeResult]:
+        """Run context probing for both LLMs."""
+        llm_configs = self._extract_llm_configs()
 
+        if not llm_configs:
+            logger.error("No LLM configurations found")
+            return {}
 
-class VibelintDiagnostics:
-    """Diagnostic tools for testing vibelint functionality."""
+        # Simple probe config optimized for both inference engines
+        probe_config = ProbeConfig(
+            max_tokens_to_test=50000,  # Test up to 50k tokens
+            token_increment_strategy="exponential",
+            enable_niah_testing=True,
+            enable_performance_testing=True,
+            max_probe_duration_minutes=10  # 10 min max per LLM
+        )
 
-    def __init__(self):
-        self.temp_dir = Path(tempfile.gettempdir()) / "vibelint_diagnostics"
-        self.temp_dir.mkdir(exist_ok=True)
+        results = await run_context_probing(
+            llm_configs,
+            probe_config=probe_config,
+            save_results=True,
+            results_file=Path("llm_probe_results.json")
+        )
 
-    def create_test_file(self, content: str, name: str) -> Path:
-        """Create a temporary test file with given content."""
-        test_file = self.temp_dir / f"{name}.py"
-        test_file.write_text(content)
-        return test_file
-
-    def test_ai_analysis(self, test_cases: List[Tuple[str, str]]) -> Dict[str, Any]:
-        """Test AI analysis on various code patterns."""
-        results = {"test_results": [], "summary": {}}
-
-        for test_name, test_content in test_cases:
-            logger.info(f"Testing AI analysis: {test_name}")
-
-            test_file = self.create_test_file(test_content, test_name)
-
-            try:
-                cmd = [
-                    sys.executable,
-                    "-m",
-                    "vibelint",
-                    "check",
-                    str(test_file),
-                    "--categories",
-                    "ai",
-                    "--format",
-                    "json",
-                ]
-
-                env = {"PYTHONPATH": "tools/vibelint/src"}
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
-
-                test_result = {
-                    "test_name": test_name,
-                    "success": result.returncode == 0,
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
-                    "has_findings": "findings" in result.stdout.lower(),
-                }
-
-                results["test_results"].append(test_result)
-                logger.info(f"  Result: {'PASS' if test_result['success'] else 'FAIL'}")
-
-            except subprocess.TimeoutExpired:
-                logger.warning("  TIMEOUT")
-                results["test_results"].append(
-                    {"test_name": test_name, "success": False, "error": "timeout"}
-                )
-
-        # Summary
-        successful_tests = [r for r in results["test_results"] if r["success"]]
-        results["summary"] = {
-            "total_tests": len(results["test_results"]),
-            "successful_tests": len(successful_tests),
-            "success_rate": (
-                len(successful_tests) / len(results["test_results"])
-                if results["test_results"]
-                else 0
-            ),
-        }
+        # Save calibration report
+        if results:
+            await self._save_calibration_results(results)
 
         return results
 
-    def cleanup(self):
-        """Clean up temporary test files."""
-        import shutil
+    async def _save_calibration_results(self, probe_results: Dict[str, ProbeResult]):
+        """Save simple calibration report."""
+        report = "# LLM Calibration Results\n\n"
+        report += f"**Date:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        report += "**System:** vibelint dual LLM diagnostics\n\n"
 
-        if self.temp_dir.exists():
-            shutil.rmtree(self.temp_dir)
+        for llm_name, result in probe_results.items():
+            report += f"## {llm_name.title()} LLM\n\n"
+            report += f"- **Model:** {result.model}\n"
+            report += f"- **API:** {result.api_base_url}\n"
+            report += f"- **Engine:** {result.inference_engine.value}\n"
+            report += f"- **Max Context:** {result.max_context_tokens:,} tokens\n"
+            report += f"- **Effective Context:** {result.effective_context_tokens:,} tokens\n"
+            report += f"- **Success Rate:** {result.success_rate:.1%}\n"
+            report += f"- **Avg Latency:** {result.avg_latency_ms:.0f}ms\n\n"
 
+        report += "## Recommended Configuration\n\n"
+        report += "Update your `pyproject.toml`:\n\n"
+        report += "```toml\n"
+        report += "[tool.vibelint.llm]\n"
 
-def run_benchmark() -> Dict[str, Any]:
-    """Run LLM benchmark and print results."""
-    benchmark = LLMBenchmark()
-    try:
-        results = benchmark.benchmark_llm_speed()
+        for llm_name, result in probe_results.items():
+            prefix = f"{llm_name}_"
+            report += f"# Calibrated limits for {llm_name} LLM\n"
+            report += f"{prefix}max_context_tokens = {result.effective_context_tokens}\n"
+            report += f"{prefix}max_prompt_tokens = {result.recommended_max_prompt_tokens}\n"
 
-        print("\n=== LLM Benchmark Results ===")
-        for result in results["benchmark_results"]:
-            print(
-                f"{result['file_size']}: {result['duration_seconds']:.2f}s ({'SUCCESS' if result['success'] else 'FAILED'})"
-            )
+        report += "enable_context_probing = false  # Disable after calibration\n"
+        report += "```\n"
 
-        if results["summary"]:
-            print(
-                f"\nSummary: {results['summary']['successful_runs']}/{results['summary']['total_runs']} successful"
-            )
-            print(f"Average duration: {results['summary']['avg_duration']:.2f}s")
+        Path("LLM_CALIBRATION_RESULTS.md").write_text(report, encoding="utf-8")
 
+    async def benchmark_routing(self) -> Dict[str, Any]:
+        """Simple benchmark of LLM routing logic."""
+        if not self.llm_manager:
+            return {"error": "No LLM manager configured"}
+
+        # Test scenarios
+        scenarios = [
+            {"content": "Short docstring task", "task_type": "docstring", "expected": LLMRole.PRIMARY},
+            {"content": "x" * 5000, "task_type": "analysis", "expected": LLMRole.ORCHESTRATOR},
+            {"content": "Architecture analysis", "task_type": "architecture", "expected": LLMRole.ORCHESTRATOR},
+        ]
+
+        results = {"scenarios": [], "routing_accuracy": 0.0}
+        correct = 0
+
+        for scenario in scenarios:
+            from .llm_manager import LLMRequest
+            request = LLMRequest(scenario["content"], scenario["task_type"])
+            selected = self.llm_manager.select_llm(request)
+
+            is_correct = selected == scenario["expected"]
+            if is_correct:
+                correct += 1
+
+            results["scenarios"].append({
+                "task": scenario["task_type"],
+                "content_size": len(scenario["content"]),
+                "expected": scenario["expected"].value,
+                "selected": selected.value,
+                "correct": is_correct
+            })
+
+        results["routing_accuracy"] = correct / len(scenarios)
         return results
-    finally:
-        benchmark.cleanup()
 
 
-def run_diagnostics() -> Dict[str, Any]:
-    """Run diagnostic tests and print results."""
-    diagnostics = VibelintDiagnostics()
+async def run_diagnostics(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Run diagnostics with context probing.
 
-    test_cases = [
-        (
-            "simple_function",
-            """
-def test_function():
-    pass
-""",
-        ),
-        (
-            "complex_logic",
-            """
-def complex_function(data):
-    if not data:
-        return None
+    Args:
+        config: Vibelint configuration dictionary
 
-    result = []
-    for item in data:
-        if item > 0:
-            result.append(item * 2)
-
-    return result
-""",
-        ),
-    ]
+    Returns:
+        Diagnostics results
+    """
+    diagnostics = DualLLMDiagnostics(config)
 
     try:
-        results = diagnostics.test_ai_analysis(test_cases)
+        print("=== LLM Context Probing ===")
+        probe_results = await diagnostics.run_context_probing()
 
-        print("\n=== Diagnostic Test Results ===")
-        for result in results["test_results"]:
-            print(f"{result['test_name']}: {'PASS' if result['success'] else 'FAIL'}")
+        if not probe_results:
+            print("❌ No LLM configurations found or probing failed")
+            return {"error": "Context probing failed"}
 
-        print(f"\nSuccess rate: {results['summary']['success_rate']:.1%}")
+        # Print results
+        for llm_name, result in probe_results.items():
+            print(f"\n{llm_name.upper()} LLM:")
+            print(f"  ✓ Max Context: {result.max_context_tokens:,} tokens")
+            print(f"  ✓ Success Rate: {result.success_rate:.1%}")
+            print(f"  ✓ Latency: {result.avg_latency_ms:.0f}ms")
+
+        print(f"\n✅ Context probing completed")
+        print(f"📄 Results saved to LLM_CALIBRATION_RESULTS.md")
+
+        return {"probe_results": probe_results, "success": True}
+
+    except Exception as e:
+        print(f"❌ Diagnostics failed: {e}")
+        return {"error": str(e), "success": False}
+
+
+async def run_benchmark(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Run LLM routing benchmark.
+
+    Args:
+        config: Vibelint configuration dictionary
+
+    Returns:
+        Benchmark results
+    """
+    diagnostics = DualLLMDiagnostics(config)
+
+    try:
+        print("=== LLM Routing Benchmark ===")
+        results = await diagnostics.benchmark_routing()
+
+        if "error" in results:
+            print(f"❌ {results['error']}")
+            return results
+
+        print(f"Routing Accuracy: {results['routing_accuracy']:.1%}")
+
+        for scenario in results["scenarios"]:
+            status = "✓" if scenario["correct"] else "✗"
+            print(f"  {status} {scenario['task']}: {scenario['selected']} (expected: {scenario['expected']})")
 
         return results
-    finally:
-        diagnostics.cleanup()
+
+    except Exception as e:
+        print(f"❌ Benchmark failed: {e}")
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":
-    print("Running vibelint diagnostics...")
-    run_benchmark()
-    run_diagnostics()
+    # Simple test
+    test_config = {
+        "llm": {
+            "primary_api_url": "http://100.94.250.88:8001",
+            "primary_model": "openai/gpt-oss-20b",
+            "orchestrator_api_url": "http://100.116.54.128:11434",
+            "orchestrator_model": "llama3.2:latest",
+            "context_threshold": 3000
+        }
+    }
+
+    asyncio.run(run_diagnostics(test_config))

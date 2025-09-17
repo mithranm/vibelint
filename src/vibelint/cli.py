@@ -1155,56 +1155,71 @@ custom_thinking_patterns = {suggestions}"""
 
 
 @cli.command("diagnostics")
-@click.option("--benchmark", is_flag=True, help="Run LLM performance benchmark")
-@click.option("--test", is_flag=True, help="Run diagnostic tests")
-def diagnostics_cmd(benchmark: bool, test: bool) -> None:
+@click.option("--probe", is_flag=True, help="Run context probing (default)")
+@click.option("--benchmark", is_flag=True, help="Run routing benchmark")
+@click.pass_context
+def diagnostics_cmd(ctx: click.Context, probe: bool, benchmark: bool) -> None:
     """
-    Run vibelint diagnostics and performance tests.
+    Run dual LLM diagnostics with context probing.
+
+    Discovers actual context limits for both primary (vLLM) and
+    orchestrator (llama.cpp) LLMs using systematic testing.
 
     Examples:
-        vibelint diagnostics --benchmark    # Benchmark LLM performance
-        vibelint diagnostics --test         # Run diagnostic tests
-        vibelint diagnostics --benchmark --test  # Run both
+        vibelint diagnostics           # Run both probing and benchmark
+        vibelint diagnostics --probe   # Context probing only
+        vibelint diagnostics --benchmark  # Routing benchmark only
 
     tools/vibelint/src/vibelint/cli.py
     """
-    if not benchmark and not test:
-        # Run both by default
-        benchmark = test = True
+    vibelint_ctx: VibelintContext = ctx.obj
+    project_root = vibelint_ctx.project_root
+    assert project_root is not None, "Project root missing in diagnostics command"
 
-    if benchmark:
-        console.print("[bold blue]Running LLM performance benchmark...[/bold blue]")
-        try:
-            from .diagnostics import run_benchmark
+    # Load configuration
+    config: Config = load_config(project_root)
+    if config.project_root is None:
+        logger_cli.error("Project root lost after config load.")
+        ctx.exit(1)
 
-            run_benchmark()
-            console.print("[green]Benchmark completed successfully[/green]")
-        except ImportError as e:
-            console.print(f"[red]Benchmark dependencies missing: {e}[/red]")
-            sys.exit(1)
-        except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
-            console.print(f"[red]Benchmark subprocess failed: {e}[/red]")
-            sys.exit(1)
-        except (OSError, IOError) as e:
-            console.print(f"[red]Benchmark I/O error: {e}[/red]")
-            sys.exit(1)
+    config_dict = config.settings if isinstance(config.settings, dict) else {}
 
-    if test:
-        console.print("[bold blue]Running diagnostic tests...[/bold blue]")
-        try:
-            from .diagnostics import run_diagnostics
+    # Default: run both
+    if not probe and not benchmark:
+        probe = benchmark = True
 
-            run_diagnostics()
-            console.print("[green]Diagnostics completed successfully[/green]")
-        except ImportError as e:
-            console.print(f"[red]Diagnostics dependencies missing: {e}[/red]")
-            sys.exit(1)
-        except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
-            console.print(f"[red]Diagnostics subprocess failed: {e}[/red]")
-            sys.exit(1)
-        except (OSError, IOError) as e:
-            console.print(f"[red]Diagnostics I/O error: {e}[/red]")
-            sys.exit(1)
+    import asyncio
+
+    async def run_diagnostics_async():
+        from .diagnostics import run_diagnostics, run_benchmark
+
+        if probe:
+            console.print("[bold blue]🔍 Running LLM context probing...[/bold blue]")
+            probe_results = await run_diagnostics(config_dict)
+
+            if not probe_results.get("success"):
+                console.print(f"[red]❌ Context probing failed: {probe_results.get('error', 'Unknown error')}[/red]")
+                return False
+
+        if benchmark:
+            console.print("[bold blue]⚡ Running LLM routing benchmark...[/bold blue]")
+            await run_benchmark(config_dict)
+
+        return True
+
+    try:
+        success = asyncio.run(run_diagnostics_async())
+        if success:
+            console.print("\n[bold green]✅ Diagnostics completed![/bold green]")
+            console.print("📄 Check LLM_CALIBRATION_RESULTS.md for details")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⚠️  Cancelled by user[/yellow]")
+        ctx.exit(1)
+    except Exception as e:
+        console.print(f"\n[red]❌ Diagnostics failed: {e}[/red]")
+        logger_cli.error("Diagnostics failed", exc_info=True)
+        ctx.exit(1)
 
 
 @cli.command("regen-docstrings")
