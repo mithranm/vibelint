@@ -35,8 +35,11 @@ class LoggerNameValidator(BaseValidator):
             return
 
         class LoggerNameVisitor(ast.NodeVisitor):
-            def __init__(self, validator):
-                self.validator = validator
+            """Visitor class that traverses an AST to collect all logger names used in the code."""
+
+            def __init__(self):
+                """Initialize logger name visitor."""
+                self.logger_names = []
                 self.findings = []
 
             def visit_Call(self, node: ast.Call):

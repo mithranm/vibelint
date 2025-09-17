@@ -211,8 +211,12 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
         returns = []
 
         class ReturnVisitor(ast.NodeVisitor):
-            def visit_Return(self, node: ast.Return) -> None:
+            """A visitor that returns a value from visiting nodes in a syntax tree."""
+
+            def visit_Return(self, node: ast.Return):
+                """Visit a Return node in the AST and process it."""
                 returns.append(node)
+                self.generic_visit(node)
 
         ReturnVisitor().visit(function_node)
         return returns

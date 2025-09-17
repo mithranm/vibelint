@@ -28,7 +28,7 @@ class FixEngine:
         self.config = config
 
         # Initialize LLM manager for dual LLM support
-        from .llm_manager import create_llm_manager
+        from .llm import create_llm_manager
 
         config_dict = config.settings if isinstance(config.settings, dict) else {}
         self.llm_manager = create_llm_manager(config_dict)
@@ -168,7 +168,7 @@ class FixEngine:
             return None
 
         try:
-            from .llm_manager import LLMRequest
+            from .llm import LLMRequest
 
             # Safe prompt - only asks for docstring text, never code
             if isinstance(node, ast.ClassDef):
