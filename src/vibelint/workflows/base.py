@@ -18,13 +18,18 @@ from typing import Dict, List, Any, Optional, Set
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "WorkflowStatus", "WorkflowPriority", "WorkflowConfig", "WorkflowMetrics",
-    "WorkflowResult", "BaseWorkflow"
+    "WorkflowStatus",
+    "WorkflowPriority",
+    "WorkflowConfig",
+    "WorkflowMetrics",
+    "WorkflowResult",
+    "BaseWorkflow",
 ]
 
 
 class WorkflowStatus(Enum):
     """Workflow execution status."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -34,6 +39,7 @@ class WorkflowStatus(Enum):
 
 class WorkflowPriority(Enum):
     """Workflow execution priority."""
+
     LOW = 1
     MEDIUM = 2
     HIGH = 3
@@ -149,11 +155,7 @@ class BaseWorkflow(ABC):
         self._validate_configuration()
 
     @abstractmethod
-    async def execute(
-        self,
-        project_root: Path,
-        context: Dict[str, Any]
-    ) -> WorkflowResult:
+    async def execute(self, project_root: Path, context: Dict[str, Any]) -> WorkflowResult:
         """Execute the workflow with given context.
 
         Args:
@@ -242,7 +244,7 @@ class BaseWorkflow(ABC):
         status: WorkflowStatus,
         findings: Optional[List[Dict[str, Any]]] = None,
         artifacts: Optional[Dict[str, Any]] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
     ) -> WorkflowResult:
         """Create workflow result."""
         self._update_status(status)
@@ -253,13 +255,11 @@ class BaseWorkflow(ABC):
             metrics=self.metrics,
             findings=findings or [],
             artifacts=artifacts or {},
-            error_message=error_message
+            error_message=error_message,
         )
 
     async def _execute_with_error_handling(
-        self,
-        project_root: Path,
-        context: Dict[str, Any]
+        self, project_root: Path, context: Dict[str, Any]
     ) -> WorkflowResult:
         """Execute workflow with comprehensive error handling."""
         try:
@@ -283,17 +283,14 @@ class BaseWorkflow(ABC):
             logger.error(f"Workflow {self.workflow_id} failed: {e}", exc_info=True)
             self.metrics.errors_encountered += 1
 
-            return self._create_result(
-                WorkflowStatus.FAILED,
-                error_message=str(e)
-            )
+            return self._create_result(WorkflowStatus.FAILED, error_message=str(e))
 
     def get_evaluation_criteria(self) -> Dict[str, Any]:
         """Get criteria for evaluating workflow effectiveness."""
         return {
             "performance": {
                 "max_execution_time": 60.0,  # seconds
-                "max_memory_usage": 500.0,   # MB
+                "max_memory_usage": 500.0,  # MB
             },
             "quality": {
                 "min_confidence_score": 0.7,
@@ -302,7 +299,7 @@ class BaseWorkflow(ABC):
             "reliability": {
                 "max_error_rate": 0.05,  # 5%
                 "max_timeout_rate": 0.01,  # 1%
-            }
+            },
         }
 
     def __repr__(self) -> str:

@@ -24,8 +24,9 @@ __all__ = ["RedundancyDetectionWorkflow", "RedundancyPattern", "DeadCodeCandidat
 @dataclass
 class RedundancyPattern:
     """Represents a potentially redundant code pattern."""
+
     pattern_type: str  # "function", "class", "import", "logic_block"
-    signature: str     # Normalized signature or pattern
+    signature: str  # Normalized signature or pattern
     locations: List[Tuple[str, int]]  # (file_path, line_number)
     similarity_score: float  # 0.0 to 1.0
     estimated_redundancy: str  # "duplicate", "similar", "refactorable"
@@ -34,6 +35,7 @@ class RedundancyPattern:
 @dataclass
 class DeadCodeCandidate:
     """Represents potentially dead code."""
+
     code_type: str  # "function", "class", "import"
     name: str
     file_path: str
@@ -56,7 +58,7 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
 
         # Analysis state
         self.all_functions = {}  # signature -> locations
-        self.all_classes = {}    # signature -> locations
+        self.all_classes = {}  # signature -> locations
         self.import_usage = defaultdict(set)  # module -> using_files
         self.function_calls = defaultdict(set)  # function -> calling_functions
         self.entry_points = []
@@ -73,7 +75,7 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
             "dead_code_candidates",
             "import_redundancies",
             "consolidation_opportunities",
-            "removal_benefit_estimate"
+            "removal_benefit_estimate",
         }
 
     async def execute(self, project_root: Path, context: Dict[str, Any]) -> WorkflowResult:
@@ -108,26 +110,30 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
 
             # Add dead code findings
             for candidate in dead_code:
-                findings.append({
-                    "rule_id": "DEAD-CODE-CANDIDATE",
-                    "severity": "INFO",
-                    "message": f"Potentially dead {candidate.code_type}: {candidate.name}",
-                    "file_path": candidate.file_path,
-                    "line": candidate.line_number,
-                    "suggestion": f"Consider removing if truly unused. Reason: {candidate.reason}",
-                    "confidence": candidate.confidence
-                })
+                findings.append(
+                    {
+                        "rule_id": "DEAD-CODE-CANDIDATE",
+                        "severity": "INFO",
+                        "message": f"Potentially dead {candidate.code_type}: {candidate.name}",
+                        "file_path": candidate.file_path,
+                        "line": candidate.line_number,
+                        "suggestion": f"Consider removing if truly unused. Reason: {candidate.reason}",
+                        "confidence": candidate.confidence,
+                    }
+                )
 
             # Add redundancy findings
             for pattern in redundant_patterns:
-                findings.append({
-                    "rule_id": "REDUNDANT-PATTERN",
-                    "severity": "WARN" if pattern.similarity_score > 0.8 else "INFO",
-                    "message": f"Redundant {pattern.pattern_type} pattern found in {len(pattern.locations)} locations",
-                    "locations": pattern.locations,
-                    "suggestion": f"Consider consolidating similar {pattern.pattern_type}s",
-                    "similarity_score": pattern.similarity_score
-                })
+                findings.append(
+                    {
+                        "rule_id": "REDUNDANT-PATTERN",
+                        "severity": "WARN" if pattern.similarity_score > 0.8 else "INFO",
+                        "message": f"Redundant {pattern.pattern_type} pattern found in {len(pattern.locations)} locations",
+                        "locations": pattern.locations,
+                        "suggestion": f"Consider consolidating similar {pattern.pattern_type}s",
+                        "similarity_score": pattern.similarity_score,
+                    }
+                )
 
             # Create artifacts
             artifacts = {
@@ -137,26 +143,23 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
                 "consolidation_opportunities": consolidation_opportunities,
                 "removal_benefit_estimate": removal_benefits,
                 "entry_points_traced": self.entry_points,
-                "cli_commands_found": self.cli_commands
+                "cli_commands_found": self.cli_commands,
             }
 
             # Update metrics
             self.metrics.files_processed = len(self._get_all_python_files(project_root))
             self.metrics.findings_generated = len(findings)
-            self.metrics.confidence_score = self._calculate_overall_confidence(dead_code, redundant_patterns)
+            self.metrics.confidence_score = self._calculate_overall_confidence(
+                dead_code, redundant_patterns
+            )
 
             return self._create_result(
-                WorkflowStatus.COMPLETED,
-                findings=findings,
-                artifacts=artifacts
+                WorkflowStatus.COMPLETED, findings=findings, artifacts=artifacts
             )
 
         except Exception as e:
             logger.error(f"Redundancy detection failed: {e}", exc_info=True)
-            return self._create_result(
-                WorkflowStatus.FAILED,
-                error_message=str(e)
-            )
+            return self._create_result(WorkflowStatus.FAILED, error_message=str(e))
 
     def _discover_cli_entry_points(self, project_root: Path):
         """Discover CLI entry points from setup and CLI modules."""
@@ -172,7 +175,7 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
         cli_candidates = [
             source_root / "vibelint" / "cli.py",
             project_root / "cli.py",
-            project_root / "main.py"
+            project_root / "main.py",
         ]
 
         for cli_path in cli_candidates:
@@ -183,12 +186,15 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
         """Parse entry points from pyproject.toml."""
         try:
             import sys
+
             if sys.version_info >= (3, 11):
                 import tomllib
+
                 with open(pyproject_path, "rb") as f:
                     config = tomllib.load(f)
             else:
                 import tomli
+
                 content = pyproject_path.read_text(encoding="utf-8")
                 config = tomli.loads(content)
 
@@ -252,7 +258,9 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
         # Full implementation would require building complete call graph
         return reachable
 
-    def _find_dead_code_candidates(self, project_root: Path, reachable_code: Set[str]) -> List[DeadCodeCandidate]:
+    def _find_dead_code_candidates(
+        self, project_root: Path, reachable_code: Set[str]
+    ) -> List[DeadCodeCandidate]:
         """Find code that appears to be unreachable from entry points."""
         logger.debug("Finding dead code candidates...")
 
@@ -270,27 +278,31 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
                         func_id = f"function:{node.name}"
                         if func_id not in reachable_code:
                             if not self._is_exempt_function(node, file_path):
-                                dead_code.append(DeadCodeCandidate(
-                                    code_type="function",
-                                    name=node.name,
-                                    file_path=relative_path,
-                                    line_number=node.lineno,
-                                    reason="unreachable_from_entry_points",
-                                    confidence=0.6  # Moderate confidence
-                                ))
+                                dead_code.append(
+                                    DeadCodeCandidate(
+                                        code_type="function",
+                                        name=node.name,
+                                        file_path=relative_path,
+                                        line_number=node.lineno,
+                                        reason="unreachable_from_entry_points",
+                                        confidence=0.6,  # Moderate confidence
+                                    )
+                                )
 
                     elif isinstance(node, ast.ClassDef):
                         class_id = f"class:{node.name}"
                         if class_id not in reachable_code:
                             if not self._is_exempt_class(node, file_path):
-                                dead_code.append(DeadCodeCandidate(
-                                    code_type="class",
-                                    name=node.name,
-                                    file_path=relative_path,
-                                    line_number=node.lineno,
-                                    reason="unreachable_from_entry_points",
-                                    confidence=0.5  # Lower confidence for classes
-                                ))
+                                dead_code.append(
+                                    DeadCodeCandidate(
+                                        code_type="class",
+                                        name=node.name,
+                                        file_path=relative_path,
+                                        line_number=node.lineno,
+                                        reason="unreachable_from_entry_points",
+                                        confidence=0.5,  # Lower confidence for classes
+                                    )
+                                )
 
             except Exception as e:
                 logger.debug(f"Failed to analyze {file_path}: {e}")
@@ -349,7 +361,9 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
                     if isinstance(node, ast.FunctionDef):
                         # Create normalized signature
                         signature = self._normalize_function_signature(node)
-                        function_signatures[signature].append((relative_path, node.lineno, node.name))
+                        function_signatures[signature].append(
+                            (relative_path, node.lineno, node.name)
+                        )
 
             except Exception as e:
                 logger.debug(f"Failed to analyze {file_path}: {e}")
@@ -361,13 +375,17 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
                 similarity_score = self._calculate_similarity_score(signature, locations)
 
                 if similarity_score > 0.6:  # Reasonable similarity threshold
-                    patterns.append(RedundancyPattern(
-                        pattern_type="function",
-                        signature=signature,
-                        locations=[(loc[0], loc[1]) for loc in locations],
-                        similarity_score=similarity_score,
-                        estimated_redundancy="duplicate" if similarity_score > 0.9 else "similar"
-                    ))
+                    patterns.append(
+                        RedundancyPattern(
+                            pattern_type="function",
+                            signature=signature,
+                            locations=[(loc[0], loc[1]) for loc in locations],
+                            similarity_score=similarity_score,
+                            estimated_redundancy=(
+                                "duplicate" if similarity_score > 0.9 else "similar"
+                            ),
+                        )
+                    )
 
         return patterns
 
@@ -426,9 +444,9 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
                                 all_imports[import_name].append((relative_path, node.lineno))
 
                 # Track usage (simplified analysis)
-                for line in content.split('\n'):
+                for line in content.split("\n"):
                     for module_name in all_imports.keys():
-                        if module_name.split('.')[-1] in line:
+                        if module_name.split(".")[-1] in line:
                             import_usage[module_name].add(relative_path)
 
             except Exception as e:
@@ -443,12 +461,14 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
                         unused_locations.append((file_path, line_no))
 
                 if unused_locations:
-                    import_redundancies.append({
-                        "module": module_name,
-                        "unused_locations": unused_locations,
-                        "total_imports": len(locations),
-                        "estimated_savings": f"{len(unused_locations)} unused imports"
-                    })
+                    import_redundancies.append(
+                        {
+                            "module": module_name,
+                            "unused_locations": unused_locations,
+                            "total_imports": len(locations),
+                            "estimated_savings": f"{len(unused_locations)} unused imports",
+                        }
+                    )
 
         return import_redundancies
 
@@ -468,17 +488,21 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
         # Find consolidation opportunities
         for purpose, files in file_purposes.items():
             if len(files) > 3 and purpose not in ["testing", "unknown"]:
-                opportunities.append({
-                    "type": "module_consolidation",
-                    "purpose": purpose,
-                    "files": files,
-                    "suggestion": f"Consider consolidating {purpose} files into subpackage",
-                    "estimated_benefit": f"Reduce {len(files)} files to organized submodule"
-                })
+                opportunities.append(
+                    {
+                        "type": "module_consolidation",
+                        "purpose": purpose,
+                        "files": files,
+                        "suggestion": f"Consider consolidating {purpose} files into subpackage",
+                        "estimated_benefit": f"Reduce {len(files)} files to organized submodule",
+                    }
+                )
 
         return opportunities
 
-    def _estimate_removal_benefit(self, dead_code: List[DeadCodeCandidate], redundant_patterns: List[RedundancyPattern]) -> Dict[str, Any]:
+    def _estimate_removal_benefit(
+        self, dead_code: List[DeadCodeCandidate], redundant_patterns: List[RedundancyPattern]
+    ) -> Dict[str, Any]:
         """Estimate benefits of removing dead/redundant code."""
         total_dead_functions = len([d for d in dead_code if d.code_type == "function"])
         total_dead_classes = len([d for d in dead_code if d.code_type == "class"])
@@ -495,15 +519,12 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
             "redundant_patterns": total_redundant_patterns,
             "estimated_lines_saved": estimated_lines_saved,
             "estimated_files_reducible": len(set(d.file_path for d in dead_code)),
-            "maintainability_improvement": "Medium" if estimated_lines_saved > 100 else "Low"
+            "maintainability_improvement": "Medium" if estimated_lines_saved > 100 else "Low",
         }
 
     def _get_all_python_files(self, project_root: Path) -> List[Path]:
         """Get all Python files in the project."""
-        source_candidates = [
-            project_root / "src",
-            project_root
-        ]
+        source_candidates = [project_root / "src", project_root]
 
         python_files = []
         for source_root in source_candidates:
@@ -514,7 +535,9 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
         # Filter out common non-code files
         filtered_files = []
         for file_path in python_files:
-            if not any(skip in str(file_path) for skip in ["__pycache__", ".pytest_cache", "build", "dist"]):
+            if not any(
+                skip in str(file_path) for skip in ["__pycache__", ".pytest_cache", "build", "dist"]
+            ):
                 filtered_files.append(file_path)
 
         return filtered_files
@@ -543,7 +566,9 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
         else:
             return "unknown"
 
-    def _calculate_overall_confidence(self, dead_code: List[DeadCodeCandidate], redundant_patterns: List[RedundancyPattern]) -> float:
+    def _calculate_overall_confidence(
+        self, dead_code: List[DeadCodeCandidate], redundant_patterns: List[RedundancyPattern]
+    ) -> float:
         """Calculate overall confidence score for the analysis."""
         if not dead_code and not redundant_patterns:
             return 1.0
@@ -568,7 +593,7 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
             "signature": pattern.signature,
             "locations": pattern.locations,
             "similarity_score": pattern.similarity_score,
-            "estimated_redundancy": pattern.estimated_redundancy
+            "estimated_redundancy": pattern.estimated_redundancy,
         }
 
     def _candidate_to_dict(self, candidate: DeadCodeCandidate) -> Dict[str, Any]:
@@ -579,5 +604,5 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
             "file_path": candidate.file_path,
             "line_number": candidate.line_number,
             "reason": candidate.reason,
-            "confidence": candidate.confidence
+            "confidence": candidate.confidence,
         }

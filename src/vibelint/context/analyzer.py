@@ -22,6 +22,7 @@ __all__ = ["ContextAnalyzer", "TreeViolation", "ContentViolation"]
 @dataclass
 class TreeViolation:
     """File tree organization violation."""
+
     violation_type: str
     file_path: Path
     message: str
@@ -32,6 +33,7 @@ class TreeViolation:
 @dataclass
 class ContentViolation:
     """File content structure violation."""
+
     violation_type: str
     file_path: Path
     line: int
@@ -81,13 +83,15 @@ class ContextAnalyzer:
 
         for path in self.project_root.iterdir():
             if path.is_file():
-                tree["files"].append({
-                    "name": path.name,
-                    "path": path,
-                    "size": path.stat().st_size,
-                    "suffix": path.suffix
-                })
-            elif path.is_dir() and not path.name.startswith('.'):
+                tree["files"].append(
+                    {
+                        "name": path.name,
+                        "path": path,
+                        "size": path.stat().st_size,
+                        "suffix": path.suffix,
+                    }
+                )
+            elif path.is_dir() and not path.name.startswith("."):
                 tree["dirs"][path.name] = self._get_dir_tree(path)
 
         self.file_tree_cache = tree
@@ -100,12 +104,8 @@ class ContextAnalyzer:
         try:
             for path in dir_path.iterdir():
                 if path.is_file():
-                    tree["files"].append({
-                        "name": path.name,
-                        "path": path,
-                        "suffix": path.suffix
-                    })
-                elif path.is_dir() and not path.name.startswith('.'):
+                    tree["files"].append({"name": path.name, "path": path, "suffix": path.suffix})
+                elif path.is_dir() and not path.name.startswith("."):
                     tree["dirs"][path.name] = self._get_dir_tree(path)
         except PermissionError:
             pass
@@ -118,11 +118,23 @@ class ContextAnalyzer:
 
         # Files that belong in project root
         allowed_root_files = {
-            "README.md", "LICENSE", "LICENSE.txt", "LICENSE.md",
-            "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
-            "Makefile", "Dockerfile", "docker-compose.yml",
-            ".gitignore", ".gitattributes", "tox.ini",
-            "CHANGELOG.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md"
+            "README.md",
+            "LICENSE",
+            "LICENSE.txt",
+            "LICENSE.md",
+            "pyproject.toml",
+            "setup.py",
+            "setup.cfg",
+            "requirements.txt",
+            "Makefile",
+            "Dockerfile",
+            "docker-compose.yml",
+            ".gitignore",
+            ".gitattributes",
+            "tox.ini",
+            "CHANGELOG.md",
+            "CONTRIBUTING.md",
+            "CODE_OF_CONDUCT.md",
         }
 
         # Files that should be in docs/
@@ -142,48 +154,64 @@ class ContextAnalyzer:
                 continue
 
             # Check for documentation files
-            if (file_info["suffix"] in doc_suffixes and
-                any(keyword in name for keyword in doc_keywords)):
+            if file_info["suffix"] in doc_suffixes and any(
+                keyword in name for keyword in doc_keywords
+            ):
 
-                violations.append(TreeViolation(
-                    violation_type="ROOT_CLUTTER",
-                    file_path=path,
-                    message=f"Documentation file in project root: {file_info['name']}",
-                    suggestion=f"Move to docs/ directory: mv {file_info['name']} docs/"
-                ))
+                violations.append(
+                    TreeViolation(
+                        violation_type="ROOT_CLUTTER",
+                        file_path=path,
+                        message=f"Documentation file in project root: {file_info['name']}",
+                        suggestion=f"Move to docs/ directory: mv {file_info['name']} docs/",
+                    )
+                )
 
             # Check for script files
-            elif (file_info["suffix"] in script_suffixes and
-                  any(keyword in name for keyword in script_keywords) and
-                  file_info["name"] != "setup.py"):
+            elif (
+                file_info["suffix"] in script_suffixes
+                and any(keyword in name for keyword in script_keywords)
+                and file_info["name"] != "setup.py"
+            ):
 
-                violations.append(TreeViolation(
-                    violation_type="ROOT_CLUTTER",
-                    file_path=path,
-                    message=f"Script file in project root: {file_info['name']}",
-                    suggestion=f"Move to scripts/ directory: mkdir -p scripts && mv {file_info['name']} scripts/"
-                ))
+                violations.append(
+                    TreeViolation(
+                        violation_type="ROOT_CLUTTER",
+                        file_path=path,
+                        message=f"Script file in project root: {file_info['name']}",
+                        suggestion=f"Move to scripts/ directory: mkdir -p scripts && mv {file_info['name']} scripts/",
+                    )
+                )
 
             # Check for random Python files (not entry points)
-            elif (file_info["suffix"] == ".py" and
-                  file_info["name"] not in {"setup.py", "conftest.py"}):
+            elif file_info["suffix"] == ".py" and file_info["name"] not in {
+                "setup.py",
+                "conftest.py",
+            }:
 
-                violations.append(TreeViolation(
-                    violation_type="ROOT_CLUTTER",
-                    file_path=path,
-                    message=f"Python file in project root: {file_info['name']}",
-                    suggestion="Move to appropriate src/ subdirectory or remove if temporary"
-                ))
+                violations.append(
+                    TreeViolation(
+                        violation_type="ROOT_CLUTTER",
+                        file_path=path,
+                        message=f"Python file in project root: {file_info['name']}",
+                        suggestion="Move to appropriate src/ subdirectory or remove if temporary",
+                    )
+                )
 
             # Check for config files that should be in config/
             elif file_info["suffix"] in {".json", ".yaml", ".yml", ".toml", ".ini", ".cfg"}:
-                if not any(allowed in file_info["name"] for allowed in ["pyproject.toml", "setup.cfg", "tox.ini"]):
-                    violations.append(TreeViolation(
-                        violation_type="ROOT_CLUTTER",
-                        file_path=path,
-                        message=f"Config file in project root: {file_info['name']}",
-                        suggestion="Move to config/ directory or src/package/config/"
-                    ))
+                if not any(
+                    allowed in file_info["name"]
+                    for allowed in ["pyproject.toml", "setup.cfg", "tox.ini"]
+                ):
+                    violations.append(
+                        TreeViolation(
+                            violation_type="ROOT_CLUTTER",
+                            file_path=path,
+                            message=f"Config file in project root: {file_info['name']}",
+                            suggestion="Move to config/ directory or src/package/config/",
+                        )
+                    )
 
         return violations
 
@@ -207,12 +235,14 @@ class ContextAnalyzer:
                         matching_files = [f for f in python_files if f["name"].startswith(prefix)]
 
                         if len(matching_files) >= 3:
-                            violations.append(TreeViolation(
-                                violation_type="SCATTERED_MODULES",
-                                file_path=matching_files[0]["path"].parent,
-                                message=f"Related modules with '{prefix}' prefix should be grouped: {len(matching_files)} files",
-                                suggestion=f"Create {prefix}/ subdirectory and move related files"
-                            ))
+                            violations.append(
+                                TreeViolation(
+                                    violation_type="SCATTERED_MODULES",
+                                    file_path=matching_files[0]["path"].parent,
+                                    message=f"Related modules with '{prefix}' prefix should be grouped: {len(matching_files)} files",
+                                    suggestion=f"Create {prefix}/ subdirectory and move related files",
+                                )
+                            )
 
         return violations
 
@@ -250,12 +280,14 @@ class ContextAnalyzer:
                         break
 
                 if main_package:
-                    violations.append(TreeViolation(
-                        violation_type="FLAT_STRUCTURE",
-                        file_path=self.project_root / "src" / main_package,
-                        message=f"Package '{main_package}' has {pkg_py_files} Python files - too flat",
-                        suggestion="Group related functionality into subpackages"
-                    ))
+                    violations.append(
+                        TreeViolation(
+                            violation_type="FLAT_STRUCTURE",
+                            file_path=self.project_root / "src" / main_package,
+                            message=f"Package '{main_package}' has {pkg_py_files} Python files - too flat",
+                            suggestion="Group related functionality into subpackages",
+                        )
+                    )
 
         return violations
 
@@ -287,30 +319,46 @@ class ContextAnalyzer:
         violations = []
 
         allowed_root_files = {
-            "README.md", "LICENSE", "LICENSE.txt", "LICENSE.md",
-            "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
-            "Makefile", "Dockerfile", "docker-compose.yml",
-            ".gitignore", ".gitattributes", "tox.ini",
-            "CHANGELOG.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md"
+            "README.md",
+            "LICENSE",
+            "LICENSE.txt",
+            "LICENSE.md",
+            "pyproject.toml",
+            "setup.py",
+            "setup.cfg",
+            "requirements.txt",
+            "Makefile",
+            "Dockerfile",
+            "docker-compose.yml",
+            ".gitignore",
+            ".gitattributes",
+            "tox.ini",
+            "CHANGELOG.md",
+            "CONTRIBUTING.md",
+            "CODE_OF_CONDUCT.md",
         }
 
         if file_path.name not in allowed_root_files:
             # Documentation files
             if file_path.suffix in {".md", ".rst", ".txt"}:
-                violations.append(TreeViolation(
-                    violation_type="ROOT_CLUTTER",
-                    file_path=file_path,
-                    message=f"Documentation file should not be in project root: {file_path.name}",
-                    suggestion="Move to docs/ directory"
-                ))
+                violations.append(
+                    TreeViolation(
+                        violation_type="ROOT_CLUTTER",
+                        file_path=file_path,
+                        message=f"Documentation file should not be in project root: {file_path.name}",
+                        suggestion="Move to docs/ directory",
+                    )
+                )
 
             # Python files (except setup.py)
             elif file_path.suffix == ".py" and file_path.name != "setup.py":
-                violations.append(TreeViolation(
-                    violation_type="ROOT_CLUTTER",
-                    file_path=file_path,
-                    message=f"Python file should not be in project root: {file_path.name}",
-                    suggestion="Move to appropriate src/ subdirectory"
-                ))
+                violations.append(
+                    TreeViolation(
+                        violation_type="ROOT_CLUTTER",
+                        file_path=file_path,
+                        message=f"Python file should not be in project root: {file_path.name}",
+                        suggestion="Move to appropriate src/ subdirectory",
+                    )
+                )
 
         return violations

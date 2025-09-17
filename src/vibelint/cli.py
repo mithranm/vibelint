@@ -28,8 +28,7 @@ from rich.table import Table
 from .config import Config, load_config
 from .utils import console
 from .validators.namespace_collisions import NamespaceCollision
-from .results import (CheckResult, CommandResult, NamespaceResult,
-                      SnapshotResult)
+from .results import CheckResult, CommandResult, NamespaceResult, SnapshotResult
 from .utils import get_relative_path
 
 # Lazy imports - these will be imported only when needed
@@ -702,6 +701,7 @@ def check(
         if fix:
             console.print("\n[bold blue]Applying automatic fixes...[/bold blue]")
             import asyncio
+
             # Collect fixable findings by file
             from collections import defaultdict
 
@@ -774,9 +774,11 @@ def check(
         # Then check for namespace collisions
         logger_cli.debug("Checking for namespace vibe collisions...")
         target_paths: list[Path] = [project_root]
-        from .validators.namespace_collisions import (detect_global_definition_collisions,
-                                detect_hard_collisions,
-                                detect_local_export_collisions)
+        from .validators.namespace_collisions import (
+            detect_global_definition_collisions,
+            detect_hard_collisions,
+            detect_local_export_collisions,
+        )
 
         result_data.hard_collisions = detect_hard_collisions(target_paths, config)
         result_data.global_soft_collisions = detect_global_definition_collisions(
@@ -1087,8 +1089,7 @@ thinking_format = "harmony"      # Options: "harmony", "qwen", "custom"
             content = detect.read_text(encoding="utf-8")
 
             # Import the detection logic
-            from .validators.architecture.llm_analysis import \
-                LLMAnalysisValidator
+            from .validators.architecture.llm_analysis import LLMAnalysisValidator
 
             # Create a temporary validator instance to use detection method
             validator = LLMAnalysisValidator()
@@ -1267,7 +1268,9 @@ def regen_docstrings_cmd(
 
     # SAFETY WARNINGS
     if dry_run:
-        console.print("\n[bold green][DRY RUN] DRY RUN MODE - No files will be modified[/bold green]\n")
+        console.print(
+            "\n[bold green][DRY RUN] DRY RUN MODE - No files will be modified[/bold green]\n"
+        )
     else:
         console.print("\n[bold red]WARNING: This will modify your source code files![/bold red]")
         console.print(
@@ -1398,7 +1401,9 @@ def regen_docstrings_cmd(
                     remaining = len(preview_results["files_analyzed"]) - 3
                     console.print(f"[dim]... and {remaining} more files with changes[/dim]\n")
 
-            console.print("[bold green][SEARCH] DRY RUN COMPLETE:[/bold green] No files were modified.")
+            console.print(
+                "[bold green][SEARCH] DRY RUN COMPLETE:[/bold green] No files were modified."
+            )
             console.print(
                 "[bold yellow][TIP] Remove --dry-run to apply these changes (review carefully first!).[/bold yellow]"
             )
@@ -1521,7 +1526,9 @@ def rollback_cmd(ctx: click.Context, manifest: Path, yes: bool) -> None:
             console.print(f"  • {entry['original']} ← {entry['backup']}")
 
         if not yes:
-            console.print("\n[bold red][WARNING]  WARNING: This will overwrite current files![/bold red]")
+            console.print(
+                "\n[bold red][WARNING]  WARNING: This will overwrite current files![/bold red]"
+            )
             if not click.confirm("Are you sure you want to proceed with rollback?"):
                 console.print("Rollback cancelled.")
                 ctx.exit(0)

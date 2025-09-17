@@ -26,6 +26,7 @@ __all__ = ["CoverageAnalysisWorkflow", "CoverageGap", "EdgeCase", "CodeSuggestio
 @dataclass
 class CoverageGap:
     """Represents a coverage gap in the codebase."""
+
     file_path: str
     line_number: int
     function_name: Optional[str]
@@ -37,6 +38,7 @@ class CoverageGap:
 @dataclass
 class EdgeCase:
     """Represents an identified edge case that should be tested."""
+
     file_path: str
     function_name: str
     line_number: int
@@ -48,6 +50,7 @@ class EdgeCase:
 @dataclass
 class CodeSuggestion:
     """Represents a generated code suggestion for improving coverage."""
+
     suggestion_name: str
     file_path: str
     function_under_analysis: str
@@ -83,7 +86,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
             "edge_cases",
             "code_suggestions",
             "coverage_metrics",
-            "improvement_recommendations"
+            "improvement_recommendations",
         }
 
     async def execute(self, project_root: Path, context: Dict[str, Any]) -> WorkflowResult:
@@ -110,26 +113,34 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
 
             # Add coverage gap findings
             for gap in self.coverage_gaps:
-                severity = "BLOCK" if gap.coverage_percentage < 0.5 else "WARN" if gap.coverage_percentage < 0.8 else "INFO"
-                findings.append({
-                    "rule_id": "COVERAGE-GAP",
-                    "severity": severity,
-                    "message": f"Coverage gap in {gap.function_name or 'unknown function'}: {gap.coverage_percentage:.1%} coverage",
-                    "file_path": gap.file_path,
-                    "line": gap.line_number,
-                    "suggestion": gap.description
-                })
+                severity = (
+                    "BLOCK"
+                    if gap.coverage_percentage < 0.5
+                    else "WARN" if gap.coverage_percentage < 0.8 else "INFO"
+                )
+                findings.append(
+                    {
+                        "rule_id": "COVERAGE-GAP",
+                        "severity": severity,
+                        "message": f"Coverage gap in {gap.function_name or 'unknown function'}: {gap.coverage_percentage:.1%} coverage",
+                        "file_path": gap.file_path,
+                        "line": gap.line_number,
+                        "suggestion": gap.description,
+                    }
+                )
 
             # Add edge case findings
             for edge_case in self.edge_cases:
-                findings.append({
-                    "rule_id": "EDGE-CASE-MISSING",
-                    "severity": "INFO",
-                    "message": f"Missing edge case test for {edge_case.function_name}: {edge_case.case_type}",
-                    "file_path": edge_case.file_path,
-                    "line": edge_case.line_number,
-                    "suggestion": edge_case.description
-                })
+                findings.append(
+                    {
+                        "rule_id": "EDGE-CASE-MISSING",
+                        "severity": "INFO",
+                        "message": f"Missing edge case test for {edge_case.function_name}: {edge_case.case_type}",
+                        "file_path": edge_case.file_path,
+                        "line": edge_case.line_number,
+                        "suggestion": edge_case.description,
+                    }
+                )
 
             # Create artifacts
             artifacts = {
@@ -137,7 +148,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
                 "edge_cases": [self._edge_case_to_dict(e) for e in self.edge_cases],
                 "code_suggestions": [self._suggestion_to_dict(s) for s in self.code_suggestions],
                 "coverage_metrics": coverage_data or {},
-                "improvement_recommendations": self._generate_recommendations()
+                "improvement_recommendations": self._generate_recommendations(),
             }
 
             # Update metrics
@@ -146,17 +157,12 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
             self.metrics.confidence_score = self._calculate_confidence()
 
             return self._create_result(
-                WorkflowStatus.COMPLETED,
-                findings=findings,
-                artifacts=artifacts
+                WorkflowStatus.COMPLETED, findings=findings, artifacts=artifacts
             )
 
         except Exception as e:
             logger.error(f"Coverage analysis failed: {e}", exc_info=True)
-            return self._create_result(
-                WorkflowStatus.FAILED,
-                error_message=str(e)
-            )
+            return self._create_result(WorkflowStatus.FAILED, error_message=str(e))
 
     async def _run_coverage_analysis(self, project_root: Path) -> Optional[Dict[str, Any]]:
         """Run coverage analysis using pytest-cov."""
@@ -174,19 +180,17 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
 
             # Run coverage
             cmd = [
-                "python", "-m", "pytest",
+                "python",
+                "-m",
+                "pytest",
                 "--cov=src",
                 "--cov-report=xml",
                 "--cov-report=term-missing",
-                *test_dirs
+                *test_dirs,
             ]
 
             result = subprocess.run(
-                cmd,
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=300
+                cmd, cwd=project_root, capture_output=True, text=True, timeout=300
             )
 
             # Parse coverage XML if available
@@ -209,11 +213,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
             tree = ET.parse(coverage_xml_path)
             root = tree.getroot()
 
-            coverage_data = {
-                "overall_coverage": 0.0,
-                "file_coverage": {},
-                "line_coverage": {}
-            }
+            coverage_data = {"overall_coverage": 0.0, "file_coverage": {}, "line_coverage": {}}
 
             # Extract overall coverage
             if root.attrib.get("line-rate"):
@@ -255,13 +255,17 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
                     try:
                         # Analyze the file to understand what's missing
                         content = full_path.read_text(encoding="utf-8")
-                        gap = await self._analyze_file_coverage_gap(file_path, content, coverage_rate)
+                        gap = await self._analyze_file_coverage_gap(
+                            file_path, content, coverage_rate
+                        )
                         if gap:
                             self.coverage_gaps.append(gap)
                     except Exception as e:
                         logger.debug(f"Failed to analyze coverage gap for {file_path}: {e}")
 
-    async def _analyze_file_coverage_gap(self, file_path: str, content: str, coverage_rate: float) -> Optional[CoverageGap]:
+    async def _analyze_file_coverage_gap(
+        self, file_path: str, content: str, coverage_rate: float
+    ) -> Optional[CoverageGap]:
         """Analyze specific file coverage gap."""
         try:
             tree = ast.parse(content)
@@ -272,7 +276,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
-                    lines = node.end_lineno - node.lineno if hasattr(node, 'end_lineno') else 10
+                    lines = node.end_lineno - node.lineno if hasattr(node, "end_lineno") else 10
                     if lines > max_lines:
                         max_lines = lines
                         largest_function = node
@@ -284,7 +288,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
                     function_name=largest_function.name,
                     coverage_percentage=coverage_rate,
                     gap_type="uncovered_function",
-                    description=f"Function '{largest_function.name}' likely has uncovered code paths"
+                    description=f"Function '{largest_function.name}' likely has uncovered code paths",
                 )
 
         except Exception as e:
@@ -315,24 +319,28 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
                 if isinstance(node, ast.FunctionDef):
                     # Look for common edge case patterns
                     if any(arg.arg in ["data", "input", "value"] for arg in node.args.args):
-                        edge_cases.append(EdgeCase(
-                            file_path=str(file_path.relative_to(file_path.parents[2])),
-                            function_name=node.name,
-                            line_number=node.lineno,
-                            case_type="null_input",
-                            description=f"Consider testing {node.name} with null/empty inputs"
-                        ))
+                        edge_cases.append(
+                            EdgeCase(
+                                file_path=str(file_path.relative_to(file_path.parents[2])),
+                                function_name=node.name,
+                                line_number=node.lineno,
+                                case_type="null_input",
+                                description=f"Consider testing {node.name} with null/empty inputs",
+                            )
+                        )
 
                     # Look for division or mathematical operations
                     for child in ast.walk(node):
                         if isinstance(child, ast.BinOp) and isinstance(child.op, ast.Div):
-                            edge_cases.append(EdgeCase(
-                                file_path=str(file_path.relative_to(file_path.parents[2])),
-                                function_name=node.name,
-                                line_number=getattr(child, 'lineno', node.lineno),
-                                case_type="division_by_zero",
-                                description=f"Test division by zero in {node.name}"
-                            ))
+                            edge_cases.append(
+                                EdgeCase(
+                                    file_path=str(file_path.relative_to(file_path.parents[2])),
+                                    function_name=node.name,
+                                    line_number=getattr(child, "lineno", node.lineno),
+                                    case_type="division_by_zero",
+                                    description=f"Test division by zero in {node.name}",
+                                )
+                            )
 
         except Exception as e:
             logger.debug(f"AST analysis failed for {file_path}: {e}")
@@ -350,7 +358,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
                 suggested_code=f"def test_{gap.function_name or 'function'}():\n    # TODO: Add test for {gap.description}",
                 priority=3,
                 edge_cases_covered=[gap.gap_type],
-                estimated_coverage_increase=0.1
+                estimated_coverage_increase=0.1,
             )
             self.code_suggestions.append(suggestion)
 
@@ -359,13 +367,17 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
         recommendations = []
 
         if self.coverage_gaps:
-            recommendations.append(f"Address {len(self.coverage_gaps)} coverage gaps to improve test quality")
+            recommendations.append(
+                f"Address {len(self.coverage_gaps)} coverage gaps to improve test quality"
+            )
 
         if self.edge_cases:
             recommendations.append(f"Add tests for {len(self.edge_cases)} identified edge cases")
 
         if self.code_suggestions:
-            recommendations.append(f"Consider implementing {len(self.code_suggestions)} suggested test improvements")
+            recommendations.append(
+                f"Consider implementing {len(self.code_suggestions)} suggested test improvements"
+            )
 
         if not recommendations:
             recommendations.append("Coverage analysis complete - no major issues found")
@@ -388,10 +400,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
 
     def _get_python_files(self, project_root: Path) -> List[Path]:
         """Get Python files for analysis."""
-        source_candidates = [
-            project_root / "src",
-            project_root
-        ]
+        source_candidates = [project_root / "src", project_root]
 
         python_files = []
         for source_root in source_candidates:
@@ -402,7 +411,9 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
         # Filter out test files and common non-source files
         filtered_files = []
         for file_path in python_files:
-            if not any(skip in str(file_path) for skip in ["__pycache__", ".pytest_cache", "test", "tests"]):
+            if not any(
+                skip in str(file_path) for skip in ["__pycache__", ".pytest_cache", "test", "tests"]
+            ):
                 filtered_files.append(file_path)
 
         return filtered_files
@@ -415,7 +426,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
             "function_name": gap.function_name,
             "coverage_percentage": gap.coverage_percentage,
             "gap_type": gap.gap_type,
-            "description": gap.description
+            "description": gap.description,
         }
 
     def _edge_case_to_dict(self, edge_case: EdgeCase) -> Dict[str, Any]:
@@ -426,7 +437,7 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
             "line_number": edge_case.line_number,
             "case_type": edge_case.case_type,
             "description": edge_case.description,
-            "suggested_test_data": edge_case.suggested_test_data
+            "suggested_test_data": edge_case.suggested_test_data,
         }
 
     def _suggestion_to_dict(self, suggestion: CodeSuggestion) -> Dict[str, Any]:
@@ -438,5 +449,5 @@ class CoverageAnalysisWorkflow(BaseWorkflow):
             "suggested_code": suggestion.suggested_code,
             "priority": suggestion.priority,
             "edge_cases_covered": suggestion.edge_cases_covered,
-            "estimated_coverage_increase": suggestion.estimated_coverage_increase
+            "estimated_coverage_increase": suggestion.estimated_coverage_increase,
         }

@@ -49,7 +49,7 @@ class WorkflowRegistry:
             "produced_outputs": list(temp_instance.get_produced_outputs()),
             "dependencies": temp_instance.get_dependencies(),
             "supports_parallel": temp_instance.supports_parallel_execution(),
-            "class_name": workflow_class.__name__
+            "class_name": workflow_class.__name__,
         }
 
         logger.debug(f"Registered workflow: {workflow_id}")
@@ -140,7 +140,12 @@ def _discover_and_register_workflows():
     workflows_dir = Path(__file__).parent
 
     for file_path in workflows_dir.glob("*.py"):
-        if file_path.name.startswith("__") or file_path.name in ["base.py", "registry.py", "manager.py", "evaluation.py"]:
+        if file_path.name.startswith("__") or file_path.name in [
+            "base.py",
+            "registry.py",
+            "manager.py",
+            "evaluation.py",
+        ]:
             continue
 
         module_name = file_path.stem
@@ -150,13 +155,17 @@ def _discover_and_register_workflows():
             # Find workflow classes in the module
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                if (isinstance(attr, type) and
-                    issubclass(attr, BaseWorkflow) and
-                    attr != BaseWorkflow and
-                    hasattr(attr, 'workflow_id') and
-                    attr.workflow_id):
+                if (
+                    isinstance(attr, type)
+                    and issubclass(attr, BaseWorkflow)
+                    and attr != BaseWorkflow
+                    and hasattr(attr, "workflow_id")
+                    and attr.workflow_id
+                ):
 
-                    logger.debug(f"Auto-registering workflow: {attr.workflow_id} from {module_name}")
+                    logger.debug(
+                        f"Auto-registering workflow: {attr.workflow_id} from {module_name}"
+                    )
                     workflow_registry.register(attr)
 
         except Exception as e:
@@ -171,7 +180,7 @@ def _register_entry_point_workflows():
     try:
         import pkg_resources
 
-        for entry_point in pkg_resources.iter_entry_points('vibelint.workflows'):
+        for entry_point in pkg_resources.iter_entry_points("vibelint.workflows"):
             try:
                 workflow_class = entry_point.load()
                 if issubclass(workflow_class, BaseWorkflow):

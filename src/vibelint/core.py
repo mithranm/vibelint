@@ -25,6 +25,7 @@ __all__ = ["DynamicAnalyzer", "AnalysisRequest", "AnalysisResult"]
 @dataclass
 class AnalysisRequest:
     """Request for dynamic code analysis."""
+
     file_path: Path
     content: str
     analysis_types: List[str]  # e.g., ["architecture", "code_smells", "dead_code"]
@@ -35,6 +36,7 @@ class AnalysisRequest:
 @dataclass
 class AnalysisResult:
     """Result of dynamic analysis."""
+
     file_path: Path
     findings: List[Finding]
     analysis_duration: float
@@ -80,24 +82,23 @@ class DynamicAnalyzer:
             findings=all_findings,
             analysis_duration=duration,
             llm_calls_made=llm_calls,
-            confidence_score=confidence
+            confidence_score=confidence,
         )
 
         # Cache result
         self.analysis_cache[cache_key] = result
         return result
 
-    def _analyze_with_llm(self, request: AnalysisRequest, analysis_type: str) -> tuple[List[Finding], int]:
+    def _analyze_with_llm(
+        self, request: AnalysisRequest, analysis_type: str
+    ) -> tuple[List[Finding], int]:
         """Perform specific analysis type using appropriate LLM."""
 
         prompt = self._generate_analysis_prompt(request, analysis_type)
 
         # Route to appropriate LLM based on complexity
         llm_request = LLMRequest(
-            content=prompt,
-            task_type=analysis_type,
-            max_tokens=2048,
-            temperature=0.1
+            content=prompt, task_type=analysis_type, max_tokens=2048, temperature=0.1
         )
 
         try:
@@ -227,7 +228,7 @@ Be specific about line numbers and provide actionable suggestions.
                     severity_map = {
                         "ERROR": Severity.BLOCK,
                         "WARN": Severity.WARN,
-                        "INFO": Severity.INFO
+                        "INFO": Severity.INFO,
                     }
 
                     finding = Finding(
@@ -235,8 +236,10 @@ Be specific about line numbers and provide actionable suggestions.
                         message=finding_data.get("message", "LLM identified issue"),
                         file_path=file_path,
                         line=finding_data.get("line", 1),
-                        severity=severity_map.get(finding_data.get("severity", "INFO"), Severity.INFO),
-                        suggestion=finding_data.get("suggestion", "See LLM analysis")
+                        severity=severity_map.get(
+                            finding_data.get("severity", "INFO"), Severity.INFO
+                        ),
+                        suggestion=finding_data.get("suggestion", "See LLM analysis"),
                     )
                     findings.append(finding)
 
@@ -244,14 +247,16 @@ Be specific about line numbers and provide actionable suggestions.
             logger.warning(f"Failed to parse LLM response as JSON: {e}")
 
             # Fallback: Parse as unstructured text
-            findings.append(Finding(
-                rule_id="LLM-ANALYSIS",
-                message="LLM identified code quality issues",
-                file_path=file_path,
-                line=1,
-                severity=Severity.INFO,
-                suggestion=f"LLM Analysis: {llm_response[:200]}..."
-            ))
+            findings.append(
+                Finding(
+                    rule_id="LLM-ANALYSIS",
+                    message="LLM identified code quality issues",
+                    file_path=file_path,
+                    line=1,
+                    severity=Severity.INFO,
+                    suggestion=f"LLM Analysis: {llm_response[:200]}...",
+                )
+            )
 
         return findings
 
@@ -305,10 +310,7 @@ class CustomValidator(BaseValidator):
 """
 
         llm_request = LLMRequest(
-            content=prompt,
-            task_type="code_generation",
-            max_tokens=1000,
-            temperature=0.1
+            content=prompt, task_type="code_generation", max_tokens=1000, temperature=0.1
         )
 
         try:

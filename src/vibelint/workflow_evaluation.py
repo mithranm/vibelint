@@ -23,6 +23,7 @@ __all__ = ["WorkflowEvaluator", "EvaluationResult", "PerformanceMetrics", "Quali
 @dataclass
 class PerformanceMetrics:
     """Performance evaluation metrics."""
+
     execution_time_seconds: float
     memory_usage_mb: Optional[float] = None
     cpu_usage_percent: Optional[float] = None
@@ -44,6 +45,7 @@ class PerformanceMetrics:
 @dataclass
 class QualityMetrics:
     """Quality evaluation metrics."""
+
     confidence_score: float
     accuracy_score: Optional[float] = None
     precision: Optional[float] = None
@@ -67,6 +69,7 @@ class QualityMetrics:
 @dataclass
 class EvaluationResult:
     """Result of workflow evaluation."""
+
     workflow_id: str
     timestamp: str
     overall_score: float  # 0.0 to 1.0
@@ -96,9 +99,7 @@ class WorkflowEvaluator:
         self.baselines: Dict[str, Dict[str, float]] = {}
 
     def evaluate_workflow_execution(
-        self,
-        workflow: BaseWorkflow,
-        result: WorkflowResult
+        self, workflow: BaseWorkflow, result: WorkflowResult
     ) -> EvaluationResult:
         """Evaluate a completed workflow execution."""
 
@@ -109,14 +110,14 @@ class WorkflowEvaluator:
             execution_time_seconds=result.metrics.execution_time_seconds or 0.0,
             memory_usage_mb=result.metrics.memory_usage_mb,
             cpu_usage_percent=result.metrics.cpu_usage_percent,
-            throughput_files_per_second=self._calculate_throughput(result.metrics)
+            throughput_files_per_second=self._calculate_throughput(result.metrics),
         )
 
         # Extract quality metrics
         quality = QualityMetrics(
             confidence_score=result.metrics.confidence_score,
             accuracy_score=result.metrics.accuracy_score,
-            coverage_percentage=result.metrics.coverage_percentage
+            coverage_percentage=result.metrics.coverage_percentage,
         )
 
         # Get evaluation criteria
@@ -149,7 +150,7 @@ class WorkflowEvaluator:
             quality=quality,
             meets_criteria=meets_criteria,
             criteria_violations=violations,
-            recommendations=recommendations
+            recommendations=recommendations,
         )
 
         # Add baseline comparison if available
@@ -177,10 +178,7 @@ class WorkflowEvaluator:
         return None
 
     def _calculate_overall_score(
-        self,
-        performance: PerformanceMetrics,
-        quality: QualityMetrics,
-        result: WorkflowResult
+        self, performance: PerformanceMetrics, quality: QualityMetrics, result: WorkflowResult
     ) -> float:
         """Calculate overall workflow score."""
 
@@ -218,7 +216,7 @@ class WorkflowEvaluator:
         workflow: BaseWorkflow,
         performance: PerformanceMetrics,
         quality: QualityMetrics,
-        result: WorkflowResult
+        result: WorkflowResult,
     ) -> List[str]:
         """Generate improvement recommendations."""
 
@@ -233,7 +231,9 @@ class WorkflowEvaluator:
 
         # Quality recommendations
         if quality.confidence_score < 0.7:
-            recommendations.append("Consider improving analysis confidence through better heuristics")
+            recommendations.append(
+                "Consider improving analysis confidence through better heuristics"
+            )
 
         if result.metrics.errors_encountered > 0:
             recommendations.append("Address error handling to improve reliability")
@@ -248,10 +248,7 @@ class WorkflowEvaluator:
         return recommendations
 
     def _compare_to_baseline(
-        self,
-        workflow_id: str,
-        performance: PerformanceMetrics,
-        quality: QualityMetrics
+        self, workflow_id: str, performance: PerformanceMetrics, quality: QualityMetrics
     ) -> Dict[str, float]:
         """Compare current metrics to baseline."""
 
@@ -271,10 +268,7 @@ class WorkflowEvaluator:
         return comparison
 
     def _update_baseline(
-        self,
-        workflow_id: str,
-        performance: PerformanceMetrics,
-        quality: QualityMetrics
+        self, workflow_id: str, performance: PerformanceMetrics, quality: QualityMetrics
     ):
         """Update baseline metrics for workflow."""
 
@@ -288,16 +282,15 @@ class WorkflowEvaluator:
 
         if "execution_time" in baseline:
             baseline["execution_time"] = (
-                alpha * performance.execution_time_seconds +
-                (1 - alpha) * baseline["execution_time"]
+                alpha * performance.execution_time_seconds
+                + (1 - alpha) * baseline["execution_time"]
             )
         else:
             baseline["execution_time"] = performance.execution_time_seconds
 
         if "confidence_score" in baseline:
             baseline["confidence_score"] = (
-                alpha * quality.confidence_score +
-                (1 - alpha) * baseline["confidence_score"]
+                alpha * quality.confidence_score + (1 - alpha) * baseline["confidence_score"]
             )
         else:
             baseline["confidence_score"] = quality.confidence_score
@@ -315,7 +308,7 @@ class WorkflowEvaluator:
             return None
 
         # Simple trend analysis
-        recent_evaluations = evaluations[-min(days, len(evaluations)):]
+        recent_evaluations = evaluations[-min(days, len(evaluations)) :]
 
         execution_times = [e.performance.execution_time_seconds for e in recent_evaluations]
         confidence_scores = [e.quality.confidence_score for e in recent_evaluations]
@@ -328,7 +321,7 @@ class WorkflowEvaluator:
             "avg_overall_score": sum(overall_scores) / len(overall_scores),
             "performance_trend": self._calculate_trend(execution_times),
             "quality_trend": self._calculate_trend(confidence_scores),
-            "overall_trend": self._calculate_trend(overall_scores)
+            "overall_trend": self._calculate_trend(overall_scores),
         }
 
         return trends
@@ -338,8 +331,8 @@ class WorkflowEvaluator:
         if len(values) < 2:
             return "insufficient_data"
 
-        first_half = values[:len(values)//2]
-        second_half = values[len(values)//2:]
+        first_half = values[: len(values) // 2]
+        second_half = values[len(values) // 2 :]
 
         first_avg = sum(first_half) / len(first_half)
         second_avg = sum(second_half) / len(second_half)
@@ -351,7 +344,9 @@ class WorkflowEvaluator:
         else:
             return "stable"
 
-    def generate_evaluation_report(self, workflow_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    def generate_evaluation_report(
+        self, workflow_ids: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """Generate comprehensive evaluation report."""
 
         if workflow_ids is None:
@@ -360,7 +355,7 @@ class WorkflowEvaluator:
         report = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "workflows_evaluated": len(workflow_ids),
-            "workflow_summaries": {}
+            "workflow_summaries": {},
         }
 
         for workflow_id in workflow_ids:
@@ -376,7 +371,7 @@ class WorkflowEvaluator:
                         "meets_criteria": latest.meets_criteria,
                         "execution_count": len(evaluations),
                         "recommendations": latest.recommendations,
-                        "trends": trends
+                        "trends": trends,
                     }
 
         return report
@@ -388,7 +383,7 @@ class WorkflowEvaluator:
         export_data = {
             "evaluation_history": {},
             "baselines": self.baselines,
-            "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
         # Convert evaluation history to serializable format
@@ -403,17 +398,17 @@ class WorkflowEvaluator:
                     "performance": {
                         "execution_time_seconds": eval_result.performance.execution_time_seconds,
                         "memory_usage_mb": eval_result.performance.memory_usage_mb,
-                        "throughput_files_per_second": eval_result.performance.throughput_files_per_second
+                        "throughput_files_per_second": eval_result.performance.throughput_files_per_second,
                     },
                     "quality": {
                         "confidence_score": eval_result.quality.confidence_score,
-                        "coverage_percentage": eval_result.quality.coverage_percentage
+                        "coverage_percentage": eval_result.quality.coverage_percentage,
                     },
-                    "recommendations": eval_result.recommendations
+                    "recommendations": eval_result.recommendations,
                 }
                 export_data["evaluation_history"][workflow_id].append(eval_dict)
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(export_data, f, indent=2)
 
         logger.info(f"Evaluation data exported to {output_path}")

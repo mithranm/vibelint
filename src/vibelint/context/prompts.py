@@ -16,6 +16,7 @@ __all__ = ["AgentPrompts", "AnalysisLevel"]
 @dataclass
 class AnalysisLevel:
     """Analysis granularity levels for context awareness."""
+
     TREE = "tree"
     CONTENT = "content"
     DEEP = "deep"
@@ -307,7 +308,7 @@ Be strategic and practical. Focus on actionable recommendations that move the co
         prompts = {
             AnalysisLevel.TREE: AgentPrompts.get_tree_analysis_prompt(),
             AnalysisLevel.CONTENT: AgentPrompts.get_content_analysis_prompt(),
-            AnalysisLevel.DEEP: AgentPrompts.get_deep_analysis_prompt()
+            AnalysisLevel.DEEP: AgentPrompts.get_deep_analysis_prompt(),
         }
 
         if level not in prompts:

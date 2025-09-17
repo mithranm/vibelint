@@ -18,19 +18,27 @@ from typing import Dict, List, Any, Optional
 from .plugin_system import BaseFormatter, Finding, Severity
 
 __all__ = [
-    "ReportGenerator", "ReportConfig", "VerbosityLevel",
-    "NaturalLanguageFormatter", "JsonFormatter", "SarifFormatter", "LLMFormatter", "HumanFormatter",
-    "BUILTIN_FORMATTERS", "FORMAT_CHOICES", "DEFAULT_FORMAT"
+    "ReportGenerator",
+    "ReportConfig",
+    "VerbosityLevel",
+    "NaturalLanguageFormatter",
+    "JsonFormatter",
+    "SarifFormatter",
+    "LLMFormatter",
+    "HumanFormatter",
+    "BUILTIN_FORMATTERS",
+    "FORMAT_CHOICES",
+    "DEFAULT_FORMAT",
 ]
 
 
 class VerbosityLevel(Enum):
     """Report verbosity levels for different use cases."""
 
-    EXECUTIVE = "executive"    # High-level summary for planning
-    TACTICAL = "tactical"      # Actionable items for development
-    DETAILED = "detailed"      # Comprehensive analysis with context
-    FORENSIC = "forensic"      # Complete diagnostic information
+    EXECUTIVE = "executive"  # High-level summary for planning
+    TACTICAL = "tactical"  # Actionable items for development
+    DETAILED = "detailed"  # Comprehensive analysis with context
+    FORENSIC = "forensic"  # Complete diagnostic information
 
 
 @dataclass
@@ -68,9 +76,7 @@ class ReportGenerator:
         self.config = config
 
     def generate_comprehensive_report(
-        self,
-        analysis_results: Dict[str, Any],
-        timestamp: Optional[str] = None
+        self, analysis_results: Dict[str, Any], timestamp: Optional[str] = None
     ) -> Dict[str, Path]:
         """Generate comprehensive report with all artifacts."""
 
@@ -104,10 +110,7 @@ class ReportGenerator:
         return generated_files
 
     def _generate_main_report(
-        self,
-        analysis_results: Dict[str, Any],
-        report_dir: Path,
-        timestamp: str
+        self, analysis_results: Dict[str, Any], report_dir: Path, timestamp: str
     ) -> Path:
         """Generate main analysis report."""
 
@@ -169,7 +172,7 @@ Verbosity Level: {self.config.verbosity_level.value}
         tree_violations = analysis_results.get("tree_analysis", {}).get("quick_violations", [])
         if tree_violations:
             content += f"### Organizational Issues ({len(tree_violations)})\n\n"
-            for violation in tree_violations[:self.config.max_findings_per_category]:
+            for violation in tree_violations[: self.config.max_findings_per_category]:
                 content += f"- **{violation.get('violation_type', 'Unknown')}**: {violation.get('message', 'No message')}\n"
             content += "\n"
 
@@ -181,17 +184,14 @@ Verbosity Level: {self.config.verbosity_level.value}
 
         if content_findings:
             content += f"### Structural Issues ({len(content_findings)})\n\n"
-            for finding in content_findings[:self.config.max_findings_per_category]:
+            for finding in content_findings[: self.config.max_findings_per_category]:
                 content += f"- **{finding.get('rule_id', 'Unknown')}**: {finding.get('message', 'No message')}\n"
             content += "\n"
 
         return content
 
     def _generate_artifacts(
-        self,
-        analysis_results: Dict[str, Any],
-        report_dir: Path,
-        timestamp: str
+        self, analysis_results: Dict[str, Any], report_dir: Path, timestamp: str
     ) -> Dict[str, Path]:
         """Generate detailed artifacts for different analysis aspects."""
 
@@ -205,7 +205,7 @@ Verbosity Level: {self.config.verbosity_level.value}
             tree_path = artifacts_dir / "organizational_analysis.json"
             tree_path.write_text(
                 json.dumps(analysis_results["tree_analysis"], indent=2, default=str),
-                encoding="utf-8"
+                encoding="utf-8",
             )
             artifact_paths["organizational"] = tree_path
 
@@ -213,7 +213,7 @@ Verbosity Level: {self.config.verbosity_level.value}
             content_path = artifacts_dir / "structural_analysis.json"
             content_path.write_text(
                 json.dumps(analysis_results["content_analysis"], indent=2, default=str),
-                encoding="utf-8"
+                encoding="utf-8",
             )
             artifact_paths["structural"] = content_path
 
@@ -221,17 +221,14 @@ Verbosity Level: {self.config.verbosity_level.value}
             arch_path = artifacts_dir / "architectural_analysis.json"
             arch_path.write_text(
                 json.dumps(analysis_results["deep_analysis"], indent=2, default=str),
-                encoding="utf-8"
+                encoding="utf-8",
             )
             artifact_paths["architectural"] = arch_path
 
         return artifact_paths
 
     def _generate_quick_action_plan(
-        self,
-        analysis_results: Dict[str, Any],
-        report_dir: Path,
-        timestamp: str
+        self, analysis_results: Dict[str, Any], report_dir: Path, timestamp: str
     ) -> Path:
         """Generate quick action plan for immediate development focus."""
 
@@ -268,10 +265,7 @@ Generated: {timestamp}
         return quick_plan_path
 
     def _generate_index(
-        self,
-        report_dir: Path,
-        generated_files: Dict[str, Path],
-        timestamp: str
+        self, report_dir: Path, generated_files: Dict[str, Path], timestamp: str
     ) -> Path:
         """Generate navigation index for the report."""
 
@@ -291,7 +285,7 @@ Generated: {timestamp}
         artifact_types = {
             "organizational": "[BUILD] Organizational Analysis",
             "structural": "[TOOL] Structural Analysis",
-            "architectural": "[ARCH] Architectural Analysis"
+            "architectural": "[ARCH] Architectural Analysis",
         }
 
         for artifact_key, description in artifact_types.items():
@@ -314,8 +308,10 @@ Generated: {timestamp}
             # Only high-level summary and critical issues
             return {
                 "synthesis": {
-                    "executive_summary": analysis_results.get("synthesis", {}).get("executive_summary", {}),
-                    "priority_actions": self._extract_critical_issues(analysis_results)
+                    "executive_summary": analysis_results.get("synthesis", {}).get(
+                        "executive_summary", {}
+                    ),
+                    "priority_actions": self._extract_critical_issues(analysis_results),
                 }
             }
 
@@ -364,6 +360,7 @@ Generated: {timestamp}
 
 # ===== FORMATTERS =====
 # Consolidated from formatters.py
+
 
 class NaturalLanguageFormatter(BaseFormatter):
     """Natural language output formatter for humans and AI agents."""

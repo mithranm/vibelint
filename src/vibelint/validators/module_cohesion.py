@@ -25,7 +25,9 @@ class ModuleCohesionValidator(BaseValidator):
 
     rule_id = "MODULE-COHESION"
     name = "Module Cohesion & File Justification Analyzer"
-    description = "Identifies scattered related modules and files without clear purpose justification"
+    description = (
+        "Identifies scattered related modules and files without clear purpose justification"
+    )
     default_severity = Severity.INFO
 
     def __init__(self):
@@ -104,7 +106,9 @@ class ModuleCohesionValidator(BaseValidator):
 
         return groups
 
-    def _suggest_module_grouping(self, prefix: str, files: List[Path], src_dir: Path) -> Iterator[Finding]:
+    def _suggest_module_grouping(
+        self, prefix: str, files: List[Path], src_dir: Path
+    ) -> Iterator[Finding]:
         """Suggest grouping related files into a submodule."""
         if len(files) < 2:
             return
@@ -122,9 +126,9 @@ class ModuleCohesionValidator(BaseValidator):
             line=1,
             severity=self.default_severity,
             suggestion=f"Create 'src/vibelint/{prefix}/' subpackage and move related modules:\n"
-                      f"  mkdir src/vibelint/{prefix}/\n"
-                      f"  mv {' '.join(file_names)} src/vibelint/{prefix}/\n"
-                      f"  # Rename files to remove prefix: {prefix}_manager.py -> manager.py"
+            f"  mkdir src/vibelint/{prefix}/\n"
+            f"  mv {' '.join(file_names)} src/vibelint/{prefix}/\n"
+            f"  # Rename files to remove prefix: {prefix}_manager.py -> manager.py",
         )
 
     def _analyze_import_cohesion(self, files: List[Path], src_dir: Path) -> Iterator[Finding]:
@@ -155,7 +159,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=src_dir / f"{list(group)[0]}.py",
                     line=1,
                     severity=Severity.INFO,
-                    suggestion="Consider grouping these functionally related modules into a subpackage"
+                    suggestion="Consider grouping these functionally related modules into a subpackage",
                 )
 
     def _extract_local_imports(self, tree: ast.AST, src_dir: Path) -> Set[str]:
@@ -206,11 +210,29 @@ class ModuleCohesionValidator(BaseValidator):
         """Check that every file has clear justification for existence."""
         # Files that are automatically justified
         auto_justified = {
-            "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "requirements-dev.txt",
-            "LICENSE", "LICENSE.txt", "LICENSE.md", "README.md", "README.rst", "CHANGELOG.md",
-            "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", ".gitignore", ".gitattributes",
-            "Dockerfile", "docker-compose.yml", "Makefile", "tox.ini", ".pre-commit-config.yaml",
-            "__init__.py", "conftest.py", "pytest.ini"
+            "pyproject.toml",
+            "setup.py",
+            "setup.cfg",
+            "requirements.txt",
+            "requirements-dev.txt",
+            "LICENSE",
+            "LICENSE.txt",
+            "LICENSE.md",
+            "README.md",
+            "README.rst",
+            "CHANGELOG.md",
+            "CONTRIBUTING.md",
+            "CODE_OF_CONDUCT.md",
+            ".gitignore",
+            ".gitattributes",
+            "Dockerfile",
+            "docker-compose.yml",
+            "Makefile",
+            "tox.ini",
+            ".pre-commit-config.yaml",
+            "__init__.py",
+            "conftest.py",
+            "pytest.ini",
         }
 
         # Check all files in project
@@ -223,8 +245,20 @@ class ModuleCohesionValidator(BaseValidator):
                 continue
 
             # Skip files in build/cache directories
-            if any(part in [".git", "__pycache__", ".pytest_cache", "build", "dist", ".tox", ".mypy_cache", "node_modules"]
-                   for part in file_path.parts):
+            if any(
+                part
+                in [
+                    ".git",
+                    "__pycache__",
+                    ".pytest_cache",
+                    "build",
+                    "dist",
+                    ".tox",
+                    ".mypy_cache",
+                    "node_modules",
+                ]
+                for part in file_path.parts
+            ):
                 continue
 
             # Check file justification based on type
@@ -244,7 +278,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=file_path,
                     line=1,
                     severity=Severity.INFO,
-                    suggestion="Add comment/documentation explaining file purpose or remove if unnecessary"
+                    suggestion="Add comment/documentation explaining file purpose or remove if unnecessary",
                 )
 
     def _check_python_file_justification(self, file_path: Path) -> Iterator[Finding]:
@@ -255,8 +289,15 @@ class ModuleCohesionValidator(BaseValidator):
 
             # Check for module docstring
             has_module_docstring = False
-            if tree.body and isinstance(tree.body[0], ast.Expr) and isinstance(tree.body[0].value, ast.Constant):
-                if isinstance(tree.body[0].value.value, str) and len(tree.body[0].value.value.strip()) > 10:
+            if (
+                tree.body
+                and isinstance(tree.body[0], ast.Expr)
+                and isinstance(tree.body[0].value, ast.Constant)
+            ):
+                if (
+                    isinstance(tree.body[0].value.value, str)
+                    and len(tree.body[0].value.value.strip()) > 10
+                ):
                     has_module_docstring = True
 
             if not has_module_docstring:
@@ -266,7 +307,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=file_path,
                     line=1,
                     severity=Severity.WARN,
-                    suggestion='Add module docstring: """Brief description of module purpose."""'
+                    suggestion='Add module docstring: """Brief description of module purpose."""',
                 )
 
         except (UnicodeDecodeError, SyntaxError):
@@ -276,7 +317,7 @@ class ModuleCohesionValidator(BaseValidator):
                 file_path=file_path,
                 line=1,
                 severity=Severity.WARN,
-                suggestion="Fix syntax errors or encoding issues, or remove if unused"
+                suggestion="Fix syntax errors or encoding issues, or remove if unused",
             )
 
     def _check_documentation_justification(self, file_path: Path) -> Iterator[Finding]:
@@ -292,7 +333,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=file_path,
                     line=1,
                     severity=Severity.INFO,
-                    suggestion="Add meaningful content or remove if unnecessary"
+                    suggestion="Add meaningful content or remove if unnecessary",
                 )
 
             # Check for placeholder/template content
@@ -304,7 +345,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=file_path,
                     line=1,
                     severity=Severity.INFO,
-                    suggestion="Replace placeholder content with actual documentation or remove file"
+                    suggestion="Replace placeholder content with actual documentation or remove file",
                 )
 
         except UnicodeDecodeError:
@@ -314,7 +355,7 @@ class ModuleCohesionValidator(BaseValidator):
                 file_path=file_path,
                 line=1,
                 severity=Severity.WARN,
-                suggestion="Fix encoding issues or remove if unnecessary"
+                suggestion="Fix encoding issues or remove if unnecessary",
             )
 
     def _check_config_file_justification(self, file_path: Path) -> Iterator[Finding]:
@@ -330,7 +371,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=file_path,
                     line=1,
                     severity=Severity.INFO,
-                    suggestion="Add configuration content or remove if unnecessary"
+                    suggestion="Add configuration content or remove if unnecessary",
                 )
 
             # Check for comments explaining purpose
@@ -346,7 +387,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=file_path,
                     line=1,
                     severity=Severity.INFO,
-                    suggestion="Add comments explaining configuration purpose and usage"
+                    suggestion="Add comments explaining configuration purpose and usage",
                 )
 
         except UnicodeDecodeError:
@@ -356,7 +397,7 @@ class ModuleCohesionValidator(BaseValidator):
                 file_path=file_path,
                 line=1,
                 severity=Severity.WARN,
-                suggestion="Fix encoding issues or remove if unnecessary"
+                suggestion="Fix encoding issues or remove if unnecessary",
             )
 
     def _check_script_justification(self, file_path: Path) -> Iterator[Finding]:
@@ -369,8 +410,7 @@ class ModuleCohesionValidator(BaseValidator):
 
             # Look for explanatory comments in first 10 lines
             has_explanation = any(
-                line.strip().startswith("#") and len(line.strip()) > 20
-                for line in lines[:10]
+                line.strip().startswith("#") and len(line.strip()) > 20 for line in lines[:10]
             )
 
             if not has_explanation:
@@ -380,7 +420,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=file_path,
                     line=1,
                     severity=Severity.INFO,
-                    suggestion="Add comments explaining script purpose, usage, and requirements"
+                    suggestion="Add comments explaining script purpose, usage, and requirements",
                 )
 
         except UnicodeDecodeError:
@@ -390,5 +430,5 @@ class ModuleCohesionValidator(BaseValidator):
                 file_path=file_path,
                 line=1,
                 severity=Severity.WARN,
-                suggestion="Fix encoding issues or remove if unnecessary"
+                suggestion="Fix encoding issues or remove if unnecessary",
             )

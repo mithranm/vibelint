@@ -22,6 +22,7 @@ __all__ = ["ProjectMapper", "FileNode", "ModuleGroup"]
 @dataclass
 class FileNode:
     """Represents a file in the project structure."""
+
     path: str
     name: str
     size: int
@@ -42,6 +43,7 @@ class FileNode:
 @dataclass
 class ModuleGroup:
     """Represents a logical grouping of related files."""
+
     name: str
     files: List[FileNode]
     cohesion_score: float
@@ -82,7 +84,7 @@ class ProjectMapper:
             "module_groups": [asdict(group) for group in self.module_groups],
             "organization_metrics": metrics,
             "recommendations": recommendations,
-            "file_index": {path: asdict(node) for path, node in self.file_nodes.items()}
+            "file_index": {path: asdict(node) for path, node in self.file_nodes.items()},
         }
 
     def _discover_files(self):
@@ -98,7 +100,7 @@ class ProjectMapper:
                     file_type=file_path.suffix or "no_extension",
                     purpose=self._infer_file_purpose(file_path),
                     lines_of_code=self._count_lines_of_code(file_path),
-                    last_modified=file_path.stat().st_mtime
+                    last_modified=file_path.stat().st_mtime,
                 )
 
                 self.file_nodes[relative_path] = node
@@ -107,11 +109,27 @@ class ProjectMapper:
         """Check if file should be ignored in analysis."""
         ignore_patterns = {
             # Directories
-            ".git", "__pycache__", ".pytest_cache", "node_modules",
-            ".mypy_cache", ".tox", "build", "dist", ".venv", "venv",
+            ".git",
+            "__pycache__",
+            ".pytest_cache",
+            "node_modules",
+            ".mypy_cache",
+            ".tox",
+            "build",
+            "dist",
+            ".venv",
+            "venv",
             # File patterns
-            ".pyc", ".pyo", ".pyd", ".so", ".dylib", ".dll",
-            ".log", ".tmp", ".temp", ".cache"
+            ".pyc",
+            ".pyo",
+            ".pyd",
+            ".so",
+            ".dylib",
+            ".dll",
+            ".log",
+            ".tmp",
+            ".temp",
+            ".cache",
         }
 
         return any(pattern in str(file_path) for pattern in ignore_patterns)
@@ -158,7 +176,13 @@ class ProjectMapper:
         try:
             if file_path.suffix in {".py", ".js", ".ts", ".java", ".cpp", ".c", ".h"}:
                 content = file_path.read_text(encoding="utf-8")
-                return len([line for line in content.splitlines() if line.strip() and not line.strip().startswith("#")])
+                return len(
+                    [
+                        line
+                        for line in content.splitlines()
+                        if line.strip() and not line.strip().startswith("#")
+                    ]
+                )
         except (UnicodeDecodeError, PermissionError):
             pass
         return None
@@ -182,7 +206,7 @@ class ProjectMapper:
                 "type": "file",
                 "purpose": self.file_nodes[file_path].purpose,
                 "size": self.file_nodes[file_path].size,
-                "lines_of_code": self.file_nodes[file_path].lines_of_code
+                "lines_of_code": self.file_nodes[file_path].lines_of_code,
             }
 
         return tree
@@ -213,7 +237,7 @@ class ProjectMapper:
                     files=files,
                     cohesion_score=cohesion_score,
                     suggested_location=suggested_location,
-                    grouping_reason=f"Files with shared purpose: {purpose}"
+                    grouping_reason=f"Files with shared purpose: {purpose}",
                 )
                 self.module_groups.append(group)
 
@@ -263,7 +287,7 @@ class ProjectMapper:
             "purpose_distribution": dict(purpose_distribution),
             "potential_module_groups": len(self.module_groups),
             "groupable_files": groupable_files,
-            "organization_score": self._calculate_organization_score()
+            "organization_score": self._calculate_organization_score(),
         }
 
     def _calculate_organization_score(self) -> float:
@@ -272,13 +296,16 @@ class ProjectMapper:
         factors = []
 
         # 1. Purpose clarity (how many files have clear purposes)
-        clear_purpose_ratio = sum(1 for node in self.file_nodes.values()
-                                if node.purpose != "unknown") / len(self.file_nodes)
+        clear_purpose_ratio = sum(
+            1 for node in self.file_nodes.values() if node.purpose != "unknown"
+        ) / len(self.file_nodes)
         factors.append(clear_purpose_ratio)
 
         # 2. Module cohesion (how well files are grouped)
         if self.module_groups:
-            avg_cohesion = sum(group.cohesion_score for group in self.module_groups) / len(self.module_groups)
+            avg_cohesion = sum(group.cohesion_score for group in self.module_groups) / len(
+                self.module_groups
+            )
             factors.append(avg_cohesion)
         else:
             factors.append(0.5)  # Neutral score for no groups
@@ -308,35 +335,41 @@ class ProjectMapper:
         for group in self.module_groups:
             if group.cohesion_score > 0.7 and len(group.files) >= 2:
                 file_names = [f.name for f in group.files]
-                recommendations.append({
-                    "type": "module_grouping",
-                    "priority": "medium",
-                    "description": f"Group {group.name} files into subpackage",
-                    "action": f"mkdir {group.suggested_location} && mv {' '.join(file_names)} {group.suggested_location}",
-                    "reason": group.grouping_reason
-                })
+                recommendations.append(
+                    {
+                        "type": "module_grouping",
+                        "priority": "medium",
+                        "description": f"Group {group.name} files into subpackage",
+                        "action": f"mkdir {group.suggested_location} && mv {' '.join(file_names)} {group.suggested_location}",
+                        "reason": group.grouping_reason,
+                    }
+                )
 
         # Recommend documentation for unclear files
         unclear_files = [node for node in self.file_nodes.values() if node.purpose == "unknown"]
         if unclear_files:
-            recommendations.append({
-                "type": "documentation",
-                "priority": "high",
-                "description": f"Document purpose of {len(unclear_files)} unclear files",
-                "action": "Add docstrings or comments explaining file purposes",
-                "reason": "Files without clear purpose indicate organizational debt"
-            })
+            recommendations.append(
+                {
+                    "type": "documentation",
+                    "priority": "high",
+                    "description": f"Document purpose of {len(unclear_files)} unclear files",
+                    "action": "Add docstrings or comments explaining file purposes",
+                    "reason": "Files without clear purpose indicate organizational debt",
+                }
+            )
 
         # Recommend directory restructuring if too flat/deep
         organization_score = self._calculate_organization_score()
         if organization_score < 0.6:
-            recommendations.append({
-                "type": "restructuring",
-                "priority": "high",
-                "description": "Consider major project restructuring",
-                "action": "Group related files into logical subpackages",
-                "reason": f"Organization score is low ({organization_score:.2f})"
-            })
+            recommendations.append(
+                {
+                    "type": "restructuring",
+                    "priority": "high",
+                    "description": "Consider major project restructuring",
+                    "action": "Group related files into logical subpackages",
+                    "reason": f"Organization score is low ({organization_score:.2f})",
+                }
+            )
 
         return recommendations
 
@@ -344,7 +377,7 @@ class ProjectMapper:
         """Save project map to JSON file."""
         project_map = self.generate_project_map()
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(project_map, f, indent=2, default=str)
 
         logger.info(f"Project map saved to {output_path}")

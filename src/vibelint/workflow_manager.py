@@ -158,7 +158,7 @@ class WorkflowManager:
         workflow_ids: List[str],
         project_root: Path,
         initial_context: Optional[Dict[str, Any]] = None,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
     ) -> WorkflowSession:
         """Execute specified workflows with dependency resolution."""
 
@@ -205,9 +205,7 @@ class WorkflowManager:
         return workflows
 
     def _create_execution_plan(
-        self,
-        workflows: List[BaseWorkflow],
-        context: Dict[str, Any]
+        self, workflows: List[BaseWorkflow], context: Dict[str, Any]
     ) -> WorkflowExecutionPlan:
         """Create optimized execution plan."""
 
@@ -236,15 +234,14 @@ class WorkflowManager:
         return plan
 
     async def _execute_plan(
-        self,
-        plan: WorkflowExecutionPlan,
-        project_root: Path,
-        session: WorkflowSession
+        self, plan: WorkflowExecutionPlan, project_root: Path, session: WorkflowSession
     ):
         """Execute workflow plan with parallel batching."""
 
         for batch_idx, workflow_ids in enumerate(plan.execution_order):
-            logger.info(f"Executing batch {batch_idx + 1}/{len(plan.execution_order)}: {workflow_ids}")
+            logger.info(
+                f"Executing batch {batch_idx + 1}/{len(plan.execution_order)}: {workflow_ids}"
+            )
 
             # Group workflows by parallel execution capability
             parallel_workflows = []
@@ -282,10 +279,7 @@ class WorkflowManager:
                 self._update_context_from_result(session, result)
 
     async def _execute_single_workflow(
-        self,
-        workflow: BaseWorkflow,
-        project_root: Path,
-        session: WorkflowSession
+        self, workflow: BaseWorkflow, project_root: Path, session: WorkflowSession
     ) -> WorkflowResult:
         """Execute single workflow with monitoring."""
 
@@ -317,7 +311,7 @@ class WorkflowManager:
                 workflow_id=workflow.workflow_id,
                 status=WorkflowStatus.FAILED,
                 metrics=workflow.metrics,
-                error_message=str(e)
+                error_message=str(e),
             )
 
     def _update_context_from_result(self, session: WorkflowSession, result: WorkflowResult):
@@ -354,7 +348,7 @@ class WorkflowManager:
                     "required_inputs": list(temp_workflow.get_required_inputs()),
                     "produced_outputs": list(temp_workflow.get_produced_outputs()),
                     "dependencies": temp_workflow.get_dependencies(),
-                    "supports_parallel": temp_workflow.supports_parallel_execution()
+                    "supports_parallel": temp_workflow.supports_parallel_execution(),
                 }
             except Exception as e:
                 logger.warning(f"Failed to get metadata for workflow {workflow_id}: {e}")
@@ -368,7 +362,7 @@ class WorkflowManager:
             "errors": [],
             "warnings": [],
             "execution_order": [],
-            "estimated_duration": 0.0
+            "estimated_duration": 0.0,
         }
 
         try:
@@ -437,5 +431,5 @@ class WorkflowManager:
             "failed_workflows": session.failed_workflows,
             "success_rate": session.get_success_rate(),
             "errors": session.errors,
-            "context_keys": list(session.context.keys())
+            "context_keys": list(session.context.keys()),
         }

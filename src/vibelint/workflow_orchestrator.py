@@ -27,6 +27,7 @@ __all__ = ["AnalysisOrchestrator", "OrchestrationResult", "AnalysisReport"]
 @dataclass
 class OrchestrationResult:
     """Result of multi-level analysis orchestration."""
+
     success: bool
     analysis_duration: float
     reports_generated: List[str]
@@ -40,6 +41,7 @@ class OrchestrationResult:
 @dataclass
 class AnalysisReport:
     """Comprehensive analysis report for development feedback."""
+
     timestamp: str
     project_root: str
     analysis_levels_completed: List[str]
@@ -71,9 +73,7 @@ class AnalysisOrchestrator:
         self.project_mapper = ProjectMapper(project_root)
 
     async def run_comprehensive_analysis(
-        self,
-        target_files: Optional[List[Path]] = None,
-        analysis_levels: Optional[List[str]] = None
+        self, target_files: Optional[List[Path]] = None, analysis_levels: Optional[List[str]] = None
     ) -> OrchestrationResult:
         """Run comprehensive multi-level analysis."""
         start_time = time.time()
@@ -97,7 +97,9 @@ class AnalysisOrchestrator:
             # Step 3: Deep analysis (architectural assessment)
             deep_results = {}
             if AnalysisLevel.DEEP in analysis_levels:
-                deep_results = await self._run_deep_analysis(target_files, tree_results, content_results)
+                deep_results = await self._run_deep_analysis(
+                    target_files, tree_results, content_results
+                )
 
             # Step 4: Synthesis and orchestration
             synthesis_result = await self._synthesize_results(
@@ -116,7 +118,7 @@ class AnalysisOrchestrator:
                 total_findings=synthesis_result.get("total_findings", 0),
                 critical_issues=synthesis_result.get("critical_issues", 0),
                 quick_wins=synthesis_result.get("quick_wins", []),
-                strategic_recommendations=synthesis_result.get("strategic_initiatives", [])
+                strategic_recommendations=synthesis_result.get("strategic_initiatives", []),
             )
 
         except Exception as e:
@@ -131,7 +133,7 @@ class AnalysisOrchestrator:
                 critical_issues=0,
                 quick_wins=[],
                 strategic_recommendations=[],
-                error_message=str(e)
+                error_message=str(e),
             )
 
     async def _run_tree_analysis(self) -> Dict[str, Any]:
@@ -147,7 +149,7 @@ class AnalysisOrchestrator:
         # Prepare context for LLM analysis
         context_data = {
             "project_map": json.dumps(project_map, indent=2, default=str),
-            "quick_violations": [asdict(v) for v in quick_violations]
+            "quick_violations": [asdict(v) for v in quick_violations],
         }
 
         prompt = AgentPrompts.get_prompt_for_analysis_level(AnalysisLevel.TREE)
@@ -158,7 +160,7 @@ class AnalysisOrchestrator:
             content=f"{prompt}\n\n{context}",
             task_type="tree_analysis",
             max_tokens=2048,
-            temperature=0.1
+            temperature=0.1,
         )
 
         try:
@@ -169,7 +171,9 @@ class AnalysisOrchestrator:
                 "project_map": project_map,
                 "quick_violations": [asdict(v) for v in quick_violations],
                 "llm_analysis": llm_analysis,
-                "organization_score": project_map.get("organization_metrics", {}).get("organization_score", 0.5)
+                "organization_score": project_map.get("organization_metrics", {}).get(
+                    "organization_score", 0.5
+                ),
             }
 
         except Exception as e:
@@ -178,7 +182,9 @@ class AnalysisOrchestrator:
                 "project_map": project_map,
                 "quick_violations": [asdict(v) for v in quick_violations],
                 "llm_analysis": {"violations": [], "organization_score": 0.5},
-                "organization_score": project_map.get("organization_metrics", {}).get("organization_score", 0.5)
+                "organization_score": project_map.get("organization_metrics", {}).get(
+                    "organization_score", 0.5
+                ),
             }
 
     async def _run_content_analysis(self, target_files: Optional[List[Path]]) -> Dict[str, Any]:
@@ -206,7 +212,7 @@ class AnalysisOrchestrator:
             "files_analyzed": len(file_analyses),
             "total_files": len(target_files),
             "file_analyses": file_analyses,
-            "structural_health": self._calculate_structural_health(file_analyses)
+            "structural_health": self._calculate_structural_health(file_analyses),
         }
 
     async def _analyze_single_file(self, file_path: Path) -> Dict[str, Any]:
@@ -221,7 +227,7 @@ class AnalysisOrchestrator:
                 "file_size": len(content),
                 "file_purpose": self._infer_file_purpose(file_path),
                 "dependencies": self._extract_imports(content),
-                "exports": self._extract_exports(content)
+                "exports": self._extract_exports(content),
             }
 
             prompt = AgentPrompts.get_prompt_for_analysis_level(AnalysisLevel.CONTENT)
@@ -231,7 +237,7 @@ class AnalysisOrchestrator:
                 content=f"{prompt}\n\n{context}",
                 task_type="content_analysis",
                 max_tokens=1500,
-                temperature=0.1
+                temperature=0.1,
             )
 
             response = await self.llm.process_request(llm_request)
@@ -241,8 +247,8 @@ class AnalysisOrchestrator:
                 "metadata": {
                     "size": len(content),
                     "purpose": context_data["file_purpose"],
-                    "lines": content.count('\n') + 1
-                }
+                    "lines": content.count("\n") + 1,
+                },
             }
 
         except Exception as e:
@@ -250,14 +256,14 @@ class AnalysisOrchestrator:
             return {
                 "file_path": str(file_path.relative_to(self.project_root)),
                 "analysis": {"findings": [], "file_health": {}},
-                "error": str(e)
+                "error": str(e),
             }
 
     async def _run_deep_analysis(
         self,
         target_files: Optional[List[Path]],
         tree_results: Dict[str, Any],
-        content_results: Dict[str, Any]
+        content_results: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Run deep architectural analysis."""
         logger.info("Running deep architectural analysis...")
@@ -288,7 +294,7 @@ class AnalysisOrchestrator:
             "project_context": f"Project: {self.project_root.name}",
             "files_content": self._format_files_for_analysis(files_content),
             "tree_results": json.dumps(tree_results, indent=2, default=str),
-            "content_results": json.dumps(content_results, indent=2, default=str)
+            "content_results": json.dumps(content_results, indent=2, default=str),
         }
 
         prompt = AgentPrompts.get_prompt_for_analysis_level(AnalysisLevel.DEEP)
@@ -299,7 +305,7 @@ class AnalysisOrchestrator:
             content=f"{prompt}\n\n{context}",
             task_type="architectural_analysis",
             max_tokens=4096,
-            temperature=0.2
+            temperature=0.2,
         )
 
         try:
@@ -309,7 +315,7 @@ class AnalysisOrchestrator:
             return {
                 "files_analyzed": list(files_content.keys()),
                 "architectural_analysis": deep_analysis,
-                "analysis_scope": "comprehensive"
+                "analysis_scope": "comprehensive",
             }
 
         except Exception as e:
@@ -317,7 +323,7 @@ class AnalysisOrchestrator:
             return {
                 "files_analyzed": [],
                 "architectural_analysis": {"architectural_findings": [], "code_smells": []},
-                "error": str(e)
+                "error": str(e),
             }
 
     async def _synthesize_results(
@@ -325,7 +331,7 @@ class AnalysisOrchestrator:
         tree_results: Dict[str, Any],
         content_results: Dict[str, Any],
         deep_results: Dict[str, Any],
-        analysis_levels: List[str]
+        analysis_levels: List[str],
     ) -> Dict[str, Any]:
         """Synthesize multi-level results into actionable recommendations."""
         logger.info("Synthesizing analysis results...")
@@ -356,7 +362,7 @@ class AnalysisOrchestrator:
             "content_analysis": content_results,
             "deep_analysis": deep_results,
             "total_findings": total_findings,
-            "critical_issues": critical_issues
+            "critical_issues": critical_issues,
         }
 
         context = f"""ANALYSIS SYNTHESIS REQUEST
@@ -377,7 +383,7 @@ Synthesize these results into actionable development feedback with prioritized r
             content=f"{prompt}\n\n{context}",
             task_type="synthesis",
             max_tokens=3072,
-            temperature=0.1
+            temperature=0.1,
         )
 
         try:
@@ -400,14 +406,14 @@ Synthesize these results into actionable development feedback with prioritized r
                     "overall_health": 0.7,
                     "critical_issues": critical_issues,
                     "improvement_opportunities": total_findings,
-                    "estimated_effort": "Unknown"
+                    "estimated_effort": "Unknown",
                 },
                 "priority_actions": [],
                 "quick_wins": ["Review organizational violations", "Address structural issues"],
                 "strategic_initiatives": ["Consider architectural improvements"],
                 "total_findings": total_findings,
                 "critical_issues": critical_issues,
-                "analysis_levels_completed": analysis_levels
+                "analysis_levels_completed": analysis_levels,
             }
 
     async def _generate_reports(self, synthesis_result: Dict[str, Any]) -> List[str]:
@@ -421,7 +427,7 @@ Synthesize these results into actionable development feedback with prioritized r
         # Generate comprehensive JSON report
         json_report_path = reports_dir / f"comprehensive_analysis_{timestamp}.json"
         try:
-            with open(json_report_path, 'w', encoding='utf-8') as f:
+            with open(json_report_path, "w", encoding="utf-8") as f:
                 json.dump(synthesis_result, f, indent=2, default=str)
             report_paths.append(str(json_report_path))
             logger.info(f"Generated JSON report: {json_report_path}")
@@ -432,7 +438,7 @@ Synthesize these results into actionable development feedback with prioritized r
         summary_path = reports_dir / f"analysis_summary_{timestamp}.md"
         try:
             summary_content = self._generate_markdown_summary(synthesis_result)
-            summary_path.write_text(summary_content, encoding='utf-8')
+            summary_path.write_text(summary_content, encoding="utf-8")
             report_paths.append(str(summary_path))
             logger.info(f"Generated summary report: {summary_path}")
         except Exception as e:
@@ -506,8 +512,15 @@ Project: {self.project_root.name}
     def _should_skip_file(self, file_path: Path) -> bool:
         """Check if file should be skipped in analysis."""
         skip_patterns = [
-            "__pycache__", ".git", ".pytest_cache", "build", "dist",
-            ".venv", "venv", ".mypy_cache", ".tox"
+            "__pycache__",
+            ".git",
+            ".pytest_cache",
+            "build",
+            "dist",
+            ".venv",
+            "venv",
+            ".mypy_cache",
+            ".tox",
         ]
         return any(pattern in str(file_path) for pattern in skip_patterns)
 
@@ -567,9 +580,9 @@ Project: {self.project_root.name}
     def _extract_imports(self, content: str) -> List[str]:
         """Extract import statements from Python code."""
         imports = []
-        for line in content.split('\n'):
+        for line in content.split("\n"):
             line = line.strip()
-            if line.startswith('import ') or line.startswith('from '):
+            if line.startswith("import ") or line.startswith("from "):
                 imports.append(line)
         return imports
 
@@ -579,19 +592,20 @@ Project: {self.project_root.name}
         in_all = False
         all_content = ""
 
-        for line in content.split('\n'):
-            if '__all__' in line:
+        for line in content.split("\n"):
+            if "__all__" in line:
                 in_all = True
                 all_content = line
             elif in_all:
                 all_content += line
-                if ']' in line:
+                if "]" in line:
                     break
 
         if all_content:
             try:
                 # Simple extraction - could be improved with AST
                 import re
+
                 matches = re.findall(r'"([^"]+)"', all_content)
                 matches.extend(re.findall(r"'([^']+)'", all_content))
                 exports = matches
@@ -606,13 +620,16 @@ Project: {self.project_root.name}
             return {"overall": 0.5}
 
         total_files = len(file_analyses)
-        healthy_files = sum(1 for analysis in file_analyses
-                          if analysis.get("analysis", {}).get("file_health", {}).get("overall", False))
+        healthy_files = sum(
+            1
+            for analysis in file_analyses
+            if analysis.get("analysis", {}).get("file_health", {}).get("overall", False)
+        )
 
         return {
             "overall": healthy_files / total_files if total_files > 0 else 0.5,
             "files_analyzed": total_files,
-            "healthy_files": healthy_files
+            "healthy_files": healthy_files,
         }
 
     def _format_files_for_analysis(self, files_content: Dict[str, str]) -> str:
