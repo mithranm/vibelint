@@ -4,7 +4,7 @@ Workflow manager for orchestrating and executing analysis workflows.
 Handles workflow scheduling, dependency resolution, parallel execution,
 and results aggregation with comprehensive error handling.
 
-vibelint/src/vibelint/workflows/manager.py
+vibelint/src/vibelint/workflow_manager.py
 """
 
 import asyncio
@@ -14,9 +14,9 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
-from .base import BaseWorkflow, WorkflowResult, WorkflowStatus, WorkflowPriority
-from .evaluation import WorkflowEvaluator
-from .registry import workflow_registry
+from .workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus, WorkflowPriority
+from .workflow_evaluation import WorkflowEvaluator
+from .workflow_registry import workflow_registry
 
 logger = logging.getLogger(__name__)
 

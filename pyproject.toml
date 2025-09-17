@@ -74,11 +74,16 @@ vibelint = "vibelint.cli:main"
 
 
 [project.entry-points."vibelint.formatters"]
-human = "vibelint.formatters:HumanFormatter"
-natural = "vibelint.formatters:NaturalLanguageFormatter"
-json = "vibelint.formatters:JsonFormatter"
-sarif = "vibelint.formatters:SarifFormatter"
-llm = "vibelint.formatters:LLMFormatter"
+human = "vibelint.reporting:HumanFormatter"
+natural = "vibelint.reporting:NaturalLanguageFormatter"
+json = "vibelint.reporting:JsonFormatter"
+sarif = "vibelint.reporting:SarifFormatter"
+llm = "vibelint.reporting:LLMFormatter"
+
+[project.entry-points."vibelint.workflows"]
+# Built-in workflows are auto-discovered from vibelint.workflows package
+# Users can add custom workflows here:
+# my-custom-workflow = "my_package.workflows:MyCustomWorkflow"
 
 [project.urls]
 "Homepage" = "https://github.com/mithranm/vibelint"

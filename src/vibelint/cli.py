@@ -26,7 +26,7 @@ from rich.table import Table
 
 # Core imports needed at module level
 from .config import Config, load_config
-from .console_utils import console
+from .utils import console
 from .validators.namespace_collisions import NamespaceCollision
 from .results import (CheckResult, CommandResult, NamespaceResult,
                       SnapshotResult)
@@ -435,7 +435,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
             vibechecker_ref = pkg_resources.files("vibelint").joinpath("VIBECHECKER.txt")
             if vibechecker_ref.is_file():
                 try:
-                    from .ascii import scale_to_terminal_by_height
+                    from .utils import scale_to_terminal_by_height
 
                     # Read content directly using the reference
                     art = vibechecker_ref.read_text(encoding="utf-8")
@@ -808,7 +808,7 @@ def check(
             try:
                 report_path.parent.mkdir(parents=True, exist_ok=True)
                 from .validators.namespace_collisions import build_namespace_tree
-                from .report import write_report_content
+                from .validators.namespace_report import write_report_content
 
                 # Pass the non-None target_paths here too
                 root_node_for_report, _ = build_namespace_tree(target_paths, config)

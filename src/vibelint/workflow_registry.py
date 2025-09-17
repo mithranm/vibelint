@@ -4,7 +4,7 @@ Workflow registry for managing available workflows.
 Provides centralized registration and discovery of workflows with
 metadata and dependency information.
 
-vibelint/src/vibelint/workflows/registry.py
+vibelint/src/vibelint/workflow_registry.py
 """
 
 import logging
@@ -130,15 +130,61 @@ def register_workflow(workflow_class: Type[BaseWorkflow]) -> Type[BaseWorkflow]:
     return workflow_class
 
 
-# Auto-register built-in workflows
-def _register_builtin_workflows():
-    """Register built-in workflows."""
+# Auto-discover and register workflows
+def _discover_and_register_workflows():
+    """Auto-discover and register all workflow classes."""
+    import importlib
+    import pkgutil
+    from pathlib import Path
+
+    # Discover built-in workflows in this package
+    workflows_dir = Path(__file__).parent
+
+    for file_path in workflows_dir.glob("*.py"):
+        if file_path.name.startswith("__") or file_path.name in ["base.py", "registry.py", "manager.py", "evaluation.py"]:
+            continue
+
+        module_name = file_path.stem
+        try:
+            module = importlib.import_module(f".{module_name}", package="vibelint.workflows")
+
+            # Find workflow classes in the module
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if (isinstance(attr, type) and
+                    issubclass(attr, BaseWorkflow) and
+                    attr != BaseWorkflow and
+                    hasattr(attr, 'workflow_id') and
+                    attr.workflow_id):
+
+                    logger.debug(f"Auto-registering workflow: {attr.workflow_id} from {module_name}")
+                    workflow_registry.register(attr)
+
+        except Exception as e:
+            logger.warning(f"Failed to load workflow module {module_name}: {e}")
+
+    # Also check for user workflows in project entry points
+    _register_entry_point_workflows()
+
+
+def _register_entry_point_workflows():
+    """Register workflows from project entry points."""
     try:
-        from .redundancy_detection import RedundancyDetectionWorkflow
-        workflow_registry.register(RedundancyDetectionWorkflow)
-    except ImportError as e:
-        logger.warning(f"Failed to register built-in workflow: {e}")
+        import pkg_resources
+
+        for entry_point in pkg_resources.iter_entry_points('vibelint.workflows'):
+            try:
+                workflow_class = entry_point.load()
+                if issubclass(workflow_class, BaseWorkflow):
+                    logger.info(f"Registering user workflow: {workflow_class.workflow_id}")
+                    workflow_registry.register(workflow_class)
+            except Exception as e:
+                logger.warning(f"Failed to load workflow from entry point {entry_point.name}: {e}")
+
+    except ImportError:
+        # pkg_resources not available, skip entry point discovery
+        pass
 
 
-# Register built-ins on module import
-_register_builtin_workflows()
+# Auto-register workflows on module import
+_discover_and_register_workflows()

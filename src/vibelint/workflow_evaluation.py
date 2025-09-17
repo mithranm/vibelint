@@ -4,7 +4,7 @@ Workflow evaluation framework for measuring effectiveness and performance.
 Provides metrics collection, benchmarking, and continuous improvement
 capabilities for workflow analysis quality.
 
-vibelint/src/vibelint/workflows/evaluation.py
+vibelint/src/vibelint/workflow_evaluation.py
 """
 
 import time
@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from .base import BaseWorkflow, WorkflowResult, WorkflowStatus
+from .workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus
 
 logger = logging.getLogger(__name__)
 

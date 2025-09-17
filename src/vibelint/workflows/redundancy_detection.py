@@ -182,9 +182,15 @@ class RedundancyDetectionWorkflow(BaseWorkflow):
     def _parse_pyproject_entry_points(self, pyproject_path: Path):
         """Parse entry points from pyproject.toml."""
         try:
-            import tomli
-            content = pyproject_path.read_text(encoding="utf-8")
-            config = tomli.loads(content)
+            import sys
+            if sys.version_info >= (3, 11):
+                import tomllib
+                with open(pyproject_path, "rb") as f:
+                    config = tomllib.load(f)
+            else:
+                import tomli
+                content = pyproject_path.read_text(encoding="utf-8")
+                config = tomli.loads(content)
 
             # Script entry points
             scripts = config.get("project", {}).get("scripts", {})

@@ -14,8 +14,8 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from .agent_prompts import AgentPrompts, AnalysisLevel
-from .context import ContextAnalyzer, TreeViolation
+from .context.prompts import AgentPrompts, AnalysisLevel
+from .context.analyzer import ContextAnalyzer, TreeViolation
 from .llm import LLMManager, LLMRequest, LLMRole
 from .project_map import ProjectMapper
 from .plugin_system import Finding, Severity

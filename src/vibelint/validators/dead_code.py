@@ -294,11 +294,11 @@ class DeadCodeValidator(BaseValidator):
 
             # Legacy pattern detection removed - no legacy patterns exist to detect
 
-            # Check for manual console instantiation (except in console_utils.py which creates the shared instance)
-            if "= Console()" in stripped and not file_path.name == "console_utils.py":
+            # Check for manual console instantiation (except in utils.py which creates the shared instance)
+            if "= Console()" in stripped and not file_path.name == "utils.py":
                 yield self.create_finding(
-                    message="Manual Console instantiation - use shared console_utils instead",
+                    message="Manual Console instantiation - use shared utils instead",
                     file_path=file_path,
                     line=line_num,
-                    suggestion="Replace with: from .console_utils import console",
+                    suggestion="Replace with: from .utils import console",
                 )

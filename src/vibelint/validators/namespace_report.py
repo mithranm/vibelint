@@ -1,7 +1,7 @@
 """
 Report generation functionality for vibelint.
 
-vibelint/src/vibelint/report.py
+vibelint/src/vibelint/validators/namespace_report.py
 """
 
 import logging
@@ -10,9 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
-from .config import Config
-from .namespace import NamespaceCollision, NamespaceNode
-from .utils import get_relative_path
+from ..config import Config
+from .namespace_collisions import NamespaceCollision, NamespaceNode
+from ..utils import get_relative_path
 
 __all__ = ["write_report_content"]
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def _get_files_in_namespace_order(
         collected_files: A set to store the absolute paths of collected files.
         project_root: The project root path for checking containment.
 
-    vibelint/src/vibelint/report.py
+    vibelint/src/vibelint/validators/namespace_report.py
     """
 
     if node.is_package and node.path and node.path.is_dir():
@@ -103,7 +103,7 @@ def write_report_content(
     root_node: The root NamespaceNode of the project structure.
     config: Configuration object.
 
-    vibelint/src/vibelint/report.py
+    vibelint/src/vibelint/validators/namespace_report.py
     """
 
     package_name = project_root.name if project_root else "Unknown"

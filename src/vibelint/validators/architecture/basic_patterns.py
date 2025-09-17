@@ -54,15 +54,15 @@ class ArchitectureValidator(BaseValidator):
             if "console" in line.lower():
                 if "= Console()" in line:
                     console_patterns.append(("manual_instantiation", line_num))
-                elif "from .console_utils import console" in line:
+                elif "from .utils import console" in line:
                     console_patterns.append(("shared_import", line_num))
                 elif "from rich.console import Console" in line:
                     console_patterns.append(("rich_import", line_num))
 
-        # If file uses multiple console patterns, flag it (except console_utils.py and validators that detect patterns)
+        # If file uses multiple console patterns, flag it (except utils.py and validators that detect patterns)
         pattern_types = set(pattern[0] for pattern in console_patterns)
         if len(pattern_types) > 1 and file_path.name not in [
-            "console_utils.py",
+            "utils.py",
             "architecture.py",
             "dead_code.py",
             "basic_patterns.py",  # This file itself mentions multiple console patterns for detection

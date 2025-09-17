@@ -4,7 +4,7 @@ System prompts for different LLM agents in vibelint's multi-level analysis.
 Provides specialized prompts for tree-level, content-level, and deep analysis
 agents to catch organizational violations at different granularities.
 
-vibelint/src/vibelint/agent_prompts.py
+vibelint/src/vibelint/context/prompts.py
 """
 
 from dataclasses import dataclass
