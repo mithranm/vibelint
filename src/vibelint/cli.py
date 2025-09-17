@@ -1186,7 +1186,7 @@ def diagnostics_cmd(ctx: click.Context) -> None:
     async def run_complete_diagnostics():
         from .diagnostics import run_diagnostics
 
-        console.print("[bold blue]🔍 Running comprehensive LLM diagnostics...[/bold blue]")
+        console.print("[bold blue]Running comprehensive LLM diagnostics...[/bold blue]")
         console.print("  • Context probing for both LLMs")
         console.print("  • Performance benchmarking")
         console.print("  • Routing accuracy testing\n")
@@ -1194,12 +1194,12 @@ def diagnostics_cmd(ctx: click.Context) -> None:
         results = await run_diagnostics(config_dict)
 
         if results.get("success"):
-            console.print("\n[bold green]✅ Diagnostics completed successfully![/bold green]")
-            console.print("📄 Check LLM_CALIBRATION_RESULTS.md for detailed results")
+            console.print("\n[bold green]Diagnostics completed successfully![/bold green]")
+            console.print("Check LLM_CALIBRATION_RESULTS.md for detailed results")
             return True
         else:
             console.print(
-                f"\n[red]❌ Diagnostics failed: {results.get('error', 'Unknown error')}[/red]"
+                f"\n[red]Diagnostics failed: {results.get('error', 'Unknown error')}[/red]"
             )
             return False
 
@@ -1209,10 +1209,10 @@ def diagnostics_cmd(ctx: click.Context) -> None:
             ctx.exit(1)
 
     except KeyboardInterrupt:
-        console.print("\n[yellow]⚠️  Cancelled by user[/yellow]")
+        console.print("\n[yellow]Cancelled by user[/yellow]")
         ctx.exit(1)
     except Exception as e:
-        console.print(f"\n[red]❌ Diagnostics failed: {e}[/red]")
+        console.print(f"\n[red]Diagnostics failed: {e}[/red]")
         logger_cli.error("Diagnostics failed", exc_info=True)
         ctx.exit(1)
 
@@ -1238,7 +1238,7 @@ def regen_docstrings_cmd(
     """
     Regenerate ALL docstrings in Python files using LLM.
 
-    ⚠️  SAFETY CRITICAL ⚠️
+    WARNING: SAFETY CRITICAL
     LLM-generated docstrings may be INACCURATE and could lead to:
     - Security vulnerabilities from wrong documentation
     - System failures from incorrect API descriptions
