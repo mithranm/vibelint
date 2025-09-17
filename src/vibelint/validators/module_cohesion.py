@@ -30,8 +30,8 @@ class ModuleCohesionValidator(BaseValidator):
     )
     default_severity = Severity.INFO
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, severity=None, config=None):
+        super().__init__(severity=severity, config=config)
         # Common patterns that suggest related modules
         self.cohesion_patterns = [
             # Prefixed modules (llm_, api_, db_, etc.)

@@ -27,8 +27,8 @@ class APIConsistencyValidator(BaseValidator):
     description = "Detects inconsistent API usage, missing parameters, and architectural violations"
     default_severity = Severity.WARN
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, severity=None, config=None):
+        super().__init__(severity=severity, config=config)
         # Known API signatures and their requirements
         self.known_apis = {
             "load_config": {
