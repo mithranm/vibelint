@@ -6,7 +6,9 @@ vibelint/src/vibelint/utils.py
 
 import logging
 import os
+import shutil
 from pathlib import Path
+from rich.console import Console
 
 logger = logging.getLogger(__name__)
 
@@ -330,15 +332,11 @@ def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
 
 # === Console Utilities ===
 
-from rich.console import Console
-
 # Global console instance used throughout vibelint
 console = Console()
 
 
 # === ASCII Art Utilities ===
-
-import shutil
 
 
 def _get_terminal_size():

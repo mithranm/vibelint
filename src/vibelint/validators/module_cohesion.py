@@ -155,7 +155,7 @@ class ModuleCohesionValidator(BaseValidator):
                     file_path=src_dir / f"{list(group)[0]}.py",
                     line=1,
                     severity=Severity.INFO,
-                    suggestion=f"Consider grouping these functionally related modules into a subpackage"
+                    suggestion="Consider grouping these functionally related modules into a subpackage"
                 )
 
     def _extract_local_imports(self, tree: ast.AST, src_dir: Path) -> Set[str]:
@@ -366,7 +366,6 @@ class ModuleCohesionValidator(BaseValidator):
 
             # Check for shebang and comments
             lines = content.splitlines()
-            has_shebang = lines and lines[0].startswith("#!")
 
             # Look for explanatory comments in first 10 lines
             has_explanation = any(

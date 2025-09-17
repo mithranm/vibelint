@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Set, Union
+from typing import Dict, List, Any, Optional, Set
 
 logger = logging.getLogger(__name__)
 

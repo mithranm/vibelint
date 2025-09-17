@@ -172,7 +172,7 @@ class ContextAnalyzer:
                     violation_type="ROOT_CLUTTER",
                     file_path=path,
                     message=f"Python file in project root: {file_info['name']}",
-                    suggestion=f"Move to appropriate src/ subdirectory or remove if temporary"
+                    suggestion="Move to appropriate src/ subdirectory or remove if temporary"
                 ))
 
             # Check for config files that should be in config/
@@ -182,7 +182,7 @@ class ContextAnalyzer:
                         violation_type="ROOT_CLUTTER",
                         file_path=path,
                         message=f"Config file in project root: {file_info['name']}",
-                        suggestion=f"Move to config/ directory or src/package/config/"
+                        suggestion="Move to config/ directory or src/package/config/"
                     ))
 
         return violations
@@ -254,7 +254,7 @@ class ContextAnalyzer:
                         violation_type="FLAT_STRUCTURE",
                         file_path=self.project_root / "src" / main_package,
                         message=f"Package '{main_package}' has {pkg_py_files} Python files - too flat",
-                        suggestion=f"Group related functionality into subpackages"
+                        suggestion="Group related functionality into subpackages"
                     ))
 
         return violations
@@ -295,15 +295,13 @@ class ContextAnalyzer:
         }
 
         if file_path.name not in allowed_root_files:
-            name = file_path.name.lower()
-
             # Documentation files
             if file_path.suffix in {".md", ".rst", ".txt"}:
                 violations.append(TreeViolation(
                     violation_type="ROOT_CLUTTER",
                     file_path=file_path,
                     message=f"Documentation file should not be in project root: {file_path.name}",
-                    suggestion=f"Move to docs/ directory"
+                    suggestion="Move to docs/ directory"
                 ))
 
             # Python files (except setup.py)
@@ -312,7 +310,7 @@ class ContextAnalyzer:
                     violation_type="ROOT_CLUTTER",
                     file_path=file_path,
                     message=f"Python file should not be in project root: {file_path.name}",
-                    suggestion=f"Move to appropriate src/ subdirectory"
+                    suggestion="Move to appropriate src/ subdirectory"
                 ))
 
         return violations

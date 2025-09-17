@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from ..llm import LLMRequest, LLMManager
 from .base import BaseWorkflow, WorkflowResult, WorkflowStatus, WorkflowConfig
 
 logger = logging.getLogger(__name__)

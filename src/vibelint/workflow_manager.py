@@ -14,7 +14,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
-from .workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus, WorkflowPriority
+from .workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus
 from .workflow_evaluation import WorkflowEvaluator
 from .workflow_registry import workflow_registry
 

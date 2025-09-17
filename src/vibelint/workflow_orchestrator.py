@@ -15,10 +15,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 from .context.prompts import AgentPrompts, AnalysisLevel
-from .context.analyzer import ContextAnalyzer, TreeViolation
+from .context.analyzer import ContextAnalyzer
 from .llm import LLMManager, LLMRequest, LLMRole
 from .project_map import ProjectMapper
-from .plugin_system import Finding, Severity
 
 logger = logging.getLogger(__name__)
 

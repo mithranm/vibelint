@@ -1267,14 +1267,14 @@ def regen_docstrings_cmd(
 
     # SAFETY WARNINGS
     if dry_run:
-        console.print("\n[bold green]🔍 DRY RUN MODE - No files will be modified[/bold green]\n")
+        console.print("\n[bold green][DRY RUN] DRY RUN MODE - No files will be modified[/bold green]\n")
     else:
-        console.print("\n[bold red]⚠️  DANGER: This will modify your source code files![/bold red]")
+        console.print("\n[bold red]WARNING: This will modify your source code files![/bold red]")
         console.print(
-            "[bold red]⚠️  LLM-generated docstrings may be inaccurate or misleading![/bold red]"
+            "[bold red]WARNING: LLM-generated docstrings may be inaccurate or misleading![/bold red]"
         )
         console.print(
-            "[bold yellow]💡 Consider using --dry-run first to preview changes[/bold yellow]\n"
+            "[bold yellow]TIP: Consider using --dry-run first to preview changes[/bold yellow]\n"
         )
 
     config: Config = load_config(project_root)

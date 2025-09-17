@@ -134,7 +134,6 @@ def register_workflow(workflow_class: Type[BaseWorkflow]) -> Type[BaseWorkflow]:
 def _discover_and_register_workflows():
     """Auto-discover and register all workflow classes."""
     import importlib
-    import pkgutil
     from pathlib import Path
 
     # Discover built-in workflows in this package

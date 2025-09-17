@@ -9,9 +9,10 @@ vibelint/src/vibelint/core.py
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional
 
 from .llm import LLMManager, LLMRequest
 from .plugin_system import Finding, Severity
