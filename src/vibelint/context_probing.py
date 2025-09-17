@@ -8,30 +8,24 @@ including needle-in-haystack testing and progressive load testing.
 vibelint/src/vibelint/context_probing.py
 """
 
-import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import requests
 
 logger = logging.getLogger(__name__)
 
-__all__ = [
-    "InferenceEngine",
-    "ProbeResult",
-    "ContextProber",
-    "ProbeConfig",
-    "run_context_probing"
-]
+__all__ = ["InferenceEngine", "ProbeResult", "ContextProber", "ProbeConfig", "run_context_probing"]
 
 
 class InferenceEngine(Enum):
     """Supported inference engines for context probing."""
+
     VLLM = "vllm"
     LLAMA_CPP = "llama_cpp"
     OLLAMA = "ollama"
@@ -87,7 +81,7 @@ class ProbeConfig:
     # Needle-in-haystack testing
     enable_niah_testing: bool = True
     niah_test_count: int = 5
-    needle_positions: List[str] = None  # ["start", "middle", "end"]
+    needle_positions: Optional[List[str]] = None  # ["start", "middle", "end"]
 
     # Performance testing
     enable_performance_testing: bool = True
@@ -111,7 +105,7 @@ class ProbeConfig:
 class ContextProber:
     """Context window probing system for LLM inference engines."""
 
-    def __init__(self, config: ProbeConfig = None):
+    def __init__(self, config: Optional[ProbeConfig] = None):
         """Initialize context prober with configuration.
 
         Args:
@@ -119,14 +113,14 @@ class ContextProber:
         """
         self.config = config or ProbeConfig()
         self.session = requests.Session()
-        self.session.timeout = self.config.timeout_seconds
+        # Note: timeout is set per-request rather than on session
 
     async def probe_llm(
         self,
         api_base_url: str,
         model: str,
         inference_engine: InferenceEngine = InferenceEngine.OPENAI_COMPATIBLE,
-        temperature: float = 0.1
+        temperature: float = 0.1,
     ) -> ProbeResult:
         """Probe a single LLM to discover its context limits and performance.
 
@@ -157,7 +151,7 @@ class ContextProber:
             success_count = 0
             total_latency = 0.0
 
-            for attempt in range(self.config.performance_test_requests):
+            for _ in range(self.config.performance_test_requests):
                 try:
                     # Generate test content
                     test_content = self._generate_test_content(token_count)
@@ -175,34 +169,36 @@ class ContextProber:
 
                         # Needle-in-haystack testing at this context size
                         if self.config.enable_niah_testing:
-                            niah_success = await self._test_needle_in_haystack(
+                            await self._test_needle_in_haystack(
                                 api_base_url, model, token_count, temperature
                             )
-                        else:
-                            niah_success = 1.0
 
                 except Exception as e:
-                        error_msg = str(e)
-                        logger.debug(f"Request failed at {token_count} tokens: {error_msg}")
-                        error_patterns.append(f"{token_count}:{error_msg}")
+                    error_msg = str(e)
+                    logger.debug(f"Request failed at {token_count} tokens: {error_msg}")
+                    error_patterns.append(f"{token_count}:{error_msg}")
 
-                        if first_failure_tokens is None:
-                            first_failure_tokens = token_count
+                    if first_failure_tokens is None:
+                        first_failure_tokens = token_count
 
             # Calculate success rate for this token count
             success_rate = success_count / self.config.performance_test_requests
             avg_latency = total_latency / max(success_count, 1)
 
-            test_results.append({
-                "token_count": token_count,
-                "success_rate": success_rate,
-                "avg_latency": avg_latency,
-                "success_count": success_count
-            })
+            test_results.append(
+                {
+                    "token_count": token_count,
+                    "success_rate": success_rate,
+                    "avg_latency": avg_latency,
+                    "success_count": success_count,
+                }
+            )
 
             # Stop if success rate drops below threshold
             if success_rate < self.config.success_threshold:
-                logger.info(f"Success rate {success_rate:.2f} below threshold at {token_count} tokens")
+                logger.info(
+                    f"Success rate {success_rate:.2f} below threshold at {token_count} tokens"
+                )
                 break
 
             # Safety check: stop if probe duration exceeds limit
@@ -212,8 +208,13 @@ class ContextProber:
 
         # Analyze results
         return self._analyze_probe_results(
-            api_base_url, model, inference_engine, test_results,
-            error_patterns, first_failure_tokens, start_time
+            api_base_url,
+            model,
+            inference_engine,
+            test_results,
+            error_patterns,
+            first_failure_tokens,
+            start_time,
         )
 
     def _generate_test_token_counts(self) -> List[int]:
@@ -283,11 +284,7 @@ class ContextProber:
         return header + middle_content + footer
 
     async def _make_api_request(
-        self,
-        api_base_url: str,
-        model: str,
-        content: str,
-        temperature: float
+        self, api_base_url: str, model: str, content: str, temperature: float
     ) -> Optional[str]:
         """Make API request to LLM with proper error handling."""
         try:
@@ -299,15 +296,15 @@ class ContextProber:
                 "messages": [
                     {
                         "role": "user",
-                        "content": f"Please summarize the following text and identify any important markers:\n\n{content}"
+                        "content": f"Please summarize the following text and identify any important markers:\n\n{content}",
                     }
                 ],
                 "temperature": temperature,
                 "max_tokens": min(100, 4096),  # Small response to test context processing
-                "stream": False
+                "stream": False,
             }
 
-            response = self.session.post(url, json=payload)
+            response = self.session.post(url, json=payload, timeout=self.config.timeout_seconds)
             response.raise_for_status()
 
             data = response.json()
@@ -321,20 +318,17 @@ class ContextProber:
             raise
 
     async def _test_needle_in_haystack(
-        self,
-        api_base_url: str,
-        model: str,
-        context_tokens: int,
-        temperature: float
+        self, api_base_url: str, model: str, context_tokens: int, temperature: float
     ) -> float:
         """Test needle-in-haystack accuracy at given context size."""
         if not self.config.enable_niah_testing:
             return 1.0
 
         successes = 0
-        total_tests = len(self.config.needle_positions) * self.config.niah_test_count
+        needle_positions = self.config.needle_positions or ["start", "middle", "end"]
+        total_tests = len(needle_positions) * self.config.niah_test_count
 
-        for position in self.config.needle_positions:
+        for position in needle_positions:
             for test_num in range(self.config.niah_test_count):
                 try:
                     # Generate content with needle at specific position
@@ -342,7 +336,9 @@ class ContextProber:
                     content = self._generate_niah_content(context_tokens, needle, position)
 
                     # Ask model to find the needle
-                    prompt = f"Find and extract the secret code from the following text:\n\n{content}"
+                    prompt = (
+                        f"Find and extract the secret code from the following text:\n\n{content}"
+                    )
 
                     response = await self._make_api_request(
                         api_base_url, model, prompt, temperature
@@ -365,7 +361,7 @@ class ContextProber:
         if position == "start":
             return f"{needle}\n\n{filler_text}"[:target_chars]
         elif position == "end":
-            content = filler_text[:target_chars - len(needle) - 4]
+            content = filler_text[: target_chars - len(needle) - 4]
             return f"{content}\n\n{needle}"
         else:  # middle
             half_chars = (target_chars - len(needle)) // 2
@@ -381,7 +377,7 @@ class ContextProber:
         test_results: List[Dict],
         error_patterns: List[str],
         first_failure_tokens: Optional[int],
-        start_time: float
+        start_time: float,
     ) -> ProbeResult:
         """Analyze probe results and generate recommendations."""
 
@@ -405,11 +401,13 @@ class ContextProber:
                 recommended_max_prompt_tokens=0,
                 recommended_batch_size=1,
                 probe_timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
-                probe_duration_seconds=time.time() - start_time
+                probe_duration_seconds=time.time() - start_time,
             )
 
         # Find maximum successful context size
-        successful_tests = [r for r in test_results if r["success_rate"] >= self.config.success_threshold]
+        successful_tests = [
+            r for r in test_results if r["success_rate"] >= self.config.success_threshold
+        ]
         max_context = max((r["token_count"] for r in successful_tests), default=0)
 
         # Calculate effective context (accounting for performance degradation)
@@ -447,21 +445,21 @@ class ContextProber:
             success_rate=overall_success_rate,
             test_count=len(test_results),
             needle_in_haystack_accuracy=0.9,  # Placeholder - would be calculated from NIAH tests
-            position_bias_detected=False,      # Placeholder - would be detected from position analysis
+            position_bias_detected=False,  # Placeholder - would be detected from position analysis
             first_failure_tokens=first_failure_tokens,
             error_patterns=error_patterns,
             recommended_max_prompt_tokens=recommended_prompt_tokens,
             recommended_batch_size=recommended_batch_size,
             probe_timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
-            probe_duration_seconds=time.time() - start_time
+            probe_duration_seconds=time.time() - start_time,
         )
 
 
 async def run_context_probing(
     llm_configs: Dict[str, Dict[str, Any]],
-    probe_config: ProbeConfig = None,
+    probe_config: Optional[ProbeConfig] = None,
     save_results: bool = True,
-    results_file: Optional[Path] = None
+    results_file: Optional[Path] = None,
 ) -> Dict[str, ProbeResult]:
     """Run context probing for multiple LLMs and save results.
 
@@ -474,7 +472,7 @@ async def run_context_probing(
     Returns:
         Dictionary of probe results keyed by LLM name
     """
-    prober = ContextProber(probe_config)
+    prober = ContextProber(probe_config or ProbeConfig())
     results = {}
 
     for llm_name, config in llm_configs.items():
@@ -494,13 +492,15 @@ async def run_context_probing(
                 api_base_url=config["api_base_url"],
                 model=config["model"],
                 inference_engine=engine,
-                temperature=config.get("temperature", 0.1)
+                temperature=config.get("temperature", 0.1),
             )
             results[llm_name] = result
 
-            logger.info(f"Probe completed for {llm_name}: "
-                       f"max_context={result.max_context_tokens}, "
-                       f"success_rate={result.success_rate:.2f}")
+            logger.info(
+                f"Probe completed for {llm_name}: "
+                f"max_context={result.max_context_tokens}, "
+                f"success_rate={result.success_rate:.2f}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to probe {llm_name}: {e}")
@@ -512,9 +512,7 @@ async def run_context_probing(
             results_file = Path("vibelint_context_probe_results.json")
 
         # Convert results to serializable format
-        serializable_results = {
-            name: asdict(result) for name, result in results.items()
-        }
+        serializable_results = {name: asdict(result) for name, result in results.items()}
 
         with open(results_file, "w") as f:
             json.dump(serializable_results, f, indent=2)

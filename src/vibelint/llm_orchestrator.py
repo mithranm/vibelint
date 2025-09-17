@@ -12,37 +12,32 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-__all__ = [
-    "LLMType",
-    "TaskComplexity",
-    "LLMRequest",
-    "LLMOrchestrator",
-    "OrchestratorConfig"
-]
+__all__ = ["LLMType", "TaskComplexity", "LegacyLLMRequest", "LLMOrchestrator", "OrchestratorConfig"]
 
 
 class LLMType(Enum):
     """Available LLM types for different use cases."""
-    FAST = "fast"           # Small context, fast responses (docstrings, quick analysis)
+
+    FAST = "fast"  # Small context, fast responses (docstrings, quick analysis)
     ORCHESTRATOR = "orchestrator"  # Large context, complex reasoning (architecture, summarization)
 
 
 class TaskComplexity(Enum):
     """Task complexity levels for LLM selection."""
-    SIMPLE = "simple"       # Single function/class analysis, docstring generation
-    MODERATE = "moderate"   # Multi-function analysis, pattern detection
-    COMPLEX = "complex"     # Multi-file analysis, architectural decisions
+
+    SIMPLE = "simple"  # Single function/class analysis, docstring generation
+    MODERATE = "moderate"  # Multi-function analysis, pattern detection
+    COMPLEX = "complex"  # Multi-file analysis, architectural decisions
     ORCHESTRATION = "orchestration"  # Planning, coordination, large context summarization
 
 
 @dataclass
-class LLMRequest:
-    """Request specification for LLM processing."""
+class LegacyLLMRequest:
+    """Legacy request specification for LLM processing (deprecated, use llm_manager.LLMRequest)."""
 
     task_type: str
     content: str
@@ -93,10 +88,10 @@ class LLMOrchestrator:
         self.config = config
         self.performance_metrics = {
             LLMType.FAST: {"avg_latency": 0.0, "success_rate": 1.0, "call_count": 0},
-            LLMType.ORCHESTRATOR: {"avg_latency": 0.0, "success_rate": 1.0, "call_count": 0}
+            LLMType.ORCHESTRATOR: {"avg_latency": 0.0, "success_rate": 1.0, "call_count": 0},
         }
 
-    def select_llm(self, request: LLMRequest) -> LLMType:
+    def select_llm(self, request: LegacyLLMRequest) -> LLMType:
         """Intelligently select the appropriate LLM for a request.
 
         Selection criteria:
@@ -113,11 +108,16 @@ class LLMOrchestrator:
         """
         # Rule 1: Context size threshold
         if request.context_size > self.config.context_threshold:
-            logger.debug(f"Selecting orchestrator LLM: context size {request.context_size} > {self.config.context_threshold}")
+            logger.debug(
+                f"Selecting orchestrator LLM: context size {request.context_size} > {self.config.context_threshold}"
+            )
             return LLMType.ORCHESTRATOR
 
         # Rule 2: Task complexity threshold
-        if request.complexity.value in [TaskComplexity.COMPLEX.value, TaskComplexity.ORCHESTRATION.value]:
+        if request.complexity.value in [
+            TaskComplexity.COMPLEX.value,
+            TaskComplexity.ORCHESTRATION.value,
+        ]:
             logger.debug(f"Selecting orchestrator LLM: high complexity task ({request.complexity})")
             return LLMType.ORCHESTRATOR
 
@@ -139,7 +139,7 @@ class LLMOrchestrator:
         logger.debug("Selecting fast LLM: simple task with small context")
         return LLMType.FAST
 
-    async def process_request(self, request: LLMRequest) -> Dict[str, Any]:
+    async def process_request(self, request: LegacyLLMRequest) -> Dict[str, Any]:
         """Process an LLM request using the most appropriate model.
 
         Args:
@@ -165,7 +165,7 @@ class LLMOrchestrator:
                 "llm_used": selected_llm.value,
                 "duration": duration,
                 "context_size": request.context_size,
-                "success": True
+                "success": True,
             }
 
         except Exception as e:
@@ -185,7 +185,7 @@ class LLMOrchestrator:
                         "duration": fallback_duration,
                         "context_size": request.context_size,
                         "success": True,
-                        "fallback_used": True
+                        "fallback_used": True,
                     }
                 except Exception as fallback_error:
                     logger.error(f"Fallback also failed: {fallback_error}")
@@ -196,16 +196,16 @@ class LLMOrchestrator:
                 "duration": duration,
                 "context_size": request.context_size,
                 "success": False,
-                "error": str(e)
+                "error": str(e),
             }
 
-    async def _call_fast_llm(self, request: LLMRequest) -> str:
+    async def _call_fast_llm(self, request: LegacyLLMRequest) -> str:
         """Call the fast LLM for quick analysis tasks."""
         # Implementation would use langchain with fast LLM config
         # This is a placeholder for the actual LLM call
         raise NotImplementedError("Fast LLM implementation pending")
 
-    async def _call_orchestrator_llm(self, request: LLMRequest) -> str:
+    async def _call_orchestrator_llm(self, request: LegacyLLMRequest) -> str:
         """Call the orchestrator LLM for complex analysis tasks."""
         # Implementation would use langchain with orchestrator config
         # This is a placeholder for the actual LLM call
@@ -237,8 +237,8 @@ class LLMOrchestrator:
             "selection_stats": {
                 "context_threshold": self.config.context_threshold,
                 "complexity_threshold": self.config.complexity_threshold.value,
-                "fallback_enabled": self.config.enable_fallback
-            }
+                "fallback_enabled": self.config.enable_fallback,
+            },
         }
 
 
@@ -263,15 +263,13 @@ def create_orchestrator_from_config(vibelint_config: Dict[str, Any]) -> Optional
         fast_model=llm_config.get("model", "gpt-3.5-turbo"),
         fast_max_context=llm_config.get("max_context_tokens", 4000),
         fast_max_tokens=llm_config.get("max_tokens", 2048),
-
         orchestrator_api_base=orchestrator_config["api_base_url"],
         orchestrator_model=orchestrator_config.get("model", "llama3.2:latest"),
         orchestrator_max_context=orchestrator_config.get("max_context_tokens", 32000),
         orchestrator_max_tokens=orchestrator_config.get("max_tokens", 8192),
-
         context_threshold=llm_config.get("max_context_tokens", 4000) - 500,  # Leave buffer
         enable_caching=True,
-        enable_fallback=True
+        enable_fallback=True,
     )
 
     return LLMOrchestrator(config)
