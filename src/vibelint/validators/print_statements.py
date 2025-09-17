@@ -141,7 +141,7 @@ class PrintStatementValidator(BaseValidator):
         # Patterns that suggest legitimate CLI usage
         cli_indicators = [
             # UI symbols and formatting
-            r"[📱🎵💡🌐🚨⭐🎉🚀]",  # Emoji indicators for user interface
+            r"[[EMOJI][TIP][EMOJI][ALERT]⭐[SUCCESS][ROCKET]]",  # Emoji indicators for user interface
             r"^[-=]{3,}",  # Headers/separators (----, ====)
             r"^\s*\*{2,}",  # Emphasis markers (***, etc.)
             r"^\s*#{2,}",  # Section headers (##, ###)

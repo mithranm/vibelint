@@ -64,7 +64,7 @@ class DualLLMDiagnostics:
         results = {}
 
         for llm_name, config in llm_configs.items():
-            print(f"\n🔍 Testing {llm_name.upper()} LLM context limits...")
+            print(f"\n[SEARCH] Testing {llm_name.upper()} LLM context limits...")
 
             # Set timeout based on LLM type
             model_name = config["model"].lower()
@@ -118,19 +118,19 @@ class DualLLMDiagnostics:
                         max_working_context = context_size
                         total_duration += duration
                         successful_tests += 1
-                        print(f"✅ {duration:.1f}s")
+                        print(f"[PASS] {duration:.1f}s")
                     else:
                         failed_tests += 1
-                        print(f"❌ HTTP {response.status_code}")
+                        print(f"[FAIL] HTTP {response.status_code}")
                         break  # Stop on first HTTP error
 
                 except requests.exceptions.Timeout:
                     failed_tests += 1
-                    print(f"⏱️ Timeout (>{timeout_seconds}s)")
+                    print(f"[TIMER] Timeout (>{timeout_seconds}s)")
                     break  # Stop on first timeout
                 except (requests.exceptions.RequestException, ValueError, KeyError) as e:
                     failed_tests += 1
-                    print(f"❌ Error: {str(e)[:50]}...")
+                    print(f"[FAIL] Error: {str(e)[:50]}...")
                     break  # Stop on first error
 
                 # Small delay to let server recover
@@ -169,10 +169,10 @@ class DualLLMDiagnostics:
                 )
 
                 print(
-                    f"  📊 Result: {max_working_context} tokens max, {avg_latency:.0f}ms avg, {success_rate:.0%} success"
+                    f"  [STATS] Result: {max_working_context} tokens max, {avg_latency:.0f}ms avg, {success_rate:.0%} success"
                 )
             else:
-                print(f"  ❌ No successful tests for {llm_name}")
+                print(f"  [FAIL] No successful tests for {llm_name}")
 
         # Save assessment report
         if results:
@@ -217,30 +217,30 @@ class DualLLMDiagnostics:
             report += "### Assessment:\n"
 
             if configured_context > result.effective_context_tokens:
-                report += f"⚠️  **WARNING:** Configured context ({configured_context:,}) exceeds actual capacity ({result.effective_context_tokens:,})\n"
+                report += f"[WARNING]  **WARNING:** Configured context ({configured_context:,}) exceeds actual capacity ({result.effective_context_tokens:,})\n"
                 issues_found = True
             elif configured_context == 0:
-                report += f"💡 **INFO:** No context limit configured, discovered {result.effective_context_tokens:,} tokens\n"
+                report += f"[TIP] **INFO:** No context limit configured, discovered {result.effective_context_tokens:,} tokens\n"
             else:
-                report += "✅ **OK:** Configured context within actual capacity\n"
+                report += "[PASS] **OK:** Configured context within actual capacity\n"
 
             if result.success_rate < 0.9:
-                report += f"⚠️  **WARNING:** Low success rate ({result.success_rate:.1%}) - LLM may be overloaded\n"
+                report += f"[WARNING]  **WARNING:** Low success rate ({result.success_rate:.1%}) - LLM may be overloaded\n"
                 issues_found = True
             else:
-                report += f"✅ **OK:** Good success rate ({result.success_rate:.1%})\n"
+                report += f"[PASS] **OK:** Good success rate ({result.success_rate:.1%})\n"
 
             if result.avg_latency_ms > 10000:  # 10 seconds
-                report += f"⚠️  **WARNING:** High latency ({result.avg_latency_ms:.0f}ms) - consider optimization\n"
+                report += f"[WARNING]  **WARNING:** High latency ({result.avg_latency_ms:.0f}ms) - consider optimization\n"
                 issues_found = True
             else:
-                report += f"✅ **OK:** Acceptable latency ({result.avg_latency_ms:.0f}ms)\n"
+                report += f"[PASS] **OK:** Acceptable latency ({result.avg_latency_ms:.0f}ms)\n"
 
             report += "\n"
 
         # Overall recommendations
         if issues_found:
-            report += "## 🔧 Recommended Actions\n\n"
+            report += "## [TOOL] Recommended Actions\n\n"
             report += "Based on the assessment, consider updating your `pyproject.toml`:\n\n"
             report += "```toml\n"
             report += "[tool.vibelint.llm]\n"
@@ -258,7 +258,7 @@ class DualLLMDiagnostics:
 
             report += "```\n\n"
         else:
-            report += "## ✅ Configuration Assessment\n\n"
+            report += "## [PASS] Configuration Assessment\n\n"
             report += "Your current configuration appears to be well-matched to your LLM capabilities!\n\n"
 
         report += "### Next Steps\n\n"
@@ -329,15 +329,15 @@ async def run_diagnostics(config: Dict[str, Any]) -> Dict[str, Any]:
         probe_results = await diagnostics.run_context_probing()
 
         if not probe_results:
-            print("❌ No LLM configurations found or probing failed")
+            print("[FAIL] No LLM configurations found or probing failed")
             return {"error": "Context probing failed"}
 
         # Print context probing results
         for llm_name, result in probe_results.items():
             print(f"\n{llm_name.upper()} LLM:")
-            print(f"  ✓ Max Context: {result.max_context_tokens:,} tokens")
-            print(f"  ✓ Success Rate: {result.success_rate:.1%}")
-            print(f"  ✓ Latency: {result.avg_latency_ms:.0f}ms")
+            print(f"  [OK] Max Context: {result.max_context_tokens:,} tokens")
+            print(f"  [OK] Success Rate: {result.success_rate:.1%}")
+            print(f"  [OK] Latency: {result.avg_latency_ms:.0f}ms")
 
         # Step 2: Routing benchmark
         print("\n=== LLM Routing Benchmark ===")
@@ -347,18 +347,18 @@ async def run_diagnostics(config: Dict[str, Any]) -> Dict[str, Any]:
             print(f"Routing Accuracy: {routing_results['routing_accuracy']:.1%}")
 
             for scenario in routing_results["scenarios"]:
-                status = "✓" if scenario["correct"] else "✗"
+                status = "[OK]" if scenario["correct"] else "[ERROR]"
                 print(
                     f"  {status} {scenario['task']}: {scenario['selected']} (expected: {scenario['expected']})"
                 )
 
-        print("\n✅ Comprehensive diagnostics completed")
-        print("📄 Results saved to LLM_CALIBRATION_RESULTS.md")
+        print("\n[PASS] Comprehensive diagnostics completed")
+        print("[DOC] Results saved to LLM_CALIBRATION_RESULTS.md")
 
         return {"probe_results": probe_results, "routing_results": routing_results, "success": True}
 
     except (requests.exceptions.RequestException, ValueError, KeyError, OSError) as e:
-        print(f"❌ Diagnostics failed: {e}")
+        print(f"[FAIL] Diagnostics failed: {e}")
         return {"error": str(e), "success": False}
 
 
@@ -378,13 +378,13 @@ async def run_benchmark(config: Dict[str, Any]) -> Dict[str, Any]:
         results = await diagnostics.benchmark_routing()
 
         if "error" in results:
-            print(f"❌ {results['error']}")
+            print(f"[FAIL] {results['error']}")
             return results
 
         print(f"Routing Accuracy: {results['routing_accuracy']:.1%}")
 
         for scenario in results["scenarios"]:
-            status = "✓" if scenario["correct"] else "✗"
+            status = "[OK]" if scenario["correct"] else "[ERROR]"
             print(
                 f"  {status} {scenario['task']}: {scenario['selected']} (expected: {scenario['expected']})"
             )
@@ -392,5 +392,5 @@ async def run_benchmark(config: Dict[str, Any]) -> Dict[str, Any]:
         return results
 
     except (requests.exceptions.RequestException, ValueError, KeyError, OSError) as e:
-        print(f"❌ Benchmark failed: {e}")
+        print(f"[FAIL] Benchmark failed: {e}")
         return {"error": str(e)}

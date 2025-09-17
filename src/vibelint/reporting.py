@@ -280,8 +280,8 @@ Generated: {timestamp}
 
 ## Main Reports
 
-- [📋 Main Analysis Report](main_report.md)
-- [🚀 Quick Action Plan](QUICK_ACTION_PLAN.md)
+- [[REPORT] Main Analysis Report](main_report.md)
+- [[ROCKET] Quick Action Plan](QUICK_ACTION_PLAN.md)
 
 ## Detailed Artifacts
 
@@ -289,9 +289,9 @@ Generated: {timestamp}
 
         # Add artifact links
         artifact_types = {
-            "organizational": "🏗️ Organizational Analysis",
-            "structural": "🔧 Structural Analysis",
-            "architectural": "🏛️ Architectural Analysis"
+            "organizational": "[BUILD] Organizational Analysis",
+            "structural": "[TOOL] Structural Analysis",
+            "architectural": "[ARCH] Architectural Analysis"
         }
 
         for artifact_key, description in artifact_types.items():

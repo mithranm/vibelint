@@ -1318,7 +1318,7 @@ def regen_docstrings_cmd(
 
     # Enhanced confirmation with safety warnings
     if not yes and not dry_run:
-        console.print("\n[bold red]⚠️  CRITICAL SAFETY WARNING ⚠️[/bold red]")
+        console.print("\n[bold red][WARNING]  CRITICAL SAFETY WARNING [WARNING][/bold red]")
         console.print(
             f"This will modify {len(target_files)} Python files with LLM-generated content."
         )
@@ -1348,7 +1348,7 @@ def regen_docstrings_cmd(
         if dry_run:
             # Execute dry-run preview
             console.print(
-                "[bold yellow]🔍 PREVIEWING CHANGES: Analyzing what docstrings would be modified...[/bold yellow]"
+                "[bold yellow][SEARCH] PREVIEWING CHANGES: Analyzing what docstrings would be modified...[/bold yellow]"
             )
 
             preview_results = asyncio.run(preview_docstring_changes(config, target_files))
@@ -1359,11 +1359,11 @@ def regen_docstrings_cmd(
 
             if preview_results["total_changes"] == 0:
                 console.print(
-                    "[bold green]✓ No docstring changes needed in the analyzed files.[/bold green]"
+                    "[bold green][OK] No docstring changes needed in the analyzed files.[/bold green]"
                 )
             else:
                 console.print(
-                    f"[bold yellow]📋 Found {preview_results['total_changes']} docstring changes across {len(preview_results['files_analyzed'])} files:[/bold yellow]\n"
+                    f"[bold yellow][REPORT] Found {preview_results['total_changes']} docstring changes across {len(preview_results['files_analyzed'])} files:[/bold yellow]\n"
                 )
 
                 # Show detailed preview for first few files
@@ -1372,7 +1372,7 @@ def regen_docstrings_cmd(
                     if files_shown >= 3:  # Limit detailed preview to first 3 files
                         break
 
-                    console.print(f"[bold blue]📁 {file_path}:[/bold blue]")
+                    console.print(f"[bold blue][FOLDER] {file_path}:[/bold blue]")
                     for change in changes[:5]:  # Show first 5 changes per file
                         action = (
                             "[green]ADD[/green]"
@@ -1398,9 +1398,9 @@ def regen_docstrings_cmd(
                     remaining = len(preview_results["files_analyzed"]) - 3
                     console.print(f"[dim]... and {remaining} more files with changes[/dim]\n")
 
-            console.print("[bold green]🔍 DRY RUN COMPLETE:[/bold green] No files were modified.")
+            console.print("[bold green][SEARCH] DRY RUN COMPLETE:[/bold green] No files were modified.")
             console.print(
-                "[bold yellow]💡 Remove --dry-run to apply these changes (review carefully first!).[/bold yellow]"
+                "[bold yellow][TIP] Remove --dry-run to apply these changes (review carefully first!).[/bold yellow]"
             )
         else:
             # Create backups if requested
@@ -1435,7 +1435,7 @@ def regen_docstrings_cmd(
                             json.dumps(backup_manifest, indent=2), encoding="utf-8"
                         )
                         console.print(
-                            f"[bold blue]📝 Backup manifest saved: {manifest_path}[/bold blue]"
+                            f"[bold blue][EDIT] Backup manifest saved: {manifest_path}[/bold blue]"
                         )
                     except (OSError, ValueError) as e:
                         console.print(
@@ -1449,14 +1449,14 @@ def regen_docstrings_cmd(
                     f"[green]Successfully regenerated docstrings in {processed_count} files.[/green]"
                 )
                 console.print(
-                    "[bold yellow]⚠️  IMPORTANT: Review all changes manually for accuracy![/bold yellow]"
+                    "[bold yellow][WARNING]  IMPORTANT: Review all changes manually for accuracy![/bold yellow]"
                 )
                 if backup and backup_manifest:
                     console.print(
-                        f"[bold blue]💾 Backup files created with timestamp: {timestamp}[/bold blue]"
+                        f"[bold blue][SAVE] Backup files created with timestamp: {timestamp}[/bold blue]"
                     )
                     console.print(
-                        f"[bold green]🔄 To rollback: vibelint rollback .vibelint_backup_{timestamp}.json[/bold green]"
+                        f"[bold green][REFRESH] To rollback: vibelint rollback .vibelint_backup_{timestamp}.json[/bold green]"
                     )
             else:
                 console.print("[yellow]No docstrings were regenerated.[/yellow]")
@@ -1483,7 +1483,7 @@ def rollback_cmd(ctx: click.Context, manifest: Path, yes: bool) -> None:
 
     vibelint/src/vibelint/cli.py
     """
-    console.print(f"[bold blue]🔄 Rolling back files using manifest: {manifest}[/bold blue]")
+    console.print(f"[bold blue][REFRESH] Rolling back files using manifest: {manifest}[/bold blue]")
 
     try:
         import json
@@ -1521,7 +1521,7 @@ def rollback_cmd(ctx: click.Context, manifest: Path, yes: bool) -> None:
             console.print(f"  • {entry['original']} ← {entry['backup']}")
 
         if not yes:
-            console.print("\n[bold red]⚠️  WARNING: This will overwrite current files![/bold red]")
+            console.print("\n[bold red][WARNING]  WARNING: This will overwrite current files![/bold red]")
             if not click.confirm("Are you sure you want to proceed with rollback?"):
                 console.print("Rollback cancelled.")
                 ctx.exit(0)
@@ -1537,20 +1537,20 @@ def rollback_cmd(ctx: click.Context, manifest: Path, yes: bool) -> None:
                 backup_content = backup_path.read_text(encoding="utf-8")
                 original_path.write_text(backup_content, encoding="utf-8")
                 success_count += 1
-                console.print(f"[green]✓[/green] Restored {original_path}")
+                console.print(f"[green][OK][/green] Restored {original_path}")
             except (OSError, UnicodeDecodeError) as e:
-                console.print(f"[red]✗[/red] Failed to restore {original_path}: {e}")
+                console.print(f"[red][ERROR][/red] Failed to restore {original_path}: {e}")
 
         if success_count == len(manifest_data):
             console.print(
-                f"\n[bold green]🎉 Successfully rolled back all {success_count} files![/bold green]"
+                f"\n[bold green][SUCCESS] Successfully rolled back all {success_count} files![/bold green]"
             )
             console.print(
-                "[bold blue]💡 Consider removing backup files and manifest if no longer needed.[/bold blue]"
+                "[bold blue][TIP] Consider removing backup files and manifest if no longer needed.[/bold blue]"
             )
         else:
             console.print(
-                f"\n[bold yellow]⚠️  Partial rollback: {success_count}/{len(manifest_data)} files restored[/bold yellow]"
+                f"\n[bold yellow][WARNING]  Partial rollback: {success_count}/{len(manifest_data)} files restored[/bold yellow]"
             )
 
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
