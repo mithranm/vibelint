@@ -12,6 +12,7 @@ from typing import TextIO
 
 from ..config import Config
 from .namespace_collisions import NamespaceCollision, NamespaceNode
+from ..plugin_system import Severity
 from ..utils import get_relative_path
 
 __all__ = ["write_report_content"]
@@ -132,8 +133,6 @@ def write_report_content(
     f.write(f"| Files analyzed | {files_analyzed_count} |\n")
 
     # Count findings by severity
-    from .plugin_system import Severity
-
     error_findings = [f for f in findings if f.severity == Severity.BLOCK]
     warn_findings = [f for f in findings if f.severity == Severity.WARN]
 

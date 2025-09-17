@@ -35,7 +35,7 @@ class MissingDocstringValidator(BaseValidator):
         docstring_config = (config and config.get("docstring", {})) or {}
         require_module = docstring_config.get("require_module_docstrings", True)
         require_class = docstring_config.get("require_class_docstrings", True)
-        require_function = docstring_config.get("require_function_docstrings", False)
+        require_function = docstring_config.get("require_function_docstrings", True)
         include_private = docstring_config.get("include_private_functions", False)
 
         # Check module docstring
@@ -83,7 +83,7 @@ class DocstringPathValidator(BaseValidator):
         """Check for missing path references in docstrings based on configuration."""
         # Get docstring configuration
         docstring_config = (config and config.get("docstring", {})) or {}
-        require_path_references = docstring_config.get("require_path_references", False)
+        require_path_references = docstring_config.get("require_path_references", True)
 
         # Skip validation if path references are not required
         if not require_path_references:
@@ -140,8 +140,8 @@ class DocstringPathValidator(BaseValidator):
 
             return ".".join(module_parts)
         else:  # relative format (default)
-            # Get relative path, removing project root and src/ prefix
-            relative_path = str(file_path)
+            # Get relative path, keeping the src/ prefix for clarity
+            relative_path: Path | str = file_path
             try:
                 # Try to find project root by looking for common markers
                 current = file_path.parent
@@ -150,14 +150,15 @@ class DocstringPathValidator(BaseValidator):
                         (current / marker).exists()
                         for marker in ["pyproject.toml", "setup.py", ".git"]
                     ):
-                        relative_path = str(file_path.relative_to(current))
+                        relative_path = file_path.relative_to(current)
                         break
                     current = current.parent
             except ValueError:
                 pass
 
-            # Remove src/ prefix if present
-            if relative_path.startswith("src/"):
-                relative_path = relative_path[4:]
+            if isinstance(relative_path, Path):
+                relative_path = relative_path.as_posix()
+            else:
+                relative_path = relative_path.replace("\\", "/")
 
             return relative_path
