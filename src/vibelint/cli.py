@@ -617,19 +617,63 @@ def check(
             # Create rules dict with only specified rules
             config_dict["rules"] = {rule_id: "WARN" for rule_id in specific_rules}
 
-    elif "rule_categories" in config_dict and enabled_categories != ["core", "static", "ai"]:
-        rule_categories = config_dict["rule_categories"]
-        if isinstance(rule_categories, dict):
-            enabled_rules = set()
-            for category in enabled_categories:
-                if category in rule_categories and isinstance(rule_categories[category], list):
-                    enabled_rules.update(rule_categories[category])
+    elif enabled_categories != ["core", "static", "ai"]:
+        # Handle category filtering even if rule_categories is not explicitly defined
+        if "rule_categories" in config_dict:
+            # Use explicit rule_categories mapping
+            rule_categories = config_dict["rule_categories"]
+            if isinstance(rule_categories, dict):
+                enabled_rules = set()
+                for category in enabled_categories:
+                    if category in rule_categories and isinstance(rule_categories[category], list):
+                        enabled_rules.update(rule_categories[category])
+
+                # Disable rules not in enabled categories
+                if "rules" in config_dict and isinstance(config_dict["rules"], dict):
+                    for rule_id in list(config_dict["rules"].keys()):
+                        if rule_id not in enabled_rules:
+                            config_dict["rules"][rule_id] = "OFF"
+        else:
+            # Create dynamic rule categorization by inspecting validator classes
+            from .plugin_system import plugin_manager
+
+            # Load all validators to inspect their categories
+            plugin_manager.load_plugins()
+            all_validators = plugin_manager.get_all_validators()
+
+            # Categorize rules dynamically by checking validator module paths/names
+            ai_rules = set()
+            core_rules = set()
+            static_rules = set()
+
+            for rule_id, validator_class in all_validators.items():
+                module_name = validator_class.__module__
+                # AI validators are typically in architecture modules or have LLM in the name
+                if ('llm' in module_name.lower() or 'ai' in module_name.lower() or
+                    'architecture' in module_name.lower() or 'llm' in rule_id.lower()):
+                    ai_rules.add(rule_id)
+                elif 'emoji' in module_name.lower() or 'print' in module_name.lower():
+                    core_rules.add(rule_id)
+                else:
+                    static_rules.add(rule_id)
 
             # Disable rules not in enabled categories
-            if "rules" in config_dict and isinstance(config_dict["rules"], dict):
-                for rule_id in list(config_dict["rules"].keys()):
-                    if rule_id not in enabled_rules:
-                        config_dict["rules"][rule_id] = "OFF"
+            rules_to_disable = set()
+            if "ai" not in enabled_categories:
+                rules_to_disable.update(ai_rules)
+            if "core" not in enabled_categories:
+                rules_to_disable.update(core_rules)
+            if "static" not in enabled_categories:
+                rules_to_disable.update(static_rules)
+
+            if rules_to_disable:
+                if "rules" not in config_dict:
+                    config_dict["rules"] = {}
+                elif not isinstance(config_dict["rules"], dict):
+                    config_dict["rules"] = {}
+
+                for rule_id in rules_to_disable:
+                    config_dict["rules"][rule_id] = "OFF"
 
     try:
         # Run plugin-based validation with filtered config
