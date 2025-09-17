@@ -1,11 +1,12 @@
 """
-Simple dual LLM manager for vibelint.
+Consolidated LLM system for vibelint.
 
-Manages two LLMs with different roles:
-- Fast: High-speed inference for quick tasks (docstrings, simple analysis)
-- Orchestrator: Large context for complex reasoning (architecture, summarization)
+Manages dual LLMs, tracing, and dynamic validator generation:
+- Fast: High-speed inference for quick tasks
+- Orchestrator: Large context for complex reasoning
+- Dynamic: On-demand validator generation from prompts
 
-vibelint/src/vibelint/llm_manager.py
+vibelint/src/vibelint/llm.py
 """
 
 import logging
@@ -18,7 +19,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["LLMRole", "LLMManager", "LLMRequest"]
+__all__ = ["LLMRole", "LLMManager", "LLMRequest", "create_llm_manager"]
 
 
 class LLMRole(Enum):
@@ -67,7 +68,7 @@ class LLMManager:
 
         # Routing configuration
         self.context_threshold = llm_config.get("context_threshold", 3000)
-        self.enable_fallback = llm_config.get("enable_fallback", True)
+        self.enable_fallback = llm_config.get("enable_fallback", False)
 
         # Session for HTTP requests
         self.session = requests.Session()
@@ -98,6 +99,18 @@ class LLMManager:
         """Process request using the appropriate LLM."""
         selected_llm = self.select_llm(request)
 
+        # Check if required LLM is configured
+        if selected_llm == LLMRole.FAST and not self.fast_config.get("api_url"):
+            raise ValueError(
+                f"Fast LLM required for task '{request.task_type}' but not configured. "
+                f"Add [tool.vibelint.llm] fast_api_url and fast_model to pyproject.toml"
+            )
+        elif selected_llm == LLMRole.ORCHESTRATOR and not self.orchestrator_config.get("api_url"):
+            raise ValueError(
+                f"Orchestrator LLM required for task '{request.task_type}' but not configured. "
+                f"Add [tool.vibelint.llm] orchestrator_api_url and orchestrator_model to pyproject.toml"
+            )
+
         try:
             if selected_llm == LLMRole.FAST:
                 return await self._call_fast_llm(request)
@@ -105,32 +118,14 @@ class LLMManager:
                 return await self._call_orchestrator_llm(request)
 
         except (requests.exceptions.RequestException, ValueError, KeyError) as e:
-            if self.enable_fallback:
-                logger.warning(f"{selected_llm.value} LLM failed, trying fallback: {e}")
-
-                # Try the other LLM
-                fallback_role = (
-                    LLMRole.ORCHESTRATOR if selected_llm == LLMRole.FAST else LLMRole.FAST
-                )
-
-                try:
-                    if fallback_role == LLMRole.FAST:
-                        result = await self._call_fast_llm(request)
-                    else:
-                        result = await self._call_orchestrator_llm(request)
-
-                    result["fallback_used"] = True
-                    result["original_llm"] = selected_llm.value
-                    return result
-
-                except (
-                    requests.exceptions.RequestException,
-                    ValueError,
-                    KeyError,
-                ) as fallback_error:
-                    logger.error(f"Fallback also failed: {fallback_error}")
-
-            raise e
+            # Configured but unavailable - fail fast
+            logger.error(
+                f"{selected_llm.value} LLM configured but unavailable - aborting analysis: {e}"
+            )
+            raise RuntimeError(
+                f"LLM analysis failed: {selected_llm.value} model configured but unavailable. "
+                f"Check model server status and network connectivity. Error: {e}"
+            ) from e
 
     async def _call_fast_llm(self, request: LLMRequest) -> Dict[str, Any]:
         """Call the fast LLM."""
@@ -176,13 +171,35 @@ class LLMManager:
             "success": True,
         }
 
-    def get_status(self) -> Dict[str, Union[bool, int]]:
+    def is_llm_available(self, role: LLMRole) -> bool:
+        """Check if a specific LLM is configured and available."""
+        if role == LLMRole.FAST:
+            return bool(self.fast_config.get("api_url"))
+        else:
+            return bool(self.orchestrator_config.get("api_url"))
+
+    def get_available_features(self) -> Dict[str, bool]:
+        """Get which AI features are available based on LLM configuration."""
+        fast_available = self.is_llm_available(LLMRole.FAST)
+        orchestrator_available = self.is_llm_available(LLMRole.ORCHESTRATOR)
+
+        return {
+            "architecture_analysis": orchestrator_available,  # Requires orchestrator
+            "docstring_generation": fast_available,  # Can use fast
+            "code_smell_detection": fast_available,  # Can use fast
+            "coverage_assessment": orchestrator_available,  # Requires orchestrator
+            "semantic_analysis": orchestrator_available,  # Requires orchestrator
+            "simple_validation": fast_available or orchestrator_available,  # Either works
+        }
+
+    def get_status(self) -> Dict[str, Any]:
         """Get status of both LLMs."""
         return {
-            "fast_configured": bool(self.fast_config.get("api_url")),
-            "orchestrator_configured": bool(self.orchestrator_config.get("api_url")),
+            "fast_configured": self.is_llm_available(LLMRole.FAST),
+            "orchestrator_configured": self.is_llm_available(LLMRole.ORCHESTRATOR),
             "context_threshold": self.context_threshold,
-            "fallback_enabled": self.enable_fallback,
+            "fallback_enabled": False,  # Always disabled for predictable behavior
+            "available_features": self.get_available_features(),
         }
 
 

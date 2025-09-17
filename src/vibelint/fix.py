@@ -182,10 +182,7 @@ class FixEngine:
 
             # Use fast LLM for quick docstring generation
             request = LLMRequest(
-                content=prompt,
-                task_type="docstring_generation",
-                max_tokens=200,
-                temperature=0.1
+                content=prompt, task_type="docstring_generation", max_tokens=200, temperature=0.1
             )
 
             response = await self.llm_manager.process_request(request)
@@ -242,9 +239,7 @@ class FixEngine:
                             # Single line docstring - expand it
                             quote = '"""' if '"""' in line else "'''"
                             content = line.strip().replace(quote, "").strip()
-                            new_docstring = (
-                                f"{indent}{quote}{content}\n\n{indent}{expected_path}\n{indent}{quote}"
-                            )
+                            new_docstring = f"{indent}{quote}{content}\n\n{indent}{expected_path}\n{indent}{quote}"
                             modifications[finding.line - 1] = new_docstring
 
     def _get_expected_path_for_fix(self, file_path: Path, path_format: str) -> str:
@@ -256,7 +251,7 @@ class FixEngine:
             parts = file_path.parts
             if "src" in parts:
                 src_idx = parts.index("src")
-                module_parts = parts[src_idx + 1:]
+                module_parts = parts[src_idx + 1 :]
             else:
                 module_parts = parts
 
@@ -272,7 +267,10 @@ class FixEngine:
                 # Try to find project root by looking for common markers
                 current = file_path.parent
                 while current.parent != current:
-                    if any((current / marker).exists() for marker in ["pyproject.toml", "setup.py", ".git"]):
+                    if any(
+                        (current / marker).exists()
+                        for marker in ["pyproject.toml", "setup.py", ".git"]
+                    ):
                         relative_path = str(file_path.relative_to(current))
                         break
                     current = current.parent

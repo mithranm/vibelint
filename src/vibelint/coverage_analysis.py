@@ -14,13 +14,19 @@ import subprocess
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
-from .llm_manager import LLMManager, LLMRequest, LLMRole, create_llm_manager
+from .llm_manager import LLMRequest, create_llm_manager
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["CoverageVibeAnalyzer", "CoverageGap", "EdgeCase", "CodeSuggestion", "run_coverage_vibe_check"]
+__all__ = [
+    "CoverageVibeAnalyzer",
+    "CoverageGap",
+    "EdgeCase",
+    "CodeSuggestion",
+    "run_coverage_vibe_check",
+]
 
 
 @dataclass
@@ -93,7 +99,7 @@ class CoverageVibeAnalyzer:
         source_paths: List[str],
         test_paths: List[str],
         coverage_threshold: float = 80.0,
-        max_suggestions: int = 20
+        max_suggestions: int = 20,
     ) -> Dict[str, Any]:
         """Run comprehensive agentic test analysis."""
 
@@ -124,9 +130,7 @@ class CoverageVibeAnalyzer:
         self.edge_cases = await self._discover_edge_cases(source_paths)
 
         # Step 4: Generate code suggestions
-        self.code_suggestions = await self._generate_code_suggestions(
-            source_paths, max_suggestions
-        )
+        self.code_suggestions = await self._generate_code_suggestions(source_paths, max_suggestions)
 
         # Step 5: Self-validating test assessment
         self.test_assessments = await self._assess_existing_tests(test_paths)
@@ -141,7 +145,7 @@ class CoverageVibeAnalyzer:
             "edge_cases": self.edge_cases,
             "code_suggestions": self.code_suggestions,
             "test_assessments": self.test_assessments,
-            "analysis_summary": self._create_analysis_summary(coverage_threshold)
+            "analysis_summary": self._create_analysis_summary(coverage_threshold),
         }
 
         return results
@@ -158,7 +162,7 @@ class CoverageVibeAnalyzer:
 
             coverage_data = {
                 "overall_coverage": float(root.attrib.get("line-rate", 0)) * 100,
-                "files": {}
+                "files": {},
             }
 
             for package in root.findall(".//package"):
@@ -182,7 +186,7 @@ class CoverageVibeAnalyzer:
                     coverage_data["files"][filename] = {
                         "line_rate": line_rate,
                         "covered_lines": covered_lines,
-                        "uncovered_lines": uncovered_lines
+                        "uncovered_lines": uncovered_lines,
                     }
 
             return coverage_data
@@ -197,12 +201,16 @@ class CoverageVibeAnalyzer:
 
         try:
             # Run pytest with coverage
-            cmd = ["python", "-m", "pytest", "--cov=" + ",".join(source_paths),
-                   "--cov-report=xml", "--cov-report=term-missing"]
+            cmd = [
+                "python",
+                "-m",
+                "pytest",
+                "--cov=" + ",".join(source_paths),
+                "--cov-report=xml",
+                "--cov-report=term-missing",
+            ]
 
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=120
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
 
             if result.returncode == 0:
                 return await self._parse_coverage_data() or {}
@@ -218,10 +226,7 @@ class CoverageVibeAnalyzer:
             return {}
 
     async def _identify_coverage_gaps(
-        self,
-        coverage_data: Dict[str, Any],
-        source_paths: List[str],
-        threshold: float
+        self, coverage_data: Dict[str, Any], source_paths: List[str], threshold: float
     ) -> List[CoverageGap]:
         """Identify significant coverage gaps using fast LLM."""
         gaps = []
@@ -231,9 +236,7 @@ class CoverageVibeAnalyzer:
                 # Use fast LLM to analyze uncovered lines
                 uncovered_lines = file_data["uncovered_lines"]
                 if uncovered_lines:
-                    gaps.extend(
-                        await self._analyze_uncovered_lines(file_path, uncovered_lines)
-                    )
+                    gaps.extend(await self._analyze_uncovered_lines(file_path, uncovered_lines))
 
         return gaps
 
@@ -255,9 +258,7 @@ class CoverageVibeAnalyzer:
                     # Add some context around uncovered line
                     start = max(0, line_num - 3)
                     end = min(len(lines), line_num + 2)
-                    context = "\n".join(
-                        f"{i+1:3d}: {lines[i]}" for i in range(start, end)
-                    )
+                    context = "\n".join(f"{i+1:3d}: {lines[i]}" for i in range(start, end))
                     context_lines.append(f"Uncovered line {line_num}:\n{context}")
 
             if not context_lines:
@@ -278,16 +279,18 @@ Respond in format:
 Line X: function_name | gap_type | description""",
                 task_type="coverage_analysis",
                 max_tokens=512,
-                temperature=0.1
+                temperature=0.1,
             )
 
             response = await self.llm_manager.process_request(request)
 
             if response["success"]:
                 # Parse LLM response to create CoverageGap objects
-                gaps.extend(self._parse_coverage_gaps_response(
-                    response["content"], file_path, uncovered_lines
-                ))
+                gaps.extend(
+                    self._parse_coverage_gaps_response(
+                        response["content"], file_path, uncovered_lines
+                    )
+                )
 
         except Exception as e:
             logger.error(f"Failed to analyze uncovered lines in {file_path}: {e}")
@@ -325,14 +328,16 @@ Line X: function_name | gap_type | description""",
                                 if func_part and func_part != f"Line {line_num}":
                                     function_name = func_part
 
-                            gaps.append(CoverageGap(
-                                file_path=file_path,
-                                line_number=line_num,
-                                function_name=function_name,
-                                coverage_percentage=0.0,  # Uncovered
-                                gap_type=gap_type,
-                                description=description
-                            ))
+                            gaps.append(
+                                CoverageGap(
+                                    file_path=file_path,
+                                    line_number=line_num,
+                                    function_name=function_name,
+                                    coverage_percentage=0.0,  # Uncovered
+                                    gap_type=gap_type,
+                                    description=description,
+                                )
+                            )
 
             except Exception as e:
                 logger.debug(f"Failed to parse gap line '{line}': {e}")
@@ -367,7 +372,8 @@ Line X: function_name | gap_type | description""",
             # Parse AST to extract function signatures
             tree = ast.parse(source_code)
             functions = [
-                node for node in ast.walk(tree)
+                node
+                for node in ast.walk(tree)
                 if isinstance(node, ast.FunctionDef) and not node.name.startswith("_")
             ]
 
@@ -406,7 +412,7 @@ For each edge case, provide:
 Format: function_name|line_num|case_type|description|test_data""",
                 task_type="edge_case_analysis",
                 max_tokens=1024,
-                temperature=0.2
+                temperature=0.2,
             )
 
             response = await self.llm_manager.process_request(request)
@@ -442,14 +448,16 @@ Format: function_name|line_num|case_type|description|test_data""",
                         except Exception:
                             suggested_test_data = None
 
-                    edge_cases.append(EdgeCase(
-                        file_path=file_path,
-                        function_name=function_name,
-                        line_number=line_number,
-                        case_type=case_type,
-                        description=description,
-                        suggested_test_data=suggested_test_data
-                    ))
+                    edge_cases.append(
+                        EdgeCase(
+                            file_path=file_path,
+                            function_name=function_name,
+                            line_number=line_number,
+                            case_type=case_type,
+                            description=description,
+                            suggested_test_data=suggested_test_data,
+                        )
+                    )
 
             except (ValueError, IndexError) as e:
                 logger.debug(f"Failed to parse edge case line '{line}': {e}")
@@ -468,25 +476,29 @@ Format: function_name|line_num|case_type|description|test_data""",
 
         # High-priority targets from coverage gaps
         for gap in self.coverage_gaps[:10]:  # Top 10 gaps
-            test_targets.append({
-                "type": "coverage_gap",
-                "file_path": gap.file_path,
-                "function": gap.function_name,
-                "line": gap.line_number,
-                "description": gap.description,
-                "priority": 4 if gap.gap_type == "error_path" else 3
-            })
+            test_targets.append(
+                {
+                    "type": "coverage_gap",
+                    "file_path": gap.file_path,
+                    "function": gap.function_name,
+                    "line": gap.line_number,
+                    "description": gap.description,
+                    "priority": 4 if gap.gap_type == "error_path" else 3,
+                }
+            )
 
         # Edge cases as test targets
         for edge_case in self.edge_cases[:10]:  # Top 10 edge cases
-            test_targets.append({
-                "type": "edge_case",
-                "file_path": edge_case.file_path,
-                "function": edge_case.function_name,
-                "line": edge_case.line_number,
-                "description": edge_case.description,
-                "priority": 5 if edge_case.case_type == "error_condition" else 3
-            })
+            test_targets.append(
+                {
+                    "type": "edge_case",
+                    "file_path": edge_case.file_path,
+                    "function": edge_case.function_name,
+                    "line": edge_case.line_number,
+                    "description": edge_case.description,
+                    "priority": 5 if edge_case.case_type == "error_condition" else 3,
+                }
+            )
 
         # Sort by priority and generate tests
         test_targets.sort(key=lambda x: x["priority"], reverse=True)
@@ -530,7 +542,7 @@ Generate ONLY the test function code, properly formatted for pytest.
 Test function name should be descriptive and start with 'test_'.""",
                 task_type="test_generation",
                 max_tokens=768,
-                temperature=0.3
+                temperature=0.3,
             )
 
             response = await self.llm_manager.process_request(request)
@@ -540,14 +552,14 @@ Test function name should be descriptive and start with 'test_'.""",
                 test_code = self._clean_generated_test_code(response["content"])
 
                 if test_code:
-                    return TestSuggestion(
+                    return CodeSuggestion(
                         test_name=self._extract_test_name(test_code),
                         file_path=target["file_path"],
                         function_under_test=target["function"] or "unknown",
                         test_code=test_code,
                         priority=target["priority"],
                         edge_cases_covered=[target["description"]],
-                        estimated_coverage_increase=5.0  # Rough estimate
+                        estimated_coverage_increase=5.0,  # Rough estimate
                     )
 
         except Exception as e:
@@ -571,15 +583,15 @@ Test function name should be descriptive and start with 'test_'.""",
         try:
             tree = ast.parse(source_code)
             for node in ast.walk(tree):
-                if (isinstance(node, ast.FunctionDef) and
-                    node.name == function_name):
+                if isinstance(node, ast.FunctionDef) and node.name == function_name:
                     # Extract function lines
                     start_line = node.lineno - 1
                     end_line = node.end_lineno or (start_line + 10)
 
                     func_lines = lines[start_line:end_line]
-                    return "\n".join(f"{start_line + i + 1:3d}: {line}"
-                                   for i, line in enumerate(func_lines))
+                    return "\n".join(
+                        f"{start_line + i + 1:3d}: {line}" for i, line in enumerate(func_lines)
+                    )
         except Exception:
             pass
 
@@ -615,13 +627,9 @@ Test function name should be descriptive and start with 'test_'.""",
         lines = raw_code.strip().split("\n")
         if lines:
             # Remove extra leading whitespace
-            min_indent = min(
-                len(line) - len(line.lstrip())
-                for line in lines if line.strip()
-            )
+            min_indent = min(len(line) - len(line.lstrip()) for line in lines if line.strip())
             if min_indent > 0:
-                lines = [line[min_indent:] if len(line) >= min_indent else line
-                        for line in lines]
+                lines = [line[min_indent:] if len(line) >= min_indent else line for line in lines]
 
         return "\n".join(lines)
 
@@ -641,39 +649,49 @@ Test function name should be descriptive and start with 'test_'.""",
             "coverage_gaps_found": len(self.coverage_gaps),
             "edge_cases_discovered": len(self.edge_cases),
             "test_suggestions_generated": len(self.test_suggestions),
-            "high_priority_suggestions": len([
-                s for s in self.test_suggestions if s.priority >= 4
-            ]),
+            "high_priority_suggestions": len([s for s in self.test_suggestions if s.priority >= 4]),
             "estimated_coverage_increase": sum(
                 s.estimated_coverage_increase for s in self.test_suggestions
             ),
-            "coverage_threshold": threshold
+            "coverage_threshold": threshold,
         }
 
 
-async def run_test_analysis(
-    config: Dict[str, Any],
-    source_paths: List[str],
-    test_paths: List[str],
+async def run_coverage_vibe_check(
+    config: Optional[Dict[str, Any]] = None,
+    source_paths: Optional[List[str]] = None,
+    test_paths: Optional[List[str]] = None,
     coverage_threshold: float = 80.0,
     max_suggestions: int = 20,
-    generate_tests: bool = False
+    generate_tests: bool = False,
 ) -> Dict[str, Any]:
-    """Run comprehensive agentic test analysis."""
-    analyzer = TestAnalyzer(config)
+    """Run comprehensive agentic coverage analysis."""
+    # Load config from pyproject.toml if not provided
+    if config is None:
+        from .config import load_config
+
+        config = load_config().settings
+
+    # Default paths if not provided
+    if source_paths is None:
+        source_paths = ["src/vibelint"]
+    if test_paths is None:
+        test_paths = ["tests"]
+
+    analyzer = CoverageVibeAnalyzer(config)
 
     results = await analyzer.analyze_test_coverage(
         source_paths, test_paths, coverage_threshold, max_suggestions
     )
 
-    if generate_tests and results.get("test_suggestions"):
+    if generate_tests and results.get("code_suggestions"):
         # Optionally write generated tests to files
-        await _write_generated_tests(results["test_suggestions"])
+        await _write_generated_tests(results["code_suggestions"])
 
     return results
 
 
-async def _write_generated_tests(suggestions: List[TestSuggestion]) -> None:
+async def _write_generated_tests(suggestions: List[CodeSuggestion]) -> None:
     """Write generated test suggestions to test files."""
     test_dir = Path("tests/generated")
     test_dir.mkdir(exist_ok=True)
@@ -732,7 +750,8 @@ from unittest.mock import Mock, patch
             # Parse test functions
             tree = ast.parse(test_code)
             test_functions = [
-                node for node in ast.walk(tree)
+                node
+                for node in ast.walk(tree)
                 if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
             ]
 
@@ -741,9 +760,7 @@ from unittest.mock import Mock, patch
 
             # Analyze up to 5 test functions per file to avoid token limits
             for test_func in test_functions[:5]:
-                assessment = await self._assess_single_test(
-                    test_func, test_file_path, test_code
-                )
+                assessment = await self._assess_single_test(test_func, test_file_path, test_code)
                 if assessment:
                     assessments.append(assessment)
 
@@ -797,7 +814,7 @@ IMPROVEMENTS: suggestion1, suggestion2, suggestion3
 CONFIDENCE: 0.X""",
                 task_type="test_assessment",
                 max_tokens=1024,
-                temperature=0.2
+                temperature=0.2,
             )
 
             response = await self.llm_manager.process_request(request)
@@ -859,11 +876,17 @@ CONFIDENCE: 0.X""",
                         except ValueError:
                             pass
                     elif key == "REQUIREMENTS_COVERED":
-                        requirements_covered = [req.strip() for req in value.split(",") if req.strip()]
+                        requirements_covered = [
+                            req.strip() for req in value.split(",") if req.strip()
+                        ]
                     elif key == "MISSING_REQUIREMENTS":
-                        missing_requirements = [req.strip() for req in value.split(",") if req.strip()]
+                        missing_requirements = [
+                            req.strip() for req in value.split(",") if req.strip()
+                        ]
                     elif key == "BEHAVIORAL_ISSUES":
-                        behavioral_issues = [issue.strip() for issue in value.split(",") if issue.strip()]
+                        behavioral_issues = [
+                            issue.strip() for issue in value.split(",") if issue.strip()
+                        ]
                     elif key == "IMPROVEMENTS":
                         improvements = [imp.strip() for imp in value.split(",") if imp.strip()]
                     elif key == "CONFIDENCE":
@@ -882,7 +905,7 @@ CONFIDENCE: 0.X""",
                 missing_requirements=missing_requirements,
                 behavioral_issues=behavioral_issues,
                 improvement_suggestions=improvements,
-                confidence_score=confidence
+                confidence_score=confidence,
             )
 
         except Exception as e:
@@ -913,4 +936,6 @@ CONFIDENCE: 0.X""",
                 print(f"   • {req}")
 
             # Could prompt user for clarification here
-            print("\n💡 Consider adding tests for these requirements or clarifying if they're needed.")
+            print(
+                "\n💡 Consider adding tests for these requirements or clarifying if they're needed."
+            )

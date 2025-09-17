@@ -54,7 +54,7 @@ dev = [
 vibelint = "vibelint.cli:main"
 
 [project.entry-points."vibelint.validators"]
-# New semantic rule IDs (preferred) - now pointing to individual files
+# Semantic rule IDs pointing to individual validator classes
 "DOCSTRING-MISSING" = "vibelint.validators.docstring:MissingDocstringValidator"
 "DOCSTRING-PATH-REFERENCE" = "vibelint.validators.docstring:DocstringPathValidator"
 "EXPORTS-MISSING-ALL" = "vibelint.validators.exports:MissingAllValidator"
@@ -68,6 +68,9 @@ vibelint = "vibelint.cli:main"
 "ARCHITECTURE-LLM" = "vibelint.validators.architecture.llm_analysis:LLMAnalysisValidator"
 "SEMANTIC-SIMILARITY" = "vibelint.validators.architecture.semantic_similarity:SemanticSimilarityValidator"
 "FALLBACK-SILENT-FAILURE" = "vibelint.validators.architecture.fallback_patterns:FallbackAnalyzer"
+"API-CONSISTENCY" = "vibelint.validators.api_consistency:APIConsistencyValidator"
+"CODE-SMELLS" = "vibelint.validators.code_smells:CodeSmellValidator"
+"MODULE-COHESION" = "vibelint.validators.module_cohesion:ModuleCohesionValidator"
 
 
 [project.entry-points."vibelint.formatters"]
@@ -89,6 +92,10 @@ include = ["vibelint*"]
 # Simple configuration - most users just need this
 include_globs = ["src/**/*.py", "tests/**/*.py"]
 exclude_globs = ["tests/fixtures/*"]
+
+# Report configuration
+reports_dir = ".vibelint-reports"  # Directory for detailed analysis reports (gitignored)
+llm_trace_logs = true              # Log complete LLM workflow traces for debugging/auditing
 
 # Rule severity levels: "OFF", "INFO", "WARN", "BLOCK"
 [tool.vibelint.rules]
@@ -125,7 +132,7 @@ fast_max_context_tokens = 900  # Discovered via diagnostics (1k with 10% safety 
 # Automatic routing (when to use which LLM)
 context_threshold = 3000              # Use orchestrator for >3k tokens
 enable_context_probing = true         # Auto-discover actual limits
-enable_fallback = true                # Fallback between LLMs on failure
+enable_fallback = false               # Fail fast when configured models unavailable (unconfigured features gracefully degrade)
 
 # Thinking token removal configuration
 remove_thinking_tokens = true        # Set to false to keep all model output

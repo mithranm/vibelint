@@ -130,7 +130,7 @@ class DocstringPathValidator(BaseValidator):
             parts = file_path.parts
             if "src" in parts:
                 src_idx = parts.index("src")
-                module_parts = parts[src_idx + 1:]
+                module_parts = parts[src_idx + 1 :]
             else:
                 module_parts = parts
 
@@ -146,7 +146,10 @@ class DocstringPathValidator(BaseValidator):
                 # Try to find project root by looking for common markers
                 current = file_path.parent
                 while current.parent != current:
-                    if any((current / marker).exists() for marker in ["pyproject.toml", "setup.py", ".git"]):
+                    if any(
+                        (current / marker).exists()
+                        for marker in ["pyproject.toml", "setup.py", ".git"]
+                    ):
                         relative_path = str(file_path.relative_to(current))
                         break
                     current = current.parent

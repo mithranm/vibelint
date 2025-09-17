@@ -1,0 +1,107 @@
+{
+  "summary": {
+    "INFO": 12,
+    "WARN": 8,
+    "BLOCK": 0
+  },
+  "findings": [
+    {
+      "rule": "LONG-METHOD",
+      "level": "WARN",
+      "path": "src/example/validator.py",
+      "line": 45,
+      "column": 0,
+      "msg": "Method 'process_large_dataset' is too long (67 lines)",
+      "context": "def process_large_dataset(self, data, config, options):",
+      "suggestion": "Break method into smaller, focused functions"
+    },
+    {
+      "rule": "MAGIC-NUMBER",
+      "level": "INFO",
+      "path": "src/example/config.py",
+      "line": 23,
+      "column": 16,
+      "msg": "Magic number '42' should be named constant",
+      "context": "        timeout = 42",
+      "suggestion": "Replace with named constant: DEFAULT_TIMEOUT = 42"
+    },
+    {
+      "rule": "FALLBACK-SILENT-FAILURE",
+      "level": "WARN",
+      "path": "src/example/api.py",
+      "line": 89,
+      "column": 8,
+      "msg": "Exception handler for ConnectionError swallows errors silently. Consider logging the error or re-raising if appropriate.",
+      "context": "        except ConnectionError:\n            return None",
+      "suggestion": "Add logging: logger.warning('Connection failed: %s', e) or re-raise if caller should handle"
+    },
+    {
+      "rule": "MESSAGE-CHAIN",
+      "level": "INFO",
+      "path": "src/example/parser.py",
+      "line": 156,
+      "column": 12,
+      "msg": "Long message chain detected (4 levels)",
+      "context": "result = self.config.database.connection.session.query()",
+      "suggestion": "Consider introducing intermediate methods to reduce coupling"
+    },
+    {
+      "rule": "DEAD-CODE-FOUND",
+      "level": "INFO",
+      "path": "src/example/utils.py",
+      "line": 203,
+      "column": 0,
+      "msg": "Function/class 'legacy_formatter' is defined but never referenced",
+      "context": "def legacy_formatter(data):",
+      "suggestion": "Consider removing unused definition or adding to __all__"
+    },
+    {
+      "rule": "UNCOMMUNICATIVE-NAME",
+      "level": "INFO",
+      "path": "src/example/processor.py",
+      "line": 34,
+      "column": 8,
+      "msg": "Uncommunicative function name 'proc'",
+      "context": "def proc(d, cfg):",
+      "suggestion": "Use descriptive name that explains function purpose"
+    },
+    {
+      "rule": "TYPING-POOR-PRACTICE",
+      "level": "WARN",
+      "path": "src/example/handler.py",
+      "line": 78,
+      "column": 4,
+      "msg": "Public function 'handle_request(data)' is missing type annotations",
+      "context": "def handle_request(data):",
+      "suggestion": "Add type hints: def handle_request(data: RequestData) -> Response:"
+    },
+    {
+      "rule": "ARCHITECTURE-LLM",
+      "level": "WARN",
+      "path": "src/example/service.py",
+      "line": 112,
+      "column": 0,
+      "msg": "Class 'DataProcessor' violates Single Responsibility Principle - handles both data validation and file I/O operations",
+      "context": "class DataProcessor:",
+      "suggestion": "Consider splitting into DataValidator and FileManager classes"
+    }
+  ],
+  "namespace_collisions": {
+    "hard_collisions": 0,
+    "global_soft_collisions": 1,
+    "local_soft_collisions": 0,
+    "details": {
+      "global_definitions": [
+        {
+          "name": "logger",
+          "files": [
+            "src/example/api.py",
+            "src/example/config.py",
+            "src/example/handler.py",
+            "src/example/processor.py"
+          ]
+        }
+      ]
+    }
+  }
+}

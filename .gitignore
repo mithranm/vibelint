@@ -11,3 +11,11 @@ __pycache__/
 .pytest_cache
 .tox
 debug.txt
+
+# Vibelint analysis reports - not committed
+.vibelint-reports/*
+# Keep examples for documentation
+!.vibelint-reports/example-analysis.json
+!.vibelint-reports/example-llm-trace.json
+!.vibelint-reports/example-single-llm-config.toml
+!.vibelint-reports/README.md
