@@ -26,14 +26,13 @@ else:
     try:
 
         import tomli as tomllib
-    except ImportError:
+    except ImportError as e:
 
-        logger.error(
+        raise ImportError(
             "vibelint requires Python 3.11+ or the 'tomli' package "
             "to parse pyproject.toml on Python 3.10. "
             "Hint: Try running: pip install tomli"
-        )
-        sys.exit(1)
+        ) from e
 
 
 class Config:
