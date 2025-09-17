@@ -9,6 +9,7 @@ vibelint/src/vibelint/cli.py
 
 import logging
 import random
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -24,21 +25,14 @@ import click
 from rich.logging import RichHandler
 from rich.table import Table
 
-# Import necessary functions for ASCII art
-from .ascii import scale_to_terminal_by_height
+# Core imports needed at module level
 from .config import Config, load_config
 from .console_utils import console
-from .diagnostics import run_benchmark, run_diagnostics
-from .formatters import DEFAULT_FORMAT, FORMAT_CHOICES
-from .namespace import (NamespaceCollision, build_namespace_tree,
-                        detect_global_definition_collisions,
-                        detect_hard_collisions, detect_local_export_collisions)
-from .report import write_report_content
-from .results import (CheckResult, CommandResult, NamespaceResult,
-                      SnapshotResult)
-from .snapshot import create_snapshot
-from .utils import find_project_root, get_relative_path
-from .validation_engine import run_plugin_validation
+from .results import CommandResult, CheckResult, NamespaceResult, SnapshotResult
+from .namespace import NamespaceCollision
+from .utils import get_relative_path
+
+# Lazy imports - these will be imported only when needed
 
 
 class VibelintContext:
@@ -84,6 +78,7 @@ def _present_check_results(result: CheckResult, runner):
 
     vibelint/src/vibelint/cli.py
     """
+
     runner._print_summary()
     files_with_issues = sorted(
         [lr for lr in runner.results if lr.has_issues], key=lambda r: r.file_path
@@ -396,6 +391,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
     ctx.ensure_object(VibelintContext)
     vibelint_ctx: VibelintContext = ctx.obj
 
+    from .utils import find_project_root
     project_root = find_project_root(Path("."))
     vibelint_ctx.project_root = project_root
 
@@ -438,6 +434,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
             vibechecker_ref = pkg_resources.files("vibelint").joinpath("VIBECHECKER.txt")
             if vibechecker_ref.is_file():
                 try:
+                    from .ascii import scale_to_terminal_by_height
                     # Read content directly using the reference
                     art = vibechecker_ref.read_text(encoding="utf-8")
                     scaled_art = scale_to_terminal_by_height(art)
@@ -489,8 +486,8 @@ def cli(ctx: click.Context, debug: bool) -> None:
 @click.option(
     "--format",
     "output_format",
-    default=DEFAULT_FORMAT,
-    type=click.Choice(FORMAT_CHOICES),
+    default="natural",
+    type=click.Choice(["natural", "human", "json", "sarif"]),
     help="Report format: natural (default, optimized for humans and AI agents), human (alias for natural), json, or sarif.",
 )
 @click.option(
@@ -647,6 +644,7 @@ def check(
         else:
             logger_cli.debug("Using configured include_globs for project-wide analysis")
 
+        from .validation_engine import run_plugin_validation
         plugin_runner = run_plugin_validation(config_dict, project_root, include_globs_override)
 
         # Apply fixes if --fix flag is provided
@@ -692,8 +690,12 @@ def check(
                     else:
                         console.print("[yellow]No fixes could be applied automatically[/yellow]")
 
-                except Exception as e:
-                    console.print(f"[red]Error applying fixes: {e}[/red]")
+                except (OSError, IOError) as e:
+                    console.print(f"[red]File I/O error applying fixes: {e}[/red]")
+                except (RuntimeError, ValueError) as e:
+                    console.print(f"[red]Configuration or validation error applying fixes: {e}[/red]")
+                except ImportError as e:
+                    console.print(f"[red]Missing dependency for fix engine: {e}[/red]")
             else:
                 console.print("[yellow]No fixable issues found[/yellow]")
 
@@ -719,6 +721,8 @@ def check(
         # Then check for namespace collisions
         logger_cli.debug("Checking for namespace vibe collisions...")
         target_paths: list[Path] = [project_root]
+        from .namespace import (detect_hard_collisions, detect_global_definition_collisions,
+                               detect_local_export_collisions)
         result_data.hard_collisions = detect_hard_collisions(target_paths, config)
         result_data.global_soft_collisions = detect_global_definition_collisions(
             target_paths, config
@@ -748,6 +752,8 @@ def check(
             logger_cli.info(f"Generating detailed Vibe Report to {report_path}...")
             try:
                 report_path.parent.mkdir(parents=True, exist_ok=True)
+                from .namespace import build_namespace_tree
+                from .report import write_report_content
                 # Pass the non-None target_paths here too
                 root_node_for_report, _ = build_namespace_tree(target_paths, config)
                 if root_node_for_report is None:
@@ -833,6 +839,7 @@ def namespace(ctx: click.Context, output: Path | None) -> None:
         # Use the non-None project_root for target_paths
         target_paths: list[Path] = [project_root]
         logger_cli.info("Building namespace tree...")
+        from .namespace import build_namespace_tree
         # Pass the non-None target_paths here too
         root_node, intra_file_collisions = build_namespace_tree(target_paths, config)
         result_data.root_node = root_node
@@ -909,6 +916,7 @@ def snapshot(ctx: click.Context, output: Path) -> None:
         target_paths: list[Path] = [project_root]
         logger_cli.info(f"Creating codebase snapshot at {output_path}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        from .snapshot import create_snapshot
         # Pass the non-None target_paths here too
         create_snapshot(output_path=output_path, target_paths=target_paths, config=config)
         result_data.success = True
@@ -1063,8 +1071,10 @@ custom_thinking_patterns = {suggestions}"""
                     "\n[bold green]OK - No thinking tokens detected in this file.[/bold green]"
                 )
 
-        except Exception as e:
+        except (OSError, IOError, UnicodeDecodeError) as e:
             console.print(f"[bold red]Error reading file: {e}[/bold red]")
+        except ImportError as e:
+            console.print(f"[bold red]Missing validator dependency: {e}[/bold red]")
 
     else:
         # Show general help
@@ -1106,19 +1116,33 @@ def diagnostics_cmd(benchmark: bool, test: bool) -> None:
     if benchmark:
         console.print("[bold blue]Running LLM performance benchmark...[/bold blue]")
         try:
+            from .diagnostics import run_benchmark
             run_benchmark()
             console.print("[green]Benchmark completed successfully[/green]")
-        except Exception as e:
-            console.print(f"[red]Benchmark failed: {e}[/red]")
+        except ImportError as e:
+            console.print(f"[red]Benchmark dependencies missing: {e}[/red]")
+            sys.exit(1)
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+            console.print(f"[red]Benchmark subprocess failed: {e}[/red]")
+            sys.exit(1)
+        except (OSError, IOError) as e:
+            console.print(f"[red]Benchmark I/O error: {e}[/red]")
             sys.exit(1)
 
     if test:
         console.print("[bold blue]Running diagnostic tests...[/bold blue]")
         try:
+            from .diagnostics import run_diagnostics
             run_diagnostics()
             console.print("[green]Diagnostics completed successfully[/green]")
-        except Exception as e:
-            console.print(f"[red]Diagnostics failed: {e}[/red]")
+        except ImportError as e:
+            console.print(f"[red]Diagnostics dependencies missing: {e}[/red]")
+            sys.exit(1)
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+            console.print(f"[red]Diagnostics subprocess failed: {e}[/red]")
+            sys.exit(1)
+        except (OSError, IOError) as e:
+            console.print(f"[red]Diagnostics I/O error: {e}[/red]")
             sys.exit(1)
 
 

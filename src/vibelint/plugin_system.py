@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Protocol
+from typing import Any, Dict, Iterator, List, Optional, Protocol, Type
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +78,10 @@ class Validator(Protocol):
     default_severity: Severity
 
     def __init__(
-        self, severity: Optional[Severity] = None, config: Optional[Dict] = None
+        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
     ) -> None: ...
 
-    def validate(self, file_path: Path, content: str, config: Any) -> Iterator[Finding]:
+    def validate(self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None) -> Iterator[Finding]:
         """Validate a file and yield findings."""
         ...
 
@@ -104,33 +104,33 @@ class Formatter(Protocol):
     name: str
 
     def format_results(
-        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Dict[str, Any]] = None
     ) -> str:
         """Format validation results for output."""
         ...
 
 
 # Simple registry - no complex plugin discovery needed
-_VALIDATORS: Dict[str, type] = {}
-_FORMATTERS: Dict[str, type] = {}
+_VALIDATORS: Dict[str, Type[Validator]] = {}
+_FORMATTERS: Dict[str, Type[Formatter]] = {}
 
 
-def register_validator(validator_class: type) -> None:
+def register_validator(validator_class: Type[Validator]) -> None:
     """Register a validator class."""
     _VALIDATORS[validator_class.rule_id] = validator_class
 
 
-def register_formatter(formatter_class: type) -> None:
+def register_formatter(formatter_class: Type[Formatter]) -> None:
     """Register a formatter class."""
     _FORMATTERS[formatter_class.name] = formatter_class
 
 
-def get_validator(rule_id: str) -> Optional[type]:
+def get_validator(rule_id: str) -> Optional[Type[Validator]]:
     """Get validator class by rule ID."""
     return _VALIDATORS.get(rule_id)
 
 
-def get_all_validators() -> Dict[str, type]:
+def get_all_validators() -> Dict[str, Type[Validator]]:
     """Get all registered validator classes."""
     # Lazy load validators from entry points on first access
     if not _VALIDATORS:
@@ -138,12 +138,12 @@ def get_all_validators() -> Dict[str, type]:
     return _VALIDATORS.copy()
 
 
-def get_formatter(name: str) -> Optional[type]:
+def get_formatter(name: str) -> Optional[Type[Formatter]]:
     """Get formatter class by name."""
     return _FORMATTERS.get(name)
 
 
-def get_all_formatters() -> Dict[str, type]:
+def get_all_formatters() -> Dict[str, Type[Formatter]]:
     """Get all registered formatter classes."""
     # Lazy load formatters from entry points on first access
     if not _FORMATTERS:
@@ -188,11 +188,11 @@ class BaseValidator:
     rule_id: str = ""
     default_severity: Severity = Severity.WARN
 
-    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict] = None) -> None:
+    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None) -> None:
         self.severity = severity or self.default_severity
         self.config = config or {}
 
-    def validate(self, file_path: Path, content: str, config: Any) -> Iterator[Finding]:
+    def validate(self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None) -> Iterator[Finding]:
         """Validate a file and yield findings."""
         raise NotImplementedError
 
@@ -226,7 +226,7 @@ class BaseFormatter(ABC):
 
     @abstractmethod
     def format_results(
-        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Any] = None
+        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Dict[str, Any]] = None
     ) -> str:
         """Format validation results for output."""
         pass
