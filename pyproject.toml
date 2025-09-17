@@ -99,8 +99,8 @@ exclude_globs = ["tests/fixtures/*"]
 
 # LLM configuration (required for AI analysis)
 [tool.vibelint.llm_analysis]
-api_base_url = "http://100.94.250.88:11434"
-model = "/home/mithranmohanraj/models/gpt-oss-20b-mxfp4.gguf"
+api_base_url = "http://100.94.250.88:8001"
+model = "openai/gpt-oss-20b"
 temperature = 0.1
 max_tokens = 2048
 

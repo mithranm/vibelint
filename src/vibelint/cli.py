@@ -28,8 +28,9 @@ from rich.table import Table
 # Core imports needed at module level
 from .config import Config, load_config
 from .console_utils import console
-from .results import CommandResult, CheckResult, NamespaceResult, SnapshotResult
 from .namespace import NamespaceCollision
+from .results import (CheckResult, CommandResult, NamespaceResult,
+                      SnapshotResult)
 from .utils import get_relative_path
 
 # Lazy imports - these will be imported only when needed
@@ -392,6 +393,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
     vibelint_ctx: VibelintContext = ctx.obj
 
     from .utils import find_project_root
+
     project_root = find_project_root(Path("."))
     vibelint_ctx.project_root = project_root
 
@@ -435,6 +437,7 @@ def cli(ctx: click.Context, debug: bool) -> None:
             if vibechecker_ref.is_file():
                 try:
                     from .ascii import scale_to_terminal_by_height
+
                     # Read content directly using the reference
                     art = vibechecker_ref.read_text(encoding="utf-8")
                     scaled_art = scale_to_terminal_by_height(art)
@@ -649,10 +652,14 @@ def check(
             for rule_id, validator_class in all_validators.items():
                 module_name = validator_class.__module__
                 # AI validators are typically in architecture modules or have LLM in the name
-                if ('llm' in module_name.lower() or 'ai' in module_name.lower() or
-                    'architecture' in module_name.lower() or 'llm' in rule_id.lower()):
+                if (
+                    "llm" in module_name.lower()
+                    or "ai" in module_name.lower()
+                    or "architecture" in module_name.lower()
+                    or "llm" in rule_id.lower()
+                ):
                     ai_rules.add(rule_id)
-                elif 'emoji' in module_name.lower() or 'print' in module_name.lower():
+                elif "emoji" in module_name.lower() or "print" in module_name.lower():
                     core_rules.add(rule_id)
                 else:
                     static_rules.add(rule_id)
@@ -689,6 +696,7 @@ def check(
             logger_cli.debug("Using configured include_globs for project-wide analysis")
 
         from .validation_engine import run_plugin_validation
+
         plugin_runner = run_plugin_validation(config_dict, project_root, include_globs_override)
 
         # Apply fixes if --fix flag is provided
@@ -737,7 +745,9 @@ def check(
                 except (OSError, IOError) as e:
                     console.print(f"[red]File I/O error applying fixes: {e}[/red]")
                 except (RuntimeError, ValueError) as e:
-                    console.print(f"[red]Configuration or validation error applying fixes: {e}[/red]")
+                    console.print(
+                        f"[red]Configuration or validation error applying fixes: {e}[/red]"
+                    )
                 except ImportError as e:
                     console.print(f"[red]Missing dependency for fix engine: {e}[/red]")
             else:
@@ -765,8 +775,10 @@ def check(
         # Then check for namespace collisions
         logger_cli.debug("Checking for namespace vibe collisions...")
         target_paths: list[Path] = [project_root]
-        from .namespace import (detect_hard_collisions, detect_global_definition_collisions,
-                               detect_local_export_collisions)
+        from .namespace import (detect_global_definition_collisions,
+                                detect_hard_collisions,
+                                detect_local_export_collisions)
+
         result_data.hard_collisions = detect_hard_collisions(target_paths, config)
         result_data.global_soft_collisions = detect_global_definition_collisions(
             target_paths, config
@@ -798,6 +810,7 @@ def check(
                 report_path.parent.mkdir(parents=True, exist_ok=True)
                 from .namespace import build_namespace_tree
                 from .report import write_report_content
+
                 # Pass the non-None target_paths here too
                 root_node_for_report, _ = build_namespace_tree(target_paths, config)
                 if root_node_for_report is None:
@@ -884,6 +897,7 @@ def namespace(ctx: click.Context, output: Path | None) -> None:
         target_paths: list[Path] = [project_root]
         logger_cli.info("Building namespace tree...")
         from .namespace import build_namespace_tree
+
         # Pass the non-None target_paths here too
         root_node, intra_file_collisions = build_namespace_tree(target_paths, config)
         result_data.root_node = root_node
@@ -961,6 +975,7 @@ def snapshot(ctx: click.Context, output: Path) -> None:
         logger_cli.info(f"Creating codebase snapshot at {output_path}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         from .snapshot import create_snapshot
+
         # Pass the non-None target_paths here too
         create_snapshot(output_path=output_path, target_paths=target_paths, config=config)
         result_data.success = True
@@ -1161,6 +1176,7 @@ def diagnostics_cmd(benchmark: bool, test: bool) -> None:
         console.print("[bold blue]Running LLM performance benchmark...[/bold blue]")
         try:
             from .diagnostics import run_benchmark
+
             run_benchmark()
             console.print("[green]Benchmark completed successfully[/green]")
         except ImportError as e:
@@ -1177,6 +1193,7 @@ def diagnostics_cmd(benchmark: bool, test: bool) -> None:
         console.print("[bold blue]Running diagnostic tests...[/bold blue]")
         try:
             from .diagnostics import run_diagnostics
+
             run_diagnostics()
             console.print("[green]Diagnostics completed successfully[/green]")
         except ImportError as e:
@@ -1188,6 +1205,108 @@ def diagnostics_cmd(benchmark: bool, test: bool) -> None:
         except (OSError, IOError) as e:
             console.print(f"[red]Diagnostics I/O error: {e}[/red]")
             sys.exit(1)
+
+
+@cli.command("regen-docstrings")
+@click.argument(
+    "paths",
+    nargs=-1,
+    type=click.Path(exists=True, path_type=Path),
+    required=False,
+)
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
+@click.pass_context
+def regen_docstrings_cmd(ctx: click.Context, paths: tuple[Path, ...], yes: bool) -> None:
+    """
+    Regenerate ALL docstrings in Python files using LLM.
+
+    PATHS: Optional paths to files or directories to process. When provided,
+    these override the include_globs configuration and process only the specified paths.
+
+    WARNING: This will replace ALL existing docstrings with LLM-generated ones.
+    Only the docstring content is generated by LLM - all syntax changes are deterministic.
+
+    Examples:
+        vibelint regen-docstrings                    # Process entire project
+        vibelint regen-docstrings src/               # Process only src directory
+        vibelint regen-docstrings file.py            # Process single file
+        vibelint regen-docstrings src/ tests/        # Process multiple paths
+
+    tools/vibelint/src/vibelint/cli.py
+    """
+    vibelint_ctx: VibelintContext = ctx.obj
+    project_root = vibelint_ctx.project_root
+    assert project_root is not None, "Project root missing in regen-docstrings command"
+
+    console.print("\n[bold magenta]Regenerating docstrings using LLM...[/bold magenta]\n")
+
+    config: Config = load_config(project_root)
+    if config.project_root is None:
+        logger_cli.error("Project root lost after config load. Aborting docstring regeneration.")
+        ctx.exit(1)
+
+    # Check if LLM is configured
+    llm_config = config.settings.get("llm_analysis", {})
+    if not llm_config.get("api_base_url"):
+        console.print("[bold red]Error:[/bold red] No LLM API configured in pyproject.toml")
+        console.print(
+            "Add [tool.vibelint.llm_analysis] section with api_base_url and model settings."
+        )
+        ctx.exit(1)
+
+    # Collect files to process
+    if paths:
+        # Process specified paths
+        target_files = []
+        for path in paths:
+            if path.is_file() and path.suffix == ".py":
+                target_files.append(path)
+            elif path.is_dir():
+                target_files.extend(path.rglob("*.py"))
+        logger_cli.info(f"Processing {len(target_files)} files from specified paths")
+    else:
+        # Use project include_globs
+        from .discovery import discover_python_files
+
+        target_files = list(discover_python_files([project_root], config))
+        logger_cli.info(f"Processing {len(target_files)} files from project include_globs")
+
+    if not target_files:
+        console.print("[yellow]No Python files found to process.[/yellow]")
+        ctx.exit(0)
+
+    # Show confirmation unless --yes is provided
+    if not yes:
+        console.print(
+            f"[bold yellow]WARNING:[/bold yellow] This will regenerate docstrings in {len(target_files)} Python files."
+        )
+        console.print("All existing docstrings will be replaced with LLM-generated content.")
+
+        if not click.confirm("Do you want to continue?"):
+            console.print("Operation cancelled.")
+            ctx.exit(0)
+
+    # Process files
+    console.print(f"\n[bold blue]Processing {len(target_files)} files...[/bold blue]")
+
+    try:
+        import asyncio
+
+        from .fix import regenerate_all_docstrings
+
+        processed_count = asyncio.run(regenerate_all_docstrings(config, target_files))
+
+        if processed_count > 0:
+            console.print(
+                f"[green]Successfully regenerated docstrings in {processed_count} files.[/green]"
+            )
+        else:
+            console.print("[yellow]No docstrings were regenerated.[/yellow]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error during docstring regeneration:[/bold red] {e}")
+        logger_cli.error("Docstring regeneration failed", exc_info=True)
+        ctx.exit(1)
 
 
 def main() -> None:

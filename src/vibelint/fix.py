@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 from .config import Config
 from .plugin_system import Finding
 
-__all__ = ["FixEngine", "can_fix_finding", "apply_fixes"]
+__all__ = ["FixEngine", "can_fix_finding", "apply_fixes", "regenerate_all_docstrings"]
 
 logger = logging.getLogger(__name__)
 
@@ -327,3 +327,159 @@ def can_fix_finding(finding: Finding) -> bool:
         "DOCSTRING-PATH-REFERENCE",
         "EXPORTS-MISSING-ALL",
     }
+
+
+async def regenerate_all_docstrings(config: Config, file_paths: List[Path]) -> int:
+    """Regenerate ALL docstrings in the specified files using LLM.
+
+    Unlike apply_fixes which only adds missing docstrings, this function
+    regenerates existing docstrings as well for consistency and improved quality.
+
+    Returns the number of files successfully processed.
+
+    vibelint/src/vibelint/fix.py
+    """
+    engine = FixEngine(config)
+    processed_count = 0
+
+    if not engine.llm_config.get("api_base_url"):
+        logger.error("No LLM API configured. Cannot regenerate docstrings.")
+        return 0
+
+    for file_path in file_paths:
+        try:
+            if await _regenerate_docstrings_in_file(engine, file_path):
+                processed_count += 1
+                logger.info(f"Regenerated docstrings in {file_path}")
+            else:
+                logger.debug(f"No docstrings to regenerate in {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to regenerate docstrings in {file_path}: {e}")
+
+    return processed_count
+
+
+async def _regenerate_docstrings_in_file(engine: FixEngine, file_path: Path) -> bool:
+    """Regenerate all docstrings in a single file.
+
+    Returns True if any docstrings were regenerated.
+
+    vibelint/src/vibelint/fix.py
+    """
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        lines = content.splitlines()
+
+        # Parse the file to find all functions and classes
+        tree = ast.parse(content)
+        modifications = {}
+
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                await _regenerate_node_docstring(engine, node, lines, modifications, file_path)
+
+        if modifications:
+            # Apply modifications
+            result_content = _apply_line_modifications(lines, modifications)
+            file_path.write_text(result_content, encoding="utf-8")
+            return True
+
+        return False
+
+    except (OSError, UnicodeDecodeError, SyntaxError) as e:
+        logger.error(f"Error processing {file_path}: {e}")
+        return False
+
+
+async def _regenerate_node_docstring(
+    engine: FixEngine,
+    node: ast.AST,
+    lines: List[str],
+    modifications: Dict[int, str],
+    file_path: Path,
+) -> None:
+    """Regenerate docstring for a specific AST node.
+
+    vibelint/src/vibelint/fix.py
+    """
+    # Get current docstring if it exists
+    current_docstring = ast.get_docstring(node)
+
+    # Generate new docstring content
+    new_docstring_content = await engine._generate_docstring_content(node, file_path)
+
+    if not new_docstring_content:
+        return
+
+    # Determine indentation
+    node_line = node.lineno - 1
+    if node_line < len(lines):
+        indent = len(lines[node_line]) - len(lines[node_line].lstrip())
+        indent_str = " " * (indent + 4)  # Add 4 spaces for function/class body
+    else:
+        indent_str = "    "  # Default indentation
+
+    # Format the new docstring with path reference
+    new_docstring = (
+        f'{indent_str}"""{new_docstring_content}\n\n{indent_str}{file_path}\n{indent_str}"""'
+    )
+
+    if current_docstring:
+        # Replace existing docstring - NEVER touch the function/class definition line
+        docstring_start_line = None
+        docstring_end_line = None
+
+        # Find the actual docstring lines (not the function/class definition)
+        for i in range(node.lineno, len(lines)):  # Start AFTER the def/class line
+            line = lines[i].strip()
+            if line.startswith('"""') or line.startswith("'''"):
+                docstring_start_line = i
+                # Find the end of this docstring
+                quote_type = '"""' if line.startswith('"""') else "'''"
+                quote_count = line.count(quote_type)
+
+                if quote_count >= 2:  # Single-line docstring
+                    docstring_end_line = i
+                    break
+                else:  # Multi-line docstring
+                    for j in range(i + 1, len(lines)):
+                        if quote_type in lines[j]:
+                            docstring_end_line = j
+                            break
+                break
+
+        if docstring_start_line is not None and docstring_end_line is not None:
+            # Replace only the docstring lines, never the function/class definition
+            for line_num in range(docstring_start_line, docstring_end_line + 1):
+                if line_num == docstring_start_line:
+                    modifications[line_num] = new_docstring
+                else:
+                    modifications[line_num] = ""  # Remove other docstring lines
+    else:
+        # Add new docstring after function/class definition
+        insert_line = node.lineno  # Line after def/class
+        modifications[insert_line] = new_docstring
+
+
+def _apply_line_modifications(lines: List[str], modifications: Dict[int, str]) -> str:
+    """Apply line modifications to content deterministically.
+
+    vibelint/src/vibelint/fix.py
+    """
+    result_lines = lines[:]
+
+    # Sort modifications by line number in reverse order to avoid index shifting
+    sorted_modifications = sorted(modifications.items(), reverse=True)
+
+    for line_num, new_content in sorted_modifications:
+        if line_num < len(result_lines):
+            if new_content == "":
+                # Remove line
+                result_lines.pop(line_num)
+            else:
+                result_lines[line_num] = new_content
+        elif new_content:
+            # Insert at end
+            result_lines.append(new_content)
+
+    return "\n".join(result_lines)

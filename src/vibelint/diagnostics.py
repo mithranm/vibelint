@@ -7,12 +7,15 @@ LLM integration, and analysis quality.
 tools/vibelint/src/vibelint/diagnostics.py
 """
 
+import logging
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["LLMBenchmark", "VibelintDiagnostics"]
 
@@ -70,7 +73,7 @@ def medium_function(data: Dict[str, Any]) -> List[str]:
         results = {"benchmark_results": [], "summary": {}}
 
         for size_name, file_path, char_count in test_files:
-            print(f"Benchmarking {size_name} file ({char_count} chars)...")
+            logger.info(f"Benchmarking {size_name} file ({char_count} chars)...")
 
             start_time = time.time()
             try:
@@ -102,10 +105,10 @@ def medium_function(data: Dict[str, Any]) -> List[str]:
                 }
 
                 results["benchmark_results"].append(benchmark_result)
-                print(f"  Duration: {duration:.2f}s")
+                logger.info(f"  Duration: {duration:.2f}s")
 
             except subprocess.TimeoutExpired:
-                print("  TIMEOUT after 120s")
+                logger.warning("  TIMEOUT after 120s")
                 results["benchmark_results"].append(
                     {
                         "file_size": size_name,
@@ -156,7 +159,7 @@ class VibelintDiagnostics:
         results = {"test_results": [], "summary": {}}
 
         for test_name, test_content in test_cases:
-            print(f"Testing AI analysis: {test_name}")
+            logger.info(f"Testing AI analysis: {test_name}")
 
             test_file = self.create_test_file(test_content, test_name)
 
@@ -185,10 +188,10 @@ class VibelintDiagnostics:
                 }
 
                 results["test_results"].append(test_result)
-                print(f"  Result: {'PASS' if test_result['success'] else 'FAIL'}")
+                logger.info(f"  Result: {'PASS' if test_result['success'] else 'FAIL'}")
 
             except subprocess.TimeoutExpired:
-                print("  TIMEOUT")
+                logger.warning("  TIMEOUT")
                 results["test_results"].append(
                     {"test_name": test_name, "success": False, "error": "timeout"}
                 )
@@ -215,7 +218,7 @@ class VibelintDiagnostics:
             shutil.rmtree(self.temp_dir)
 
 
-def run_benchmark():
+def run_benchmark() -> Dict[str, Any]:
     """Run LLM benchmark and print results."""
     benchmark = LLMBenchmark()
     try:
@@ -238,7 +241,7 @@ def run_benchmark():
         benchmark.cleanup()
 
 
-def run_diagnostics():
+def run_diagnostics() -> Dict[str, Any]:
     """Run diagnostic tests and print results."""
     diagnostics = VibelintDiagnostics()
 

@@ -91,7 +91,7 @@ class LLMAnalysisValidator(BaseValidator):
         self.custom_thinking_patterns = llm_config.get("custom_thinking_patterns", [])
 
         # Diagnostics for optimal LLM utilization
-        self.enable_token_diagnostics = llm_config.get("enable_token_diagnostics", False)
+        self.enable_token_diagnostics = llm_config.get("enable_token_diagnostics", True)
         self.token_usage_stats = {
             "total_input_tokens": 0,
             "total_output_tokens": 0,
@@ -100,7 +100,7 @@ class LLMAnalysisValidator(BaseValidator):
         }
 
         # Dynamic context discovery
-        self.enable_context_probing = llm_config.get("enable_context_probing", False)
+        self.enable_context_probing = llm_config.get("enable_context_probing", True)
         self.discovered_context_limit = None
         self.context_probe_cache = {}
 

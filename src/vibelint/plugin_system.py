@@ -81,7 +81,9 @@ class Validator(Protocol):
         self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
     ) -> None: ...
 
-    def validate(self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None) -> Iterator[Finding]:
+    def validate(
+        self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None
+    ) -> Iterator[Finding]:
         """Validate a file and yield findings."""
         ...
 
@@ -104,7 +106,10 @@ class Formatter(Protocol):
     name: str
 
     def format_results(
-        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Dict[str, Any]] = None
+        self,
+        findings: List[Finding],
+        summary: Dict[str, int],
+        config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Format validation results for output."""
         ...
@@ -188,11 +193,15 @@ class BaseValidator:
     rule_id: str = ""
     default_severity: Severity = Severity.WARN
 
-    def __init__(self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
+    ) -> None:
         self.severity = severity or self.default_severity
         self.config = config or {}
 
-    def validate(self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None) -> Iterator[Finding]:
+    def validate(
+        self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None
+    ) -> Iterator[Finding]:
         """Validate a file and yield findings."""
         raise NotImplementedError
 
@@ -226,7 +235,10 @@ class BaseFormatter(ABC):
 
     @abstractmethod
     def format_results(
-        self, findings: List[Finding], summary: Dict[str, int], config: Optional[Dict[str, Any]] = None
+        self,
+        findings: List[Finding],
+        summary: Dict[str, int],
+        config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Format validation results for output."""
         pass
