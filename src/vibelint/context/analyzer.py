@@ -12,7 +12,7 @@ vibelint/src/vibelint/context_analyzer.py
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Any
+from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 

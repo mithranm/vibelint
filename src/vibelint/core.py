@@ -8,13 +8,12 @@ catalog and adapts to specific codebase contexts.
 vibelint/src/vibelint/core.py
 """
 
-import ast
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Iterator
 
-from .llm import LLMManager, LLMRequest, LLMRole
+from .llm import LLMManager, LLMRequest
 from .plugin_system import Finding, Severity
 
 logger = logging.getLogger(__name__)
