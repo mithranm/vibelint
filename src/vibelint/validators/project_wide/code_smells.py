@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
 
-from ..plugin_system import BaseValidator, Finding, Severity
+from ...plugin_system import BaseValidator, Finding, Severity
 
 logger = logging.getLogger(__name__)
 

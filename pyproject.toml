@@ -55,23 +55,33 @@ dev = [
 vibelint = "vibelint.cli:main"
 
 [project.entry-points."vibelint.validators"]
-# Semantic rule IDs pointing to individual validator classes
-"DOCSTRING-MISSING" = "vibelint.validators.docstring:MissingDocstringValidator"
-"DOCSTRING-PATH-REFERENCE" = "vibelint.validators.docstring:DocstringPathValidator"
-"EXPORTS-MISSING-ALL" = "vibelint.validators.exports:MissingAllValidator"
-"EXPORTS-MISSING-ALL-INIT" = "vibelint.validators.exports:InitAllValidator"
-"PRINT-STATEMENT" = "vibelint.validators.print_statements:PrintStatementValidator"
-"EMOJI-IN-STRING" = "vibelint.validators.emoji:EmojiUsageValidator"
-"LOGGER-NAME" = "vibelint.validators.logger_names:LoggerNameValidator"
-"DEAD-CODE-FOUND" = "vibelint.validators.dead_code:DeadCodeValidator"
+# Built-in validators - organized by type
+# Single-file validators (analyze individual files in isolation)
+"DOCSTRING-MISSING" = "vibelint.validators.single_file.docstring:MissingDocstringValidator"
+"DOCSTRING-PATH-REFERENCE" = "vibelint.validators.single_file.docstring:DocstringPathValidator"
+"EXPORTS-MISSING-ALL" = "vibelint.validators.single_file.exports:MissingAllValidator"
+"EXPORTS-MISSING-ALL-INIT" = "vibelint.validators.single_file.exports:InitAllValidator"
+"PRINT-STATEMENT" = "vibelint.validators.single_file.print_statements:PrintStatementValidator"
+"EMOJI-IN-STRING" = "vibelint.validators.single_file.emoji:EmojiUsageValidator"
+"LOGGER-NAME" = "vibelint.validators.single_file.logger_names:LoggerNameValidator"
+"TYPING-POOR-PRACTICE" = "vibelint.validators.single_file.typing_quality:TypingQualityValidator"
+"VIBELINT-SELF-VALIDATION" = "vibelint.validators.single_file.self_validation:VibelintSelfValidator"
+
+# Project-wide validators (require knowledge of entire project)
+"DEAD-CODE-FOUND" = "vibelint.validators.project_wide.dead_code:DeadCodeValidator"
+"API-CONSISTENCY" = "vibelint.validators.project_wide.api_consistency:APIConsistencyValidator"
+"CODE-SMELLS" = "vibelint.validators.project_wide.code_smells:CodeSmellValidator"
+"MODULE-COHESION" = "vibelint.validators.project_wide.module_cohesion:ModuleCohesionValidator"
+
+# Architecture validators (specialized project-wide analysis)
 "ARCHITECTURE-INCONSISTENT" = "vibelint.validators.architecture.basic_patterns:ArchitectureValidator"
-"TYPING-POOR-PRACTICE" = "vibelint.validators.typing_quality:TypingQualityValidator"
 "ARCHITECTURE-LLM" = "vibelint.validators.architecture.llm_analysis:LLMAnalysisValidator"
 "SEMANTIC-SIMILARITY" = "vibelint.validators.architecture.semantic_similarity:SemanticSimilarityValidator"
 "FALLBACK-SILENT-FAILURE" = "vibelint.validators.architecture.fallback_patterns:FallbackAnalyzer"
-"API-CONSISTENCY" = "vibelint.validators.api_consistency:APIConsistencyValidator"
-"CODE-SMELLS" = "vibelint.validators.code_smells:CodeSmellValidator"
-"MODULE-COHESION" = "vibelint.validators.module_cohesion:ModuleCohesionValidator"
+
+# Third-party validators can be added here by other packages:
+# Example:
+# "MY-CUSTOM-RULE" = "my_package.validators:MyCustomValidator"
 
 
 [project.entry-points."vibelint.formatters"]

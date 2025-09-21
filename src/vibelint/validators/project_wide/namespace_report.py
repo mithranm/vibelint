@@ -12,7 +12,7 @@ from typing import TextIO
 
 from ..config import Config
 from .namespace_collisions import NamespaceCollision, NamespaceNode
-from ..utils import get_relative_path
+from ...utils import get_relative_path
 
 __all__ = ["write_report_content"]
 logger = logging.getLogger(__name__)

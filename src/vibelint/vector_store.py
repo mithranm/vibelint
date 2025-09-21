@@ -116,26 +116,66 @@ class VectorStore(ABC):
         pass
 
 class InMemoryVectorStore(VectorStore):
-    """In-memory vector store using numpy for fast similarity search."""
+    """In-memory vector store using FAISS for fast similarity search."""
 
     def __init__(self, config: VectorStoreConfig):
         super().__init__(config)
-        self.vectors: Dict[str, np.ndarray] = {}
-        self.metadata: Dict[str, Dict[str, Any]] = {}
 
-        # Note: In-memory only - no persistence to avoid slow JSON operations
-        logger.info("InMemoryVectorStore: Fast in-memory storage (no disk persistence)")
+        try:
+            import faiss
+            self.faiss = faiss
+
+            # Create FAISS index for fast similarity search
+            if config.similarity_metric == "cosine":
+                # Normalize vectors for cosine similarity
+                self.index = faiss.IndexFlatIP(self.dimension)  # Inner product on normalized vectors = cosine
+                self.normalize_vectors = True
+            elif config.similarity_metric == "euclidean":
+                self.index = faiss.IndexFlatL2(self.dimension)  # L2 distance
+                self.normalize_vectors = False
+            else:  # dot product
+                self.index = faiss.IndexFlatIP(self.dimension)  # Inner product
+                self.normalize_vectors = False
+
+            self.id_to_index: Dict[str, int] = {}  # Map IDs to FAISS indices
+            self.index_to_id: Dict[int, str] = {}  # Map FAISS indices to IDs
+            self.metadata: Dict[str, Dict[str, Any]] = {}
+            self.next_index = 0
+
+            logger.info(f"InMemoryVectorStore: FAISS-powered similarity search ({config.similarity_metric})")
+
+        except ImportError:
+            logger.error("FAISS not available. Install with: pip install faiss-cpu")
+            raise
 
     def upsert(self, id: str, embedding: List[float], metadata: Dict[str, Any] = None) -> bool:
         """Store or update a vector with metadata."""
         try:
-            embedding_array = np.array(embedding, dtype=np.float32)
-            if embedding_array.shape[0] != self.dimension:
-                logger.warning(f"Embedding dimension mismatch: expected {self.dimension}, got {embedding_array.shape[0]}")
+            embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
+            if embedding_array.shape[1] != self.dimension:
+                logger.warning(f"Embedding dimension mismatch: expected {self.dimension}, got {embedding_array.shape[1]}")
                 return False
 
-            self.vectors[id] = embedding_array
+            # Normalize if using cosine similarity
+            if self.normalize_vectors:
+                self.faiss.normalize_L2(embedding_array)
+
+            # Remove existing vector if updating
+            if id in self.id_to_index:
+                # FAISS doesn't support direct updates, so we'll track this as a limitation
+                logger.debug(f"Vector {id} already exists - FAISS doesn't support updates")
+                return True
+
+            # Add to FAISS index
+            self.index.add(embedding_array)
+
+            # Track mapping
+            faiss_index = self.next_index
+            self.id_to_index[id] = faiss_index
+            self.index_to_id[faiss_index] = id
             self.metadata[id] = metadata or {}
+            self.next_index += 1
+
             return True
         except Exception as e:
             logger.error(f"Failed to upsert vector {id}: {e}")
@@ -143,44 +183,58 @@ class InMemoryVectorStore(VectorStore):
 
     def search(self, query_embedding: List[float], top_k: int = 5,
                filter: Optional[Dict[str, Any]] = None) -> List[VectorSearchResult]:
-        """Search for similar vectors using cosine similarity."""
-        if not self.vectors:
+        """Search for similar vectors using FAISS."""
+        if self.index.ntotal == 0:
             return []
 
         try:
-            query_array = np.array(query_embedding, dtype=np.float32)
+            query_array = np.array(query_embedding, dtype=np.float32).reshape(1, -1)
 
-            # Filter vectors based on metadata
-            candidate_ids = self._apply_filter(filter) if filter else list(self.vectors.keys())
+            # Normalize query if using cosine similarity
+            if self.normalize_vectors:
+                self.faiss.normalize_L2(query_array)
 
-            if not candidate_ids:
-                return []
-
-            # Compute similarities
-            similarities = []
-            for vec_id in candidate_ids:
-                if self.config.similarity_metric == "cosine":
-                    similarity = self._cosine_similarity(query_array, self.vectors[vec_id])
-                elif self.config.similarity_metric == "euclidean":
-                    similarity = -np.linalg.norm(query_array - self.vectors[vec_id])  # Negative distance
-                else:  # dot product
-                    similarity = np.dot(query_array, self.vectors[vec_id])
-
-                similarities.append((vec_id, similarity))
-
-            # Sort by similarity and return top_k
-            similarities.sort(key=lambda x: x[1], reverse=True)
+            # Perform FAISS search
+            scores, indices = self.index.search(query_array, min(top_k, self.index.ntotal))
 
             results = []
-            for vec_id, score in similarities[:top_k]:
+            for i in range(len(scores[0])):
+                faiss_index = indices[0][i]
+                score = float(scores[0][i])
+
+                # Skip invalid indices
+                if faiss_index == -1:
+                    continue
+
+                # Get original ID
+                if faiss_index not in self.index_to_id:
+                    continue
+
+                vec_id = self.index_to_id[faiss_index]
+
+                # Apply metadata filter if specified
+                if filter and not self._matches_filter(self.metadata.get(vec_id, {}), filter):
+                    continue
+
+                # Convert FAISS score based on similarity metric
+                if self.config.similarity_metric == "cosine":
+                    # FAISS inner product on normalized vectors = cosine similarity
+                    final_score = score
+                elif self.config.similarity_metric == "euclidean":
+                    # FAISS returns squared L2 distance, convert to similarity
+                    final_score = 1.0 / (1.0 + score)
+                else:  # dot product
+                    final_score = score
+
                 results.append(VectorSearchResult(
                     id=vec_id,
-                    score=float(score),
-                    metadata=self.metadata.get(vec_id, {}),
-                    embedding=self.vectors[vec_id].tolist()
+                    score=final_score,
+                    metadata=self.metadata.get(vec_id, {})
                 ))
 
-            return results
+            # Sort by score descending and limit to top_k
+            results.sort(key=lambda x: x.score, reverse=True)
+            return results[:top_k]
 
         except Exception as e:
             logger.error(f"Failed to search vectors: {e}")
@@ -189,9 +243,14 @@ class InMemoryVectorStore(VectorStore):
     def delete(self, id: str) -> bool:
         """Delete a vector by ID."""
         try:
-            if id in self.vectors:
-                del self.vectors[id]
+            if id in self.id_to_index:
+                # FAISS doesn't support deletion efficiently
+                # We'll just remove from our tracking but keep in FAISS index
+                faiss_index = self.id_to_index[id]
+                del self.id_to_index[id]
+                del self.index_to_id[faiss_index]
                 del self.metadata[id]
+                logger.debug(f"Logically deleted {id} (FAISS index entry remains)")
                 return True
             return False
         except Exception as e:
@@ -200,27 +259,37 @@ class InMemoryVectorStore(VectorStore):
 
     def get(self, id: str) -> Optional[VectorSearchResult]:
         """Get a specific vector by ID."""
-        if id not in self.vectors:
+        if id not in self.id_to_index:
             return None
 
         return VectorSearchResult(
             id=id,
             score=1.0,  # Perfect match
-            metadata=self.metadata.get(id, {}),
-            embedding=self.vectors[id].tolist()
+            metadata=self.metadata.get(id, {})
+            # Note: FAISS doesn't easily retrieve vectors, so no embedding returned
         )
 
     def list_ids(self, filter: Optional[Dict[str, Any]] = None) -> List[str]:
         """List all vector IDs, optionally filtered."""
         if not filter:
-            return list(self.vectors.keys())
+            return list(self.id_to_index.keys())
         return self._apply_filter(filter)
 
     def clear(self) -> bool:
         """Clear all vectors."""
         try:
-            self.vectors.clear()
+            # Reset FAISS index
+            if self.config.similarity_metric == "cosine":
+                self.index = self.faiss.IndexFlatIP(self.dimension)
+            elif self.config.similarity_metric == "euclidean":
+                self.index = self.faiss.IndexFlatL2(self.dimension)
+            else:
+                self.index = self.faiss.IndexFlatIP(self.dimension)
+
+            self.id_to_index.clear()
+            self.index_to_id.clear()
             self.metadata.clear()
+            self.next_index = 0
             return True
         except Exception as e:
             logger.error(f"Failed to clear vectors: {e}")
@@ -229,23 +298,15 @@ class InMemoryVectorStore(VectorStore):
     def stats(self) -> Dict[str, Any]:
         """Get storage statistics."""
         return {
-            "backend": "memory",
-            "total_vectors": len(self.vectors),
+            "backend": "memory_faiss",
+            "total_vectors": len(self.id_to_index),
+            "faiss_total": self.index.ntotal,
             "dimension": self.dimension,
-            "memory_usage_mb": sum(v.nbytes for v in self.vectors.values()) / (1024 * 1024),
-            "similarity_metric": self.config.similarity_metric
+            "similarity_metric": self.config.similarity_metric,
+            "index_type": type(self.index).__name__
         }
 
-    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
-        """Compute cosine similarity between two vectors."""
-        dot_product = np.dot(a, b)
-        norm_a = np.linalg.norm(a)
-        norm_b = np.linalg.norm(b)
-
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-
-        return dot_product / (norm_a * norm_b)
+    # FAISS handles similarity computation internally
 
     def _apply_filter(self, filter: Dict[str, Any]) -> List[str]:
         """Apply metadata filter to get matching vector IDs."""

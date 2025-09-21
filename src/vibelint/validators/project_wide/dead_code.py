@@ -12,8 +12,8 @@ import re
 from pathlib import Path
 from typing import Dict, Iterator, List, Set
 
-from ..plugin_system import BaseValidator, Finding, Severity
-from ..utils import find_project_root, find_files_by_extension
+from ...plugin_system import BaseValidator, Finding, Severity
+from ...utils import find_project_root, find_files_by_extension
 
 __all__ = ["DeadCodeValidator"]
 
