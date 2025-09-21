@@ -185,11 +185,11 @@ similarity_threshold = 0.85  # Threshold for similarity detection
 # Vector database configuration
 [tool.vibelint.vector_store]
 # Backend options: "memory", "qdrant", "vectorize", "pinecone"
-backend = "memory"  # Default to in-memory for M4 Mac
+backend = "qdrant"  # Default to Qdrant for proper vector performance
 
-# In-memory options (recommended for M4 Mac)
+# In-memory options (lightweight fallback only)
 cache_size = 10000  # Maximum vectors to keep in memory
-persist_path = ".vibelint-cache/vectors.json"  # Persist between sessions
+# Note: No persistence - use Qdrant for proper vector storage
 
 # Qdrant options (native ARM64 binary - no Docker needed)
 qdrant_url = "http://localhost:6333"

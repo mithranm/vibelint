@@ -50,9 +50,8 @@ class VectorStoreConfig:
     """Configuration for vector store backends."""
     backend: str = "memory"  # "memory", "qdrant", "pinecone"
 
-    # In-memory options
+    # In-memory options (fallback only)
     cache_size: int = 10000
-    persist_path: Optional[str] = None
 
     # Qdrant options
     qdrant_url: str = "http://localhost:6333"
@@ -123,11 +122,9 @@ class InMemoryVectorStore(VectorStore):
         super().__init__(config)
         self.vectors: Dict[str, np.ndarray] = {}
         self.metadata: Dict[str, Dict[str, Any]] = {}
-        self.persist_path = config.persist_path
 
-        # Try to load from disk
-        if self.persist_path and Path(self.persist_path).exists():
-            self._load_from_disk()
+        # Note: In-memory only - no persistence to avoid slow JSON operations
+        logger.info("InMemoryVectorStore: Fast in-memory storage (no disk persistence)")
 
     def upsert(self, id: str, embedding: List[float], metadata: Dict[str, Any] = None) -> bool:
         """Store or update a vector with metadata."""
@@ -139,11 +136,6 @@ class InMemoryVectorStore(VectorStore):
 
             self.vectors[id] = embedding_array
             self.metadata[id] = metadata or {}
-
-            # Persist if configured
-            if self.persist_path:
-                self._save_to_disk()
-
             return True
         except Exception as e:
             logger.error(f"Failed to upsert vector {id}: {e}")
@@ -200,9 +192,6 @@ class InMemoryVectorStore(VectorStore):
             if id in self.vectors:
                 del self.vectors[id]
                 del self.metadata[id]
-
-                if self.persist_path:
-                    self._save_to_disk()
                 return True
             return False
         except Exception as e:
@@ -232,9 +221,6 @@ class InMemoryVectorStore(VectorStore):
         try:
             self.vectors.clear()
             self.metadata.clear()
-
-            if self.persist_path:
-                self._save_to_disk()
             return True
         except Exception as e:
             logger.error(f"Failed to clear vectors: {e}")
@@ -247,7 +233,6 @@ class InMemoryVectorStore(VectorStore):
             "total_vectors": len(self.vectors),
             "dimension": self.dimension,
             "memory_usage_mb": sum(v.nbytes for v in self.vectors.values()) / (1024 * 1024),
-            "persist_path": self.persist_path,
             "similarity_metric": self.config.similarity_metric
         }
 
@@ -279,40 +264,7 @@ class InMemoryVectorStore(VectorStore):
                 return False
         return True
 
-    def _save_to_disk(self):
-        """Persist vectors and metadata to disk."""
-        if not self.persist_path:
-            return
-
-        try:
-            persist_dir = Path(self.persist_path).parent
-            persist_dir.mkdir(parents=True, exist_ok=True)
-
-            data = {
-                "vectors": {k: v.tolist() for k, v in self.vectors.items()},
-                "metadata": self.metadata,
-                "dimension": self.dimension
-            }
-
-            with open(self.persist_path, 'w') as f:
-                json.dump(data, f)
-
-        except Exception as e:
-            logger.warning(f"Failed to persist vectors: {e}")
-
-    def _load_from_disk(self):
-        """Load vectors and metadata from disk."""
-        try:
-            with open(self.persist_path, 'r') as f:
-                data = json.load(f)
-
-            self.vectors = {k: np.array(v, dtype=np.float32) for k, v in data["vectors"].items()}
-            self.metadata = data["metadata"]
-
-            logger.info(f"Loaded {len(self.vectors)} vectors from {self.persist_path}")
-
-        except Exception as e:
-            logger.warning(f"Failed to load vectors from disk: {e}")
+    # JSON persistence removed - use Qdrant for proper vector storage
 
 class QdrantVectorStore(VectorStore):
     """Qdrant vector store adapter."""
@@ -362,11 +314,19 @@ class QdrantVectorStore(VectorStore):
         """Store or update a vector with metadata."""
         try:
             from qdrant_client.models import PointStruct
+            import uuid
+
+            # Qdrant requires UUID or integer IDs, so convert string to UUID
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, id))
+
+            # Store original ID in metadata for retrieval
+            payload = metadata or {}
+            payload['original_id'] = id
 
             point = PointStruct(
-                id=id,
+                id=point_id,
                 vector=embedding,
-                payload=metadata or {}
+                payload=payload
             )
 
             self.client.upsert(
@@ -403,9 +363,9 @@ class QdrantVectorStore(VectorStore):
 
             return [
                 VectorSearchResult(
-                    id=str(hit.id),
+                    id=hit.payload.get('original_id', str(hit.id)),  # Return original ID
                     score=hit.score,
-                    metadata=hit.payload or {}
+                    metadata={k: v for k, v in (hit.payload or {}).items() if k != 'original_id'}
                 )
                 for hit in results
             ]
@@ -417,9 +377,13 @@ class QdrantVectorStore(VectorStore):
     def delete(self, id: str) -> bool:
         """Delete a vector by ID."""
         try:
+            import uuid
+            # Convert string ID to UUID
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, id))
+
             self.client.delete(
                 collection_name=self.collection_name,
-                points_selector=[id]
+                points_selector=[point_id]
             )
             return True
         except Exception as e:
@@ -429,19 +393,24 @@ class QdrantVectorStore(VectorStore):
     def get(self, id: str) -> Optional[VectorSearchResult]:
         """Get a specific vector by ID."""
         try:
+            import uuid
+            # Convert string ID to UUID
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, id))
+
             result = self.client.retrieve(
                 collection_name=self.collection_name,
-                ids=[id],
+                ids=[point_id],
                 with_payload=True,
                 with_vectors=True
             )
 
             if result:
                 point = result[0]
+                payload = point.payload or {}
                 return VectorSearchResult(
-                    id=str(point.id),
+                    id=payload.get('original_id', id),
                     score=1.0,
-                    metadata=point.payload or {},
+                    metadata={k: v for k, v in payload.items() if k != 'original_id'},
                     embedding=point.vector
                 )
             return None
@@ -872,10 +841,9 @@ def get_vector_store(config: Union[Dict[str, Any], VectorStoreConfig]) -> Vector
         vector_config = config.get("vector_store", {})
 
         store_config = VectorStoreConfig(
-            backend=vector_config.get("backend", "memory"),
+            backend=vector_config.get("backend", "qdrant"),  # Default to Qdrant
             dimension=embeddings_config.get("code_dimensions", 768),
             cache_size=vector_config.get("cache_size", 10000),
-            persist_path=vector_config.get("persist_path"),
             qdrant_url=vector_config.get("qdrant_url", "http://localhost:6333"),
             qdrant_api_key=os.getenv("QDRANT_API_KEY"),
             qdrant_collection=vector_config.get("qdrant_collection", "vibelint_embeddings"),
