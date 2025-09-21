@@ -12,6 +12,7 @@ import random
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
 
 # Add this import
 if sys.version_info >= (3, 7):
@@ -1592,6 +1593,386 @@ def main() -> None:
             print("Unhandled exception in CLI execution:", file=sys.stderr)
             traceback.print_exc()
         sys.exit(1)
+
+
+@cli.command("justify")
+@click.argument("path", type=click.Path(exists=True, path_type=Path), default=".")
+@click.option("--similarity-threshold", type=float, default=0.85,
+              help="Similarity threshold for redundancy detection (0.5-1.0)")
+@click.option("--min-complexity", type=int, default=2,
+              help="Minimum complexity threshold for method analysis")
+@click.option("--no-embeddings", is_flag=True,
+              help="Disable semantic embeddings (faster but less accurate)")
+@click.option("--output-dir", type=click.Path(path_type=Path),
+              help="Directory to export detailed analysis results")
+@click.option("--format", "output_format", type=click.Choice(["table", "json", "markdown"]),
+              default="table", help="Output format")
+def justify_cmd(path: Path, similarity_threshold: float, min_complexity: int,
+                no_embeddings: bool, output_dir: Optional[Path], output_format: str) -> None:
+    """
+    Analyze every file and method to justify their existence and find redundancies.
+
+    This command analyzes all files in your project (both Python and non-Python) to:
+    • Justify why each file exists
+    • Analyze method complexity and purpose
+    • Find duplicate/similar functionality using semantic embeddings
+    • Identify consolidation opportunities
+    • Generate actionable recommendations
+
+    Examples:
+        vibelint justify                           # Analyze current directory
+        vibelint justify src/                      # Analyze specific directory
+        vibelint justify --similarity-threshold 0.9  # Stricter redundancy detection
+        vibelint justify --output-dir analysis/   # Export detailed results
+        vibelint justify --no-embeddings          # Faster analysis without AI
+    """
+    import asyncio
+    from .workflows.justification import FileJustificationWorkflow
+    from .workflows.base import WorkflowConfig
+
+    console.print(f"[bold blue]🔍 Analyzing file and method justifications in {path}[/bold blue]")
+
+    # Validate parameters
+    if similarity_threshold < 0.5 or similarity_threshold > 1.0:
+        console.print("[red]Error: Similarity threshold must be between 0.5 and 1.0[/red]")
+        sys.exit(1)
+
+    if min_complexity < 1:
+        console.print("[red]Error: Minimum complexity must be at least 1[/red]")
+        sys.exit(1)
+
+    try:
+        # Create workflow configuration
+        config = WorkflowConfig()
+        config.similarity_threshold = similarity_threshold
+        config.min_complexity = min_complexity
+        config.enable_embeddings = not no_embeddings
+
+        # Initialize workflow
+        workflow = FileJustificationWorkflow(config)
+
+        # Execute workflow
+        async def run_analysis():
+            return await workflow.execute(path.resolve(), {})
+
+        result = asyncio.run(run_analysis())
+
+        if result.status.value == "failed":
+            console.print(f"[red]Analysis failed: {result.error_message}[/red]")
+            sys.exit(1)
+
+        # Display results based on format
+        if output_format == "table":
+            _display_justification_table(result)
+        elif output_format == "json":
+            _display_justification_json(result)
+        elif output_format == "markdown":
+            _display_justification_markdown(result)
+
+        # Export detailed results if requested or when using JSON format
+        if output_dir or output_format == "json":
+            # Default to .vibelint-reports if no output dir specified
+            export_dir = output_dir or Path(".vibelint-reports")
+            export_dir.mkdir(parents=True, exist_ok=True)
+            _export_justification_results(result, export_dir)
+            if output_dir:  # Only show message if user explicitly requested export
+                console.print(f"\n[green]✓ Detailed results exported to {export_dir}[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Analysis failed: {e}[/red]")
+        if ctx and ctx.obj and ctx.obj.get("debug"):
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
+def _display_justification_table(result: 'WorkflowResult') -> None:
+    """Display justification results in table format."""
+    from rich.table import Table
+
+    # Summary table
+    summary = result.artifacts.get("analysis_summary", {})
+
+    summary_table = Table(title="📊 Justification Analysis Summary", show_header=True)
+    summary_table.add_column("Metric", style="cyan")
+    summary_table.add_column("Value", style="green")
+
+    summary_table.add_row("Total Files Analyzed", str(summary.get("total_files_analyzed", 0)))
+    summary_table.add_row("Python Files", str(summary.get("python_files_analyzed", 0)))
+    summary_table.add_row("Other Files", str(summary.get("non_python_files_analyzed", 0)))
+    summary_table.add_row("Methods Analyzed", str(summary.get("total_methods_analyzed", 0)))
+    summary_table.add_row("Redundancy Clusters", str(summary.get("redundancy_clusters_found", 0)))
+    summary_table.add_row("Embedding Analysis", "✅" if summary.get("embedding_analysis_enabled") else "❌")
+
+    console.print(summary_table)
+
+    # Recommendations
+    if result.recommendations:
+        console.print(f"\n[bold yellow]💡 Top Recommendations:[/bold yellow]")
+        for i, rec in enumerate(result.recommendations[:5], 1):
+            console.print(f"  {i}. {rec}")
+
+    # Top redundancy clusters
+    redundancy_findings = [f for f in result.findings if f.get("type") == "redundancy_cluster"]
+    if redundancy_findings:
+        console.print(f"\n[bold red]🔍 Top Redundancy Clusters:[/bold red]")
+
+        cluster_table = Table(show_header=True)
+        cluster_table.add_column("Type", style="cyan")
+        cluster_table.add_column("Similarity", style="yellow")
+        cluster_table.add_column("Items", style="green")
+        cluster_table.add_column("Purpose", style="white")
+
+        for finding in redundancy_findings[:10]:  # Top 10
+            details = finding.get("details", {})
+            cluster_table.add_row(
+                details.get("cluster_type", "").title(),
+                f"{details.get('similarity_score', 0):.2f}",
+                str(details.get("item_count", 0)),
+                details.get("common_purpose", "")[:50] + "..." if len(details.get("common_purpose", "")) > 50 else details.get("common_purpose", "")
+            )
+
+        console.print(cluster_table)
+
+
+def _display_justification_json(result: 'WorkflowResult') -> None:
+    """Display justification results in JSON format."""
+    import json
+
+    output = {
+        "summary": result.artifacts.get("analysis_summary", {}),
+        "recommendations": result.recommendations,
+        "redundancy_clusters": len([f for f in result.findings if f.get("type") == "redundancy_cluster"]),
+        "total_findings": len(result.findings),
+        "execution_time": result.metrics.execution_time_seconds,
+        "confidence_score": result.metrics.confidence_score
+    }
+
+    console.print(json.dumps(output, indent=2))
+
+
+def _display_justification_markdown(result: 'WorkflowResult') -> None:
+    """Display justification results in Markdown format."""
+    summary = result.artifacts.get("analysis_summary", {})
+
+    markdown = f"""# File and Method Justification Analysis
+
+## Summary
+
+- **Total Files Analyzed**: {summary.get("total_files_analyzed", 0)}
+- **Python Files**: {summary.get("python_files_analyzed", 0)}
+- **Other Files**: {summary.get("non_python_files_analyzed", 0)}
+- **Methods Analyzed**: {summary.get("total_methods_analyzed", 0)}
+- **Redundancy Clusters Found**: {summary.get("redundancy_clusters_found", 0)}
+- **Embedding Analysis**: {'✅ Enabled' if summary.get("embedding_analysis_enabled") else '❌ Disabled'}
+
+## Recommendations
+
+"""
+
+    for i, rec in enumerate(result.recommendations, 1):
+        markdown += f"{i}. {rec}\n"
+
+    redundancy_findings = [f for f in result.findings if f.get("type") == "redundancy_cluster"]
+    if redundancy_findings:
+        markdown += "\n## Top Redundancy Clusters\n\n"
+
+        for i, finding in enumerate(redundancy_findings[:5], 1):
+            details = finding.get("details", {})
+            markdown += f"### {i}. {details.get('cluster_type', '').title()} Cluster\n\n"
+            markdown += f"- **Similarity**: {details.get('similarity_score', 0):.2f}\n"
+            markdown += f"- **Items**: {details.get('item_count', 0)}\n"
+            markdown += f"- **Purpose**: {details.get('common_purpose', '')}\n"
+            markdown += f"- **Recommendation**: {details.get('recommendation', '')}\n\n"
+
+    console.print(markdown)
+
+
+def _export_justification_results(result: 'WorkflowResult', output_dir: Path) -> None:
+    """Export detailed justification results to files."""
+    import json
+
+    # Export comprehensive artifacts
+    for artifact_name, artifact_data in result.artifacts.items():
+        if artifact_name == "analysis_summary":
+            continue  # Include in main report
+
+        artifact_file = output_dir / f"{artifact_name}.json"
+        with open(artifact_file, 'w') as f:
+            json.dump(artifact_data, f, indent=2)
+
+    # Export main report
+    report = {
+        "summary": result.artifacts.get("analysis_summary", {}),
+        "recommendations": result.recommendations,
+        "findings": result.findings,
+        "metrics": {
+            "execution_time_seconds": result.metrics.execution_time_seconds,
+            "confidence_score": result.metrics.confidence_score,
+            "files_processed": result.metrics.files_processed,
+            "findings_generated": result.metrics.findings_generated,
+            "custom_metrics": result.metrics.custom_metrics
+        },
+        "timestamp": result.timestamp,
+        "workflow_version": result.version
+    }
+
+    with open(output_dir / "justification_report.json", 'w') as f:
+        json.dump(report, f, indent=2)
+
+
+@cli.command("setup")
+@click.option("--global", "use_global", is_flag=True, help="Create config in home directory (~/.vibelint.env)")
+@click.option("--shared", is_flag=True, help="Single endpoint configuration (OpenAI, Groq, etc.)")
+@click.option("--separate", is_flag=True, help="Dual endpoint configuration (separate APIs/keys)")
+def setup_cmd(use_global: bool, shared: bool, separate: bool) -> None:
+    """
+    Set up vibelint configuration and API keys.
+
+    IMPORTANT: This command explicitly configures LLM settings to prevent surprise charges.
+    You must run this command to enable AI-powered analysis.
+
+    Examples:
+        vibelint setup --shared           # Single endpoint (OpenAI, Groq, Anthropic, etc.)
+        vibelint setup --separate         # Dual endpoints (custom proxies, different providers)
+        vibelint setup --global           # Create ~/.vibelint.env in home directory
+    """
+    import os
+    from pathlib import Path
+    import tomli_w
+
+    if not shared and not separate:
+        console.print("[yellow]Please specify a configuration type:[/yellow]")
+        console.print("  vibelint setup --shared     # Single endpoint (OpenAI, Groq, Anthropic, etc.)")
+        console.print("  vibelint setup --separate   # Dual endpoints (custom proxies, different providers)")
+        console.print("\n[dim]This prevents accidental API charges by requiring explicit setup.[/dim]")
+        return
+
+    # Handle .env file
+    if use_global:
+        env_path = Path.home() / ".vibelint.env"
+        location_desc = "home directory"
+    else:
+        env_path = Path.cwd() / ".env"
+        location_desc = "current directory"
+
+    # Handle pyproject.toml
+    pyproject_path = Path.cwd() / "pyproject.toml"
+
+    # Create .env content based on selection
+    if shared:
+        env_content = """# vibelint Shared Endpoint Configuration
+# Single endpoint with one API key for both fast and orchestrator roles
+
+# Hugging Face token (for embedding models)
+HF_TOKEN=your_huggingface_token_here
+
+# Shared LLM API Key (works with OpenAI, Groq, Anthropic, etc.)
+OPENAI_API_KEY=your_api_key_here
+"""
+
+        llm_config = {
+            "api_url": "https://api.openai.com/v1",  # Change this URL for other providers
+            "fast_model": "gpt-5-mini",              # $0.25/$2 per 1M tokens
+            "orchestrator_model": "gpt-5",           # $1.25/$10 per 1M tokens
+            "fast_temperature": 0.1,
+            "orchestrator_temperature": 0.2,
+            "fast_max_tokens": 4096,
+            "orchestrator_max_tokens": 8192
+        }
+
+        console.print("[green]Configuring for shared endpoint[/green]")
+        console.print(f"[blue]• Single endpoint with dual roles[/blue]")
+        console.print(f"[blue]• Fast LLM: gpt-5-mini ($0.25/$2 per 1M tokens)[/blue]")
+        console.print(f"[blue]• Orchestrator LLM: gpt-5 ($1.25/$10 per 1M tokens)[/blue]")
+        console.print(f"[dim]• Edit pyproject.toml to use different providers (Groq, Anthropic, etc.)[/dim]")
+
+    elif separate:
+        env_content = """# vibelint Separate Endpoints Configuration
+# Different API keys for fast and orchestrator roles
+
+# Hugging Face token (for embedding models)
+HF_TOKEN=your_huggingface_token_here
+
+# Separate LLM API Keys
+FAST_LLM_API_KEY=sk-your-fast-llm-api-key-here
+ORCHESTRATOR_LLM_API_KEY=sk-your-orchestrator-llm-api-key-here
+"""
+
+        llm_config = {
+            "fast_api_url": "https://your-fast-llm-endpoint.com/v1",
+            "orchestrator_api_url": "https://your-orchestrator-llm-endpoint.com/v1",
+            "fast_model": "your-fast-model-name",
+            "orchestrator_model": "your-orchestrator-model-name",
+            "fast_temperature": 0.1,
+            "orchestrator_temperature": 0.2,
+            "fast_max_tokens": 4096,
+            "orchestrator_max_tokens": 8192
+        }
+
+        console.print("[green]Configuring for separate endpoints[/green]")
+        console.print(f"[blue]• Two separate endpoints with different API keys[/blue]")
+        console.print(f"[yellow]• Update the API URLs and model names in pyproject.toml[/yellow]")
+
+    # Write .env file
+    if env_path.exists():
+        console.print(f"[yellow]Config file already exists at: {env_path}[/yellow]")
+        if not click.confirm("Do you want to overwrite it?"):
+            console.print("[blue]Setup cancelled.[/blue]")
+            return
+
+    try:
+        env_path.write_text(env_content)
+        console.print(f"[green]✓ Created API key file: {env_path}[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to create .env file: {e}[/red]")
+        return
+
+    # Update pyproject.toml with LLM configuration
+    try:
+        # Read existing pyproject.toml or create new structure
+        if pyproject_path.exists():
+            import tomli
+            with open(pyproject_path, 'rb') as f:
+                pyproject_data = tomli.load(f)
+        else:
+            pyproject_data = {}
+
+        # Ensure structure exists
+        if "tool" not in pyproject_data:
+            pyproject_data["tool"] = {}
+        if "vibelint" not in pyproject_data["tool"]:
+            pyproject_data["tool"]["vibelint"] = {}
+
+        # Add LLM configuration
+        pyproject_data["tool"]["vibelint"]["llm"] = llm_config
+
+        # Write back to pyproject.toml
+        with open(pyproject_path, 'wb') as f:
+            tomli_w.dump(pyproject_data, f)
+
+        console.print(f"[green]✓ Updated LLM configuration in: {pyproject_path}[/green]")
+        console.print(f"\n[blue]Next steps:[/blue]")
+        console.print(f"1. Edit {env_path} and add your API keys")
+        console.print(f"2. Run: vibelint check your_code/ --rule ARCHITECTURE-LLM")
+
+    except Exception as e:
+        console.print(f"[red]Failed to update pyproject.toml: {e}[/red]")
+        console.print(f"[yellow]Manual setup required - add LLM config to pyproject.toml[/yellow]")
+
+    try:
+        env_path.write_text(config_content)
+        console.print(f"[green]✓ Created config file: {env_path}[/green]")
+        console.print(f"\n[blue]Next steps:[/blue]")
+        console.print(f"1. Edit {env_path}")
+        console.print(f"2. Add your API keys")
+        console.print(f"3. Run: vibelint check your_code/")
+
+        if not use_global:
+            console.print(f"\n[dim]Tip: Use --global flag to create a global config in your {location_desc}[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Failed to create config file: {e}[/red]")
 
 
 if __name__ == "__main__":

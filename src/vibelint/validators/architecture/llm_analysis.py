@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -68,18 +68,17 @@ class LLMAnalysisValidator(BaseValidator):
         self._similarity_clusters: list[list[Path]] = []  # Groups of similar files
         self._pairwise_analyses: dict[tuple[Path, Path], str] = {}  # Pair -> analysis
 
-        # API configuration from config with environment variable fallbacks
-        llm_config = self.config.get("llm_analysis", {})
+        # Use the new dual LLM system exclusively
+        from ...llm import create_llm_manager
 
-        self.api_url = os.getenv(
-            "OPENAI_BASE_URL", llm_config.get("api_base_url", "http://localhost:11434")
-        )
-        self.model = os.getenv("OPENAI_MODEL", llm_config.get("model", "llama2"))
-        self.api_key = os.getenv("OPENAI_API_KEY", "not-needed")
+        # Get full vibelint config (not just llm_analysis section)
+        full_config = getattr(self.config, '_config_data', self.config) if hasattr(self.config, '_config_data') else self.config
+        self.llm_manager = create_llm_manager(full_config)
 
         # Generation settings from config with sensible defaults
-        self.max_tokens = llm_config.get("max_tokens", 4096)
-        self.temperature = llm_config.get("temperature", 0.1)
+        llm_config = self.config.get("llm", {})  # Use llm section, not llm_analysis
+        self.max_tokens = llm_config.get("fast_max_tokens", 4096)
+        self.temperature = llm_config.get("fast_temperature", 0.1)
 
         # Advanced settings with defaults (most users won't need to change these)
         self.max_context_tokens = llm_config.get("max_context_tokens", 32768)
@@ -112,59 +111,86 @@ class LLMAnalysisValidator(BaseValidator):
         self.max_signature_lines = 20
         self.max_hierarchy_depth = 15
 
-        # Initialize langchain components for OpenAI-compatible API
-        self.llm = ChatOpenAI(
-            base_url=self.api_url + "/v1",
-            model=self.model,
-            temperature=self.temperature,
-            max_completion_tokens=self.max_tokens,
-            api_key=SecretStr(self.api_key),
-        )
+        # Architecture analysis will use the dual LLM system directly
+        # No need for langchain setup - using our unified LLM manager
 
-        # Global architecture analysis prompt
-        self.global_prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """You are an expert software architect analyzing Python code for structural quality.
+    def _get_similarity_prioritized_pairs(self, analysis_files: List[Path]) -> List[Tuple[Path, Path, float]]:
+        """
+        Use semantic similarity to prioritize file pairs for LLM analysis.
 
-Analyze the provided codebase for architectural issues including:
-- Module organization and coupling problems
-- Violation of design principles (SOLID, DRY, etc.)
-- Inconsistent patterns and abstractions
-- Poor separation of concerns
-- Code duplication and redundancy
-- Naming convention violations
-- API design issues
+        Returns list of (file1, file2, similarity_score) tuples sorted by similarity.
+        Focuses expensive LLM analysis on highest redundancy candidates first.
+        """
+        try:
+            # Import semantic similarity validator
+            from .semantic_similarity import SemanticSimilarityValidator
 
-Focus on structural problems that affect maintainability, not syntax errors.
+            # Create similarity validator
+            similarity_validator = SemanticSimilarityValidator()
 
-Return your response as valid JSON with this structure:
-{{
-  "findings": [
-    {{
-      "file": "path/to/file.py",
-      "line": 1,
-      "severity": "warning",
-      "category": "architectural",
-      "message": "Description of issue",
-      "suggestion": "Suggested improvement"
-    }}
-  ]
-}}""",
-                ),
-                ("user", "Analyze this Python codebase structure:\n\n{code_content}"),
-            ]
-        )
+            # Check if embedding model is available
+            if not similarity_validator._initialize_model():
+                logger.info("Embedding model not available, using file order priority")
+                # Fallback: return files in original order with fake similarity scores
+                pairs = []
+                for i, file1 in enumerate(analysis_files):
+                    for file2 in analysis_files[i+1:]:
+                        pairs.append((file1, file2, 0.5))  # Neutral score
+                return pairs
 
-        # Create analysis chain
-        self.global_chain = self.global_prompt | self.llm
+            # Compute embeddings for all files
+            file_embeddings = {}
+            for file_path in analysis_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+
+                    # Extract meaningful content for embedding
+                    embedding_text = similarity_validator._extract_embedding_text(content)
+                    if embedding_text.strip():
+                        embedding = similarity_validator.model.encode([embedding_text])[0]
+                        file_embeddings[file_path] = embedding
+
+                except Exception as e:
+                    logger.debug(f"Failed to process {file_path} for similarity: {e}")
+                    continue
+
+            # Compute similarity scores for all pairs
+            pairs = []
+            files_with_embeddings = list(file_embeddings.keys())
+
+            for i, file1 in enumerate(files_with_embeddings):
+                for file2 in files_with_embeddings[i+1:]:
+                    similarity = similarity_validator._compute_similarity(
+                        file_embeddings[file1],
+                        file_embeddings[file2]
+                    )
+                    pairs.append((file1, file2, similarity))
+
+            # Sort by similarity (highest first) - focus on most redundant pairs
+            pairs.sort(key=lambda x: x[2], reverse=True)
+
+            logger.info(f"Prioritized {len(pairs)} file pairs by semantic similarity")
+            if pairs:
+                logger.info(f"Highest similarity: {pairs[0][2]:.3f} between {pairs[0][0].name} and {pairs[0][1].name}")
+
+            return pairs
+
+        except Exception as e:
+            logger.debug(f"Failed to compute semantic similarity for prioritization: {e}")
+            # Fallback to original file order
+            pairs = []
+            for i, file1 in enumerate(analysis_files):
+                for file2 in analysis_files[i+1:]:
+                    pairs.append((file1, file2, 0.5))  # Neutral score
+            return pairs
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """
-        Run LLM architectural analysis on the specified files.
+        Run LLM architectural analysis prioritized by semantic similarity.
 
-        Analyzes the actual files being processed, not the entire project.
+        Uses semantic similarity to identify high-redundancy areas and focuses
+        expensive LLM analysis on the most problematic file pairs first.
         """
         # Skip if LLM setup hasn't been attempted yet
         if not self._llm_setup_attempted:
@@ -190,15 +216,28 @@ Return your response as valid JSON with this structure:
         # Get the actual files being analyzed from the validation engine
         analysis_files = config.get("_analysis_files", [file_path]) if config else [file_path]
 
-        # Estimate analysis time (rough estimate: ~30-60 seconds per file for LLM analysis)
-        estimated_minutes = max(1, (len(analysis_files) * 45) // 60)  # 45 seconds per file average
+        # Step 1: Run semantic similarity analysis to prioritize files
+        similarity_pairs = self._get_similarity_prioritized_pairs(analysis_files)
+
+        # Step 2: Focus on high-similarity pairs first (> 0.8 similarity)
+        high_similarity_pairs = [pair for pair in similarity_pairs if pair[2] > 0.8]
+        priority_files = set()
+
+        if high_similarity_pairs:
+            logger.info(f"Found {len(high_similarity_pairs)} high-similarity pairs (>0.8) for priority analysis")
+            for file1, file2, score in high_similarity_pairs[:5]:  # Top 5 most similar pairs
+                priority_files.update([file1, file2])
+                logger.info(f"Priority pair: {file1.name} ↔ {file2.name} (similarity: {score:.3f})")
+
+        # Estimate analysis time - prioritize expensive LLM analysis
+        priority_count = len(priority_files)
+        remaining_count = len(analysis_files) - priority_count
+        estimated_minutes = max(1, (priority_count * 60 + remaining_count * 30) // 60)  # More time for priority pairs
         estimated_range = f"{max(1, estimated_minutes - 1)}-{estimated_minutes + 2}"
 
-        logger.info(f"Starting LLM architectural analysis on {len(analysis_files)} files")
+        logger.info(f"Starting similarity-guided LLM analysis: {priority_count} priority + {remaining_count} regular files")
         logger.info(f"ESTIMATED TIME: {estimated_range} minutes (depends on LLM response speed)")
-        logger.info(
-            "TIP: For faster analysis, use path override: vibelint check src/specific_dir/ --exclude-ai"
-        )
+        logger.info("Strategy: High-similarity pairs analyzed first for redundancy detection")
 
         if estimated_minutes > 5:
             logger.warning(f"TIMEOUT RISK: Analysis may take {estimated_range} minutes")
@@ -208,20 +247,126 @@ Return your response as valid JSON with this structure:
             logger.warning("   vibelint check src/module1/ --rule ARCHITECTURE-LLM")
             logger.warning("   vibelint check src/module2/ --rule ARCHITECTURE-LLM")
 
-        # Run architectural analysis on the specified files
-        yield from self._analyze_global_structure(file_path, analysis_files)
+        # Run architectural analysis prioritized by semantic similarity
+        yield from self._analyze_similarity_guided_structure(file_path, analysis_files, similarity_pairs)
+
+    def _analyze_similarity_guided_structure(self, primary_file: Path, analysis_files: List[Path], similarity_pairs: List[Tuple[Path, Path, float]]) -> Iterator[Finding]:
+        """
+        Perform similarity-guided architectural analysis.
+
+        Focuses expensive LLM analysis on high-similarity pairs first to catch
+        redundancy and architectural inconsistencies most efficiently.
+        """
+        try:
+            # Step 1: Analyze high-similarity pairs first (likely redundancy)
+            high_sim_pairs = [pair for pair in similarity_pairs if pair[2] > 0.8]
+
+            if high_sim_pairs:
+                logger.info(f"Phase 1: Analyzing {len(high_sim_pairs)} high-similarity pairs for redundancy")
+
+                for file1, file2, similarity in high_sim_pairs[:3]:  # Limit to top 3 for time
+                    logger.info(f"Analyzing similar pair: {file1.name} ↔ {file2.name} (similarity: {similarity:.3f})")
+
+                    # Read both files
+                    try:
+                        with open(file1, 'r', encoding='utf-8') as f:
+                            content1 = f.read()
+                        with open(file2, 'r', encoding='utf-8') as f:
+                            content2 = f.read()
+                    except Exception as e:
+                        logger.debug(f"Failed to read files for similarity analysis: {e}")
+                        continue
+
+                    # Create focused prompt for pair analysis
+                    pair_analysis_prompt = f"""Analyze these two similar Python files for architectural redundancy and inconsistencies:
+
+FILE 1: {file1}
+```python
+{content1[:3000]}  # Truncate for context limits
+```
+
+FILE 2: {file2}
+```python
+{content2[:3000]}  # Truncate for context limits
+```
+
+SIMILARITY SCORE: {similarity:.3f} (high similarity detected)
+
+Focus on:
+1. Functional redundancy (duplicate logic)
+2. Architectural inconsistencies (different patterns for same purpose)
+3. Opportunities for refactoring/consolidation
+4. Interface mismatches between similar components
+
+Provide specific, actionable findings."""
+
+                    # Analyze the pair
+                    try:
+                        response = self.llm.invoke(pair_analysis_prompt)
+                        findings = self._parse_llm_response(response.content, file1)
+
+                        for finding in findings:
+                            # Mark as high-priority similarity-based finding
+                            finding.message = f"[SIMILARITY-GUIDED] {finding.message}"
+                            yield finding
+
+                    except Exception as e:
+                        logger.debug(f"LLM analysis failed for pair {file1.name}-{file2.name}: {e}")
+                        continue
+
+            # Step 2: Global analysis on remaining files
+            remaining_files = [f for f in analysis_files if f not in {pair[0] for pair in high_sim_pairs} | {pair[1] for pair in high_sim_pairs}]
+
+            if remaining_files:
+                logger.info(f"Phase 2: Global analysis on {len(remaining_files)} remaining files")
+                yield from self._analyze_global_structure(primary_file, remaining_files)
+
+        except Exception as e:
+            logger.error(f"Similarity-guided analysis failed: {e}")
+            # Fallback to regular analysis
+            yield from self._analyze_global_structure(primary_file, analysis_files)
 
     def _test_connectivity(self) -> bool:
-        """Test if OpenAI-compatible API service is available."""
+        """Test if LLM service is available using new dual LLM system."""
         try:
-            # Simple connectivity test with ChatOpenAI
-            self.llm.invoke("Test connectivity")
+            if not self.llm_manager:
+                logger.debug("No LLM manager available")
+                return False
 
-            # If context probing is enabled, discover real limits
-            if self.enable_context_probing:
-                self._discover_context_limits()
+            # Test new dual LLM system
+            from ...llm import LLMRequest, LLMRole
 
-            return True
+            # Try a simple request to test connectivity
+            test_request = LLMRequest(
+                content="Test connectivity - respond with 'OK'",
+                task_type="connectivity_test"
+            )
+
+            # Test with available LLM (sync version for validator compatibility)
+            import asyncio
+
+            async def test_async():
+                if self.llm_manager.is_llm_available(LLMRole.FAST):
+                    response = await self.llm_manager._call_fast_llm(test_request)
+                    logger.debug(f"Fast LLM connectivity test successful: {response.get('content', '')[:50]}")
+                    return True
+                elif self.llm_manager.is_llm_available(LLMRole.ORCHESTRATOR):
+                    response = await self.llm_manager._call_orchestrator_llm(test_request)
+                    logger.debug(f"Orchestrator LLM connectivity test successful: {response.get('content', '')[:50]}")
+                    return True
+                else:
+                    logger.debug("No LLMs available in dual system")
+                    return False
+
+            # Run async test in sync context
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(test_async())
+                return result
+            finally:
+                loop.close()
+
         except Exception as e:
             logger.debug(f"LLM connectivity test failed: {e}")
             return False
@@ -388,8 +533,37 @@ Respond with exactly: OK"""
         optimized_prompt, metrics = self._optimize_context_usage(prompt)
 
         try:
-            response = self.global_chain.invoke({"code_content": optimized_prompt})
-            cleaned_response = self._clean_response(response)
+            # Use new dual LLM system for analysis
+            from ...llm import LLMRequest, LLMRole
+            import asyncio
+
+            async def call_llm():
+                # Use fast LLM for architectural analysis (orchestrator is too slow for interactive use)
+                request = LLMRequest(
+                    content=optimized_prompt,
+                    task_type="architectural_analysis",
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature
+                )
+
+                if self.llm_manager.is_llm_available(LLMRole.FAST):
+                    response = await self.llm_manager._call_fast_llm(request)
+                elif self.llm_manager.is_llm_available(LLMRole.ORCHESTRATOR):
+                    response = await self.llm_manager._call_orchestrator_llm(request)
+                else:
+                    raise Exception("No LLM available")
+
+                return response.get("content", "")
+
+            # Run async in sync context
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                response_content = loop.run_until_complete(call_llm())
+            finally:
+                loop.close()
+
+            cleaned_response = self._clean_response(response_content)
 
             # Track usage statistics
             if self.enable_token_diagnostics:
@@ -648,8 +822,8 @@ CONCERNS: Any potential issues
 
                 batch_summaries = self._invoke_with_diagnostics(batch_prompt)
 
-                # Parse batch response and assign to individual files
-                self._parse_batch_summaries(batch, batch_summaries)
+                # Parse batch response using generalized retry pattern
+                self._process_batch_with_retry(batch, batch_summaries)
                 logger.debug(f"Processed batch {batch_idx + 1}/{len(batches)} ({len(batch)} files)")
 
             except Exception as e:
@@ -663,28 +837,168 @@ CONCERNS: Any potential issues
 
     def _parse_batch_summaries(self, batch_files: list[Path], batch_response: str) -> None:
         """Parse batch summary response and assign to individual files."""
-        # Split by file markers
+
+        # Strategy 1: Try original format with FILE: markers
         file_sections = re.split(r"FILE:\s*([^\n]+)", batch_response)
+        parsed_files = set()
 
-        # file_sections[0] is empty, then alternates between filename and content
+        if len(file_sections) > 1:
+            for i in range(1, len(file_sections), 2):
+                if i + 1 < len(file_sections):
+                    filename_part = file_sections[i].strip()
+                    summary_content = file_sections[i + 1].split("---")[0].strip()
 
-        for i in range(1, len(file_sections), 2):
-            if i + 1 < len(file_sections):
-                filename_part = file_sections[i].strip()
-                summary_content = file_sections[i + 1].split("---")[0].strip()
+                    # Find matching file by name
+                    for file_path in batch_files:
+                        if (file_path.name in filename_part or
+                            str(file_path) in filename_part or
+                            str(file_path).replace("src/", "") in filename_part):
+                            self._file_summaries[file_path] = summary_content
+                            parsed_files.add(file_path)
+                            break
 
-                # Find matching file by name
-                for file_path in batch_files:
-                    if file_path.name in filename_part or str(file_path) in filename_part:
-                        self._file_summaries[file_path] = summary_content
+        # Strategy 2: For unparsed files, try alternative markers
+        unparsed_files = [f for f in batch_files if f not in parsed_files]
+        if unparsed_files and batch_response:
+            # Look for filename patterns anywhere in the response
+            for file_path in unparsed_files:
+                file_name = file_path.name
+                # Try to extract content around filename mentions
+                pattern = rf"(?:{re.escape(file_name)}|{re.escape(str(file_path))})[:\s]*([^{chr(10)}]*(?:{chr(10)}[^{chr(10)}]*)*?)(?=(?:FILE:|{re.escape(file_name)}|\Z))"
+                matches = re.finditer(pattern, batch_response, re.IGNORECASE | re.MULTILINE)
+                for match in matches:
+                    content = match.group(1).strip()
+                    if content and len(content) > 10:  # Only accept substantial content
+                        self._file_summaries[file_path] = content
+                        parsed_files.add(file_path)
                         break
 
-        # Ensure all files have summaries (fallback)
+        # Strategy 3: Fallback - split response evenly among remaining files
+        still_unparsed = [f for f in batch_files if f not in parsed_files]
+        if still_unparsed and batch_response:
+            # If we have a response but couldn't parse it properly,
+            # try to split it among the files
+            response_chunks = re.split(r'\n\s*\n', batch_response.strip())
+            meaningful_chunks = [chunk.strip() for chunk in response_chunks
+                               if chunk.strip() and len(chunk.strip()) > 20]
+
+            if meaningful_chunks:
+                for i, file_path in enumerate(still_unparsed):
+                    if i < len(meaningful_chunks):
+                        self._file_summaries[file_path] = meaningful_chunks[i]
+                        parsed_files.add(file_path)
+
+        # Final fallback - ensure all files have some content
+        failed_files = []
         for file_path in batch_files:
             if file_path not in self._file_summaries:
-                self._file_summaries[file_path] = (
-                    "ERROR: Could not parse summary from batch response"
-                )
+                # Try to generate a basic summary from file name/path
+                basic_summary = f"Python file: {file_path.name}. Analysis needed."
+                self._file_summaries[file_path] = basic_summary
+                failed_files.append(file_path)
+
+        return failed_files
+
+    def _process_batch_with_retry(self, batch_files: list[Path], initial_response: str):
+        """Process batch using generalized retry pattern."""
+        from ...llm_retry import FileAnalysisRetryHandler, RetryConfig, RetryStrategy
+
+        # Create retry handler with configuration
+        retry_config = RetryConfig(
+            max_retries=2,
+            strategy=RetryStrategy.FEW_SHOT,
+            retry_threshold=3,
+            enable_logging=True
+        )
+
+        # Create handler with our LLM callable
+        handler = FileAnalysisRetryHandler(
+            llm_callable=self._invoke_with_diagnostics,
+            config=retry_config
+        )
+
+        # Since we already have the initial response, we need a slightly different approach
+        # First, try to parse the initial response
+        initial_result = handler.parse_response(batch_files, initial_response)
+
+        # Store successful results
+        for file_path, summary in initial_result.parsed_data.items():
+            self._file_summaries[file_path] = f"PURPOSE: {summary.purpose}\nEXPORTS: {summary.exports}\nDEPENDENCIES: {summary.dependencies}\nCONCERNS: {summary.concerns}"
+
+        # If there are failures, use the retry mechanism
+        if initial_result.failed_items:
+            logger.info(f"Retrying analysis for {len(initial_result.failed_items)} failed files")
+
+            # Process only the failed items with retry
+            retry_result = handler.process_with_retry(initial_result.failed_items)
+
+            # Store retry results
+            for file_path, summary in retry_result.parsed_data.items():
+                self._file_summaries[file_path] = f"PURPOSE: {summary.purpose}\nEXPORTS: {summary.exports}\nDEPENDENCIES: {summary.dependencies}\nCONCERNS: {summary.concerns}"
+
+            # Log final stats
+            stats = handler.get_stats()
+            logger.info(f"Retry processing complete: {stats}")
+
+            # For any still-failed files, use fallback
+            for file_path in retry_result.failed_items:
+                self._file_summaries[file_path] = f"Python file: {file_path.name}. Analysis needed."
+
+    def _parse_batch_summaries_with_retry(self, batch_files: list[Path], initial_response: str, original_prompt: str) -> list[Path]:
+        """Parse batch summaries with few-shot learning retry for failed parsing."""
+
+        # First attempt with existing logic
+        failed_files = self._parse_batch_summaries(batch_files, initial_response)
+
+        # If parsing failed for some files, try few-shot learning retry
+        if failed_files and len(failed_files) <= 3:  # Only retry for small numbers of failures
+            logger.info(f"Retrying parsing for {len(failed_files)} files with few-shot examples")
+
+            # Create few-shot learning prompt with examples
+            retry_prompt = f"""The previous response didn't follow the expected format. Here are examples of the correct format:
+
+EXAMPLE 1:
+FILE: src/example/config.py
+PURPOSE: Configuration loading and validation for the application
+EXPORTS: ConfigLoader class, load_config() function
+DEPENDENCIES: pathlib, yaml, logging
+CONCERNS: No input validation on config file paths
+---
+
+EXAMPLE 2:
+FILE: src/example/utils.py
+PURPOSE: Utility functions for string manipulation and file operations
+EXPORTS: sanitize_string(), read_file_safe(), write_file_atomic()
+DEPENDENCIES: re, pathlib, tempfile
+CONCERNS: Limited error handling in file operations
+---
+
+Now please re-analyze these specific files using the EXACT format shown above:
+
+{chr(10).join(f"FILE: {fp}{chr(10)}Content preview: {str(fp.read_text(encoding='utf-8')[:500])[:200]}..." for fp in failed_files)}
+
+Remember: Use the exact format with FILE:, PURPOSE:, EXPORTS:, DEPENDENCIES:, CONCERNS: and end each file with ---"""
+
+            try:
+                retry_response = self._invoke_with_diagnostics(retry_prompt)
+
+                # Parse the retry response using the same logic
+                retry_failed = self._parse_batch_summaries(failed_files, retry_response)
+
+                # Log success/failure of retry
+                retry_success_count = len(failed_files) - len(retry_failed)
+                if retry_success_count > 0:
+                    logger.info(f"Few-shot retry succeeded for {retry_success_count}/{len(failed_files)} files")
+                else:
+                    logger.warning(f"Few-shot retry failed for all {len(failed_files)} files")
+
+                return retry_failed
+
+            except Exception as e:
+                logger.warning(f"Few-shot retry failed with error: {e}")
+                return failed_files
+
+        return failed_files
 
     def _parse_batch_pairwise(
         self, batch_pairs: list[tuple[Path, Path]], batch_response: str

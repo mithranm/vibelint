@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Set
 
 from ..plugin_system import BaseValidator, Finding, Severity
+from ..utils import find_project_root, find_files_by_extension
 
 __all__ = ["DeadCodeValidator"]
 
@@ -38,7 +39,7 @@ class DeadCodeValidator(BaseValidator):
             return
 
         # Build project context for dynamic analysis
-        project_root = self._get_project_root(file_path)
+        project_root = find_project_root(file_path) or file_path.parent
 
         # Analyze the AST for various dead code patterns
         yield from self._check_unused_imports_dynamic(file_path, tree, content, project_root)
@@ -46,22 +47,16 @@ class DeadCodeValidator(BaseValidator):
         yield from self._check_duplicate_patterns(file_path, content)
         yield from self._check_legacy_patterns(file_path, content)
 
-    def _get_project_root(self, file_path: Path) -> Path:
-        """Find project root by looking for pyproject.toml or setup.py."""
-        current = file_path.parent if file_path.is_file() else file_path
-        while current != current.parent:
-            if (current / "pyproject.toml").exists() or (current / "setup.py").exists():
-                return current
-            current = current.parent
-        return file_path.parent
 
     def _get_project_files(self, project_root: Path) -> List[Path]:
         """Get all Python files in the project."""
         if self._project_files_cache is None:
-            self._project_files_cache = []
-            for py_file in project_root.rglob("*.py"):
-                if not any(part.startswith(".") for part in py_file.parts):
-                    self._project_files_cache.append(py_file)
+            exclude_patterns = ["*/__pycache__/*", "*/.pytest_cache/*", "*/build/*", "*/dist/*"]
+            self._project_files_cache = find_files_by_extension(
+                project_root,
+                extension=".py",
+                exclude_globs=exclude_patterns
+            )
         return self._project_files_cache
 
     def _get_all_exports(self, project_root: Path) -> Dict[str, Set[str]]:

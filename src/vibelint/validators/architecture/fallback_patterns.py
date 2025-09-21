@@ -34,7 +34,7 @@ class FallbackAnalyzer(BaseValidator, ast.NodeVisitor):
     def __init__(
         self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
     ) -> None:
-        BaseValidator.__init__(self, severity, config)
+        super().__init__(severity, config)
         ast.NodeVisitor.__init__(self)
         self.findings: List[Finding] = []
         self.current_file: Optional[Path] = None

@@ -14,8 +14,8 @@ from typing import Any, Dict
 
 import requests
 
-from .context_probing import ProbeResult
-from .llm_manager import LLMRole, create_llm_manager
+from .context.probing import ProbeResult
+from .llm import LLMRole, create_llm_manager
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ class DualLLMDiagnostics:
                 avg_latency = (total_duration / successful_tests) * 1000  # Convert to ms
                 success_rate = successful_tests / (successful_tests + failed_tests)
 
-                from .context_probing import InferenceEngine, ProbeResult
+                from .context.probing import InferenceEngine, ProbeResult
 
                 results[llm_name] = ProbeResult(
                     model=config["model"],
@@ -289,7 +289,7 @@ class DualLLMDiagnostics:
         correct = 0
 
         for scenario in scenarios:
-            from .llm_manager import LLMRequest
+            from .llm import LLMRequest
 
             request = LLMRequest(scenario["content"], scenario["task_type"])
             selected = self.llm_manager.select_llm(request)

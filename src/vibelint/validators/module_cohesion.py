@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Set
 
 from ..plugin_system import BaseValidator, Finding, Severity
+from ..utils import find_project_root
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class ModuleCohesionValidator(BaseValidator):
     default_severity = Severity.INFO
 
     def __init__(self, severity=None, config=None):
-        super().__init__(severity=severity, config=config)
+        super().__init__(severity, config)
         # Common patterns that suggest related modules
         self.cohesion_patterns = [
             # Prefixed modules (llm_, api_, db_, etc.)
@@ -49,7 +50,7 @@ class ModuleCohesionValidator(BaseValidator):
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Analyze project structure for module cohesion issues."""
         # Only analyze from project root to avoid duplicates
-        project_root = self._get_project_root(file_path)
+        project_root = find_project_root(file_path) or file_path.parent
         if file_path.parent != project_root / "src" / "vibelint":
             return
 
@@ -74,14 +75,6 @@ class ModuleCohesionValidator(BaseValidator):
         # Check for unjustified files
         yield from self._check_file_justification(project_root)
 
-    def _get_project_root(self, file_path: Path) -> Path:
-        """Find project root by looking for pyproject.toml."""
-        current = file_path.parent if file_path.is_file() else file_path
-        while current != current.parent:
-            if (current / "pyproject.toml").exists():
-                return current
-            current = current.parent
-        return file_path.parent
 
     def _group_files_by_patterns(self, files: List[Path]) -> Dict[str, List[Path]]:
         """Group files by common naming patterns."""

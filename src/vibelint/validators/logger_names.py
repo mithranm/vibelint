@@ -24,8 +24,6 @@ class LoggerNameValidator(BaseValidator):
     description = "Detects get_logger() calls with hardcoded strings instead of __name__"
     default_severity = Severity.BLOCK
 
-    def __init__(self, severity=None, config=None):
-        super().__init__(severity, config)
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Validate a single file for hardcoded logger names."""

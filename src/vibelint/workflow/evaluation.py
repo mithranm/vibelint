@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from .workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus
+from ..workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus
 
 logger = logging.getLogger(__name__)
 

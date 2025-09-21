@@ -24,8 +24,6 @@ class EmojiUsageValidator(BaseValidator):
     description = "Detects emojis that can cause MCP and Windows shell issues"
     default_severity = Severity.WARN
 
-    def __init__(self, severity=None, config=None):
-        super().__init__(severity, config)
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Check for emoji usage in code."""

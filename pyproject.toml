@@ -31,6 +31,7 @@ dependencies = [
     "rich>=12.0.0",
     "libcst",
     "requests>=2.25.0",
+    "python-dotenv>=1.0.0",
     "langchain>=0.3.0",
     "langchain-openai>=0.3.0",
     "langchain-core>=0.3.0"
@@ -102,6 +103,14 @@ exclude_globs = ["tests/fixtures/*"]
 reports_dir = ".vibelint-reports"  # Directory for detailed analysis reports (gitignored)
 llm_trace_logs = true              # Log complete LLM workflow traces for debugging/auditing
 
+# Organized report subdirectories
+[tool.vibelint.reports]
+output_dir = ".vibelint-reports"
+justification_dir = ".vibelint-reports/justification/current"
+workflow_dir = ".vibelint-reports/workflow/current"
+analysis_dir = ".vibelint-reports/analysis/current"
+auto_archive_days = 7  # Move reports older than N days to archived/ subdirectories
+
 # Rule severity levels: "OFF", "INFO", "WARN", "BLOCK"
 [tool.vibelint.rules]
 "PRINT-STATEMENT" = "WARN"
@@ -121,13 +130,13 @@ include_private_functions = false       # Check docstrings for _private function
 # Dual LLM configuration - clean and simple
 [tool.vibelint.llm]
 # Fast LLM: High-speed inference for quick tasks (vLLM)
-fast_api_url = "http://100.94.250.88:8001"
+fast_api_url = "https://claudiallm-auth-worker.mithran-mohanraj.workers.dev"
 fast_model = "openai/gpt-oss-20b"
 fast_temperature = 0.1
 fast_max_tokens = 2048
 
 # Orchestrator LLM: Large context for complex reasoning (llama.cpp)
-orchestrator_api_url = "http://100.116.54.128:11434"
+orchestrator_api_url = "https://chipllm-auth-worker.mithran-mohanraj.workers.dev"
 orchestrator_model = "C:\\dev\\openai_gpt-oss-120b-MXFP4.gguf"
 orchestrator_temperature = 0.2
 orchestrator_max_tokens = 8192
@@ -156,6 +165,54 @@ thinking_format = "harmony"          # Options: "harmony", "qwen", "custom"
 # - Qwen models: thinking_format = "qwen"
 # - OpenAI o1 models: thinking_format = "custom" + patterns for their format
 # - Custom/local models: thinking_format = "custom" + custom_thinking_patterns
+
+# Specialized embedding configuration
+[tool.vibelint.embeddings]
+# Code embeddings: Optimized for function similarity, architectural patterns, duplicate logic
+code_api_url = "https://vanguardone-embedding-auth-worker.mithran-mohanraj.workers.dev"
+code_model = "text-embedding-ada-002"  # Model name expected by the API
+code_dimensions = 768  # Embedding vector size
+
+# Natural language embeddings: Optimized for documentation, comments, requirements
+natural_api_url = "https://vanguardtwo-embedding-auth-worker.mithran-mohanraj.workers.dev"
+natural_model = "text-embedding-ada-002"  # Model name expected by the API
+natural_dimensions = 1536  # Embedding vector size
+
+# Embedding usage routing
+use_specialized_embeddings = true  # Set to false to use local models only
+similarity_threshold = 0.85  # Threshold for similarity detection
+
+# Vector database configuration
+[tool.vibelint.vector_store]
+# Backend options: "memory", "qdrant", "vectorize", "pinecone"
+backend = "memory"  # Default to in-memory for M4 Mac
+
+# In-memory options (recommended for M4 Mac)
+cache_size = 10000  # Maximum vectors to keep in memory
+persist_path = ".vibelint-cache/vectors.json"  # Persist between sessions
+
+# Qdrant options (native ARM64 binary - no Docker needed)
+qdrant_url = "http://localhost:6333"
+qdrant_collection = "vibelint_embeddings"
+# qdrant_api_key via QDRANT_API_KEY environment variable
+
+# Chroma options (lightweight alternative)
+chroma_path = ".vibelint-cache/chroma"
+chroma_collection = "vibelint_embeddings"
+
+# Cloudflare Vectorize options (recommended for edge/cloud)
+vectorize_account_id = "your-cloudflare-account-id"
+vectorize_index = "vibelint-embeddings"
+# vectorize_api_token via VECTORIZE_API_TOKEN environment variable
+
+# Pinecone options (cloud)
+pinecone_environment = "us-west1-gcp"
+pinecone_index = "vibelint-embeddings"
+# pinecone_api_key via PINECONE_API_KEY environment variable
+
+# Performance tuning
+similarity_metric = "cosine"  # "cosine", "euclidean", "dot"
+batch_size = 100  # Vectors to process in batch operations
 
 [tool.black]
 target-version = ["py310", "py311", "py312"]

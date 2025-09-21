@@ -1,8 +1,17 @@
 """
-Semantic similarity validator using EmbeddingGemma for detecting redundant code patterns.
+Semantic similarity discovery heuristic using EmbeddingGemma.
 
-Uses embedding models to find semantically similar docstrings, functions, and classes
-that may indicate architectural redundancy or code duplication.
+This validator serves as a DISCOVERY TOOL rather than a definitive problem indicator.
+It identifies potentially redundant code patterns by analyzing semantic similarity of
+docstrings, functions, and classes using local embedding models.
+
+Primary use cases:
+1. Human-driven redundancy exploration (INFO level findings)
+2. Prioritization heuristic for expensive LLM analysis
+3. Architectural refactoring planning
+
+The findings are informational - high similarity doesn't always indicate problems,
+but helps focus attention on areas that may benefit from consolidation or refactoring.
 
 vibelint/validators/semantic_similarity.py
 """
@@ -25,6 +34,7 @@ if TYPE_CHECKING or SENTENCE_TRANSFORMERS_AVAILABLE:
         SentenceTransformer = None
 
 from ...plugin_system import BaseValidator, Finding, Severity
+from ...embedding_client import EmbeddingClient
 
 __all__ = ["SemanticSimilarityValidator"]
 logger = logging.getLogger(__name__)
@@ -95,15 +105,41 @@ class SemanticSimilarityValidator(BaseValidator):
 
         # Check configuration
         embedding_config = self._safe_config_get(config, "embedding_analysis", {})
-        model_name = self._safe_config_get(embedding_config, "model", "google/embeddinggemma-300m")
-        similarity_threshold = self._safe_config_get(embedding_config, "similarity_threshold", 0.85)
+        embeddings_config = self._safe_config_get(config, "embeddings", {})
+
+        # Use new embeddings config if available, otherwise fall back to legacy config
+        if embeddings_config:
+            similarity_threshold = self._safe_config_get(embeddings_config, "similarity_threshold", 0.85)
+            enabled = self._safe_config_get(embeddings_config, "use_specialized_embeddings", True)
+        else:
+            model_name = self._safe_config_get(embedding_config, "model", "google/embeddinggemma-300m")
+            similarity_threshold = self._safe_config_get(embedding_config, "similarity_threshold", 0.85)
+            enabled = self._safe_config_get(embedding_config, "enabled", False)
 
         # Check if embedding analysis is enabled
-        if not self._safe_config_get(embedding_config, "enabled", False):
+        if not enabled:
             logger.debug("Semantic similarity analysis disabled in configuration")
             return False
 
         try:
+            # Try to initialize the new EmbeddingClient for specialized endpoints
+            try:
+                self._embedding_client = EmbeddingClient(config)
+                self._similarity_threshold = similarity_threshold
+                logger.info(f"Initialized EmbeddingClient with specialized endpoints (threshold: {similarity_threshold})")
+
+                # Keep legacy _model for backward compatibility
+                if hasattr(self._embedding_client, '_local_model'):
+                    self._model = self._embedding_client._local_model
+                return True
+            except Exception as client_error:
+                logger.debug(f"EmbeddingClient initialization failed: {client_error}")
+
+            # Fallback to legacy local model approach
+            if embeddings_config:
+                logger.debug("Falling back to legacy embedding model approach")
+                return False
+
             # Handle HF token from config, .env file, or environment
             hf_token = self._safe_config_get(embedding_config, "hf_token")
             if not hf_token:
@@ -133,7 +169,7 @@ class SemanticSimilarityValidator(BaseValidator):
             logger.info(f"Semantic similarity analysis enabled (threshold: {similarity_threshold})")
             return True
         except Exception as e:
-            logger.warning(f"Failed to load embedding model {model_name}: {e}")
+            logger.warning(f"Failed to initialize embedding system: {e}")
             return False
 
     def _extract_code_elements(self, file_path: Path, content: str) -> List[Tuple[str, str, str]]:
@@ -217,11 +253,23 @@ class SemanticSimilarityValidator(BaseValidator):
 
     def _get_embedding(self, text: str, task_type: str = "clustering") -> Optional[Any]:
         """Generate embedding for text using task-specific prompting."""
-        if not self._model:
-            return None
-
         try:
-            # Use EmbeddingGemma task-specific prompts
+            # Try using the new EmbeddingClient first
+            if hasattr(self, '_embedding_client'):
+                # Determine content type for specialized routing
+                if task_type == "code":
+                    embeddings = self._embedding_client.get_code_embeddings([text])
+                else:
+                    embeddings = self._embedding_client.get_natural_embeddings([text])
+
+                if embeddings:
+                    return embeddings[0]
+
+            # Fallback to legacy local model
+            if not self._model:
+                return None
+
+            # Use EmbeddingGemma task-specific prompts for local model
             if task_type == "similarity":
                 prompt = f"task: sentence similarity | query: {text}"
             elif task_type == "clustering":

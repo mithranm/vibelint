@@ -72,6 +72,25 @@ pip install vibelint
 
 vibelint requires Python 3.10 or higher.
 
+### 🔑 **API Key Setup**
+
+Before using AI features, set up your API keys:
+
+```bash
+# Set up configuration (creates .env file)
+vibelint setup
+
+# Edit the created .env file with your API keys:
+# FAST_LLM_API_KEY=sk-llm-proxy-your-fast-llm-key-here
+# ORCHESTRATOR_LLM_API_KEY=sk-chip-proxy-your-orchestrator-llm-key-here
+# HF_TOKEN=your_huggingface_token_here
+```
+
+**Configuration Options:**
+- **Project-specific**: `vibelint setup` (creates `.env` in current directory)
+- **Global**: `vibelint setup --global` (creates `~/.vibelint.env` for all projects)
+- **Environment variables**: Set `FAST_LLM_API_KEY`, `ORCHESTRATOR_LLM_API_KEY`, `HF_TOKEN` directly
+
 **Optional AI Features:**
 ```bash
 # For semantic similarity analysis
@@ -84,19 +103,24 @@ pip install torch transformers
 ## Quick Start
 
 ```bash
-# Check your entire codebase
+# 1. Install and set up API keys
+pip install vibelint
+vibelint setup
+# Edit the .env file with your API keys
+
+# 2. Check your entire codebase
 vibelint check
 
-# Generate a detailed report
+# 3. Generate a detailed report
 vibelint check -o report.md
 
-# Create an LLM-ready snapshot
+# 4. Create an LLM-ready snapshot
 vibelint snapshot
 
-# Visualize project structure
+# 5. Visualize project structure
 vibelint namespace
 
-# Enable context discovery when switching LLM providers
+# 6. Enable context discovery when switching LLM providers
 # Edit pyproject.toml: enable_context_probing = true
 # Then run: vibelint check --rule ARCHITECTURE-LLM
 ```

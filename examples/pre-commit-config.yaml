@@ -1,5 +1,0 @@
-repos:
--   repo: https://github.com/mithranm/vibelint
-    rev: 0.1.0
-    hooks:
-    -   id: vibelint

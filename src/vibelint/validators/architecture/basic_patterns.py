@@ -26,10 +26,6 @@ class ArchitectureValidator(BaseValidator):
     description = "Identifies competing systems, mixed patterns, and architectural violations"
     default_severity = Severity.WARN
 
-    def __init__(
-        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
-    ) -> None:
-        super().__init__(severity, config)
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Analyze file for architectural inconsistencies."""

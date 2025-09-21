@@ -14,10 +14,10 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from .context.prompts import AgentPrompts, AnalysisLevel
-from .context.analyzer import ContextAnalyzer
-from .llm import LLMManager, LLMRequest, LLMRole
-from .project_map import ProjectMapper
+from ..context.prompts import AgentPrompts, AnalysisLevel
+from ..context.analyzer import ContextAnalyzer
+from ..llm import LLMManager, LLMRequest, LLMRole
+from ..project_map import ProjectMapper
 
 logger = logging.getLogger(__name__)
 

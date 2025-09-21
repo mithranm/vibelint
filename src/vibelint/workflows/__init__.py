@@ -8,18 +8,18 @@ vibelint/src/vibelint/workflows/__init__.py
 """
 
 from .base import BaseWorkflow, WorkflowResult, WorkflowConfig, WorkflowMetrics
-from .manager import WorkflowManager
-from .evaluation import WorkflowEvaluator, EvaluationResult
-from .registry import workflow_registry, register_workflow
+from .justification import FileJustificationWorkflow
+from ..workflow.registry import workflow_registry, register_workflow
+
+# Register built-in workflows
+register_workflow(FileJustificationWorkflow)
 
 __all__ = [
     "BaseWorkflow",
     "WorkflowResult",
     "WorkflowConfig",
     "WorkflowMetrics",
-    "WorkflowManager",
-    "WorkflowEvaluator",
-    "EvaluationResult",
+    "FileJustificationWorkflow",
     "workflow_registry",
     "register_workflow",
 ]

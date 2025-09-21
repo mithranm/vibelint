@@ -10,7 +10,7 @@ vibelint/src/vibelint/workflow_registry.py
 import logging
 from typing import Dict, Type, Optional, List
 
-from .base import BaseWorkflow
+from ..workflows.base import BaseWorkflow
 
 logger = logging.getLogger(__name__)
 

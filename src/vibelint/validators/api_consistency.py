@@ -19,6 +19,15 @@ logger = logging.getLogger(__name__)
 __all__ = ["APIConsistencyValidator"]
 
 
+def _get_function_name(node: ast.Call) -> str:
+    """Extract function name from call node."""
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    elif isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return ""
+
+
 class APIConsistencyValidator(BaseValidator):
     """Validator for API consistency and usage patterns."""
 
@@ -28,7 +37,7 @@ class APIConsistencyValidator(BaseValidator):
     default_severity = Severity.WARN
 
     def __init__(self, severity=None, config=None):
-        super().__init__(severity=severity, config=config)
+        super().__init__(severity, config)
         # Known API signatures and their requirements
         self.known_apis = {
             "load_config": {
@@ -63,7 +72,7 @@ class APIConsistencyValidator(BaseValidator):
 
     def _check_function_call(self, node: ast.Call, file_path: Path) -> Iterator[Finding]:
         """Check individual function calls for API consistency."""
-        func_name = self._get_function_name(node)
+        func_name = _get_function_name(node)
 
         if func_name in self.known_apis:
             api_info = self.known_apis[func_name]
@@ -105,14 +114,6 @@ class APIConsistencyValidator(BaseValidator):
                                 suggestion="Use load_config(Path('.')) or pass explicit path for config discovery",
                             )
 
-    def _get_function_name(self, node: ast.Call) -> str:
-        """Extract function name from call node."""
-        if isinstance(node.func, ast.Name):
-            return node.func.id
-        elif isinstance(node.func, ast.Attribute):
-            return node.func.attr
-        return ""
-
 
 class ConfigurationPatternValidator(BaseValidator):
     """Validator for configuration pattern consistency."""
@@ -135,7 +136,7 @@ class ConfigurationPatternValidator(BaseValidator):
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
-                func_name = self._get_function_name(node)
+                func_name = _get_function_name(node)
 
                 if func_name == "load_config":
                     config_loading_patterns.append(node.lineno)
@@ -164,11 +165,3 @@ class ConfigurationPatternValidator(BaseValidator):
                     line=node.lineno,
                     suggestion="Use load_config() for single source of truth instead of manual dict creation",
                 )
-
-    def _get_function_name(self, node: ast.Call) -> str:
-        """Extract function name from call node."""
-        if isinstance(node.func, ast.Name):
-            return node.func.id
-        elif isinstance(node.func, ast.Attribute):
-            return node.func.attr
-        return ""

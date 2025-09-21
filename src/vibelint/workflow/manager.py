@@ -14,9 +14,9 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
-from .workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus
-from .workflow_evaluation import WorkflowEvaluator
-from .workflow_registry import workflow_registry
+from ..workflows.base import BaseWorkflow, WorkflowResult, WorkflowStatus
+from .evaluation import WorkflowEvaluator
+from .registry import workflow_registry
 
 logger = logging.getLogger(__name__)
 
