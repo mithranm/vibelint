@@ -19,5 +19,4 @@ debug.txt
 !.vibelint-reports/example-llm-trace.json
 !.vibelint-reports/example-single-llm-config.toml
 !.vibelint-reports/README.md.vibelint-cache/
-.claude_decisions/
 .claude/
