@@ -12,7 +12,8 @@ vibelint/src/vibelint/validators/project_wide/__init__.py
 """
 
 from pathlib import Path
-from typing import List, Iterator, Dict, Any
+from typing import Any, Dict, Iterator, List
+
 from ...plugin_system import BaseValidator, Finding
 
 
@@ -60,5 +61,5 @@ def get_project_wide_validators() -> List[str]:
         "FALLBACK-SILENT-FAILURE",
         "API-CONSISTENCY",
         "CODE-SMELLS",
-        "MODULE-COHESION"
+        "MODULE-COHESION",
     ]

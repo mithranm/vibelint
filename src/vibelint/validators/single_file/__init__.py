@@ -8,7 +8,8 @@ vibelint/src/vibelint/validators/single_file/__init__.py
 """
 
 from pathlib import Path
-from typing import List, Iterator
+from typing import Iterator, List
+
 from ...plugin_system import BaseValidator, Finding
 
 
@@ -44,5 +45,5 @@ def get_single_file_validators() -> List[str]:
         "EMOJI-IN-STRING",
         "TYPING-POOR-PRACTICE",
         "EXPORTS-MISSING-ALL",
-        "EXPORTS-MISSING-ALL-INIT"
+        "EXPORTS-MISSING-ALL-INIT",
     ]

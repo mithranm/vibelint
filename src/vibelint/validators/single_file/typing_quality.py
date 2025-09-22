@@ -28,7 +28,6 @@ class TypingQualityValidator(BaseValidator):
     description = "Detects poor typing practices that reduce code clarity and type safety"
     default_severity = Severity.WARN
 
-
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Validate typing practices in a Python file."""
         try:

@@ -12,16 +12,17 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Generic
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')  # Type of items being processed
-R = TypeVar('R')  # Type of parsed results
+T = TypeVar("T")  # Type of items being processed
+R = TypeVar("R")  # Type of parsed results
 
 
 class RetryStrategy(Enum):
     """Available retry strategies."""
+
     NONE = "none"
     FEW_SHOT = "few_shot"
     PROGRESSIVE = "progressive"
@@ -31,6 +32,7 @@ class RetryStrategy(Enum):
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
+
     max_retries: int = 2
     strategy: RetryStrategy = RetryStrategy.FEW_SHOT
     retry_threshold: int = 3  # Only retry if failures <= this number
@@ -40,6 +42,7 @@ class RetryConfig:
 @dataclass
 class ParseResult(Generic[T, R]):
     """Result of a parsing attempt."""
+
     successful_items: List[T]
     failed_items: List[T]
     parsed_data: Dict[T, R]
@@ -75,14 +78,16 @@ class LLMRetryHandler(ABC, Generic[T, R]):
         """Make the actual LLM call."""
         pass
 
-    def create_retry_prompt(self, failed_items: List[T], original_response: str, retry_attempt: int) -> str:
+    def create_retry_prompt(
+        self, failed_items: List[T], original_response: str, retry_attempt: int
+    ) -> str:
         """Create retry prompt with few-shot learning."""
         examples = self.create_few_shot_examples()
 
         strategy_message = {
             RetryStrategy.FEW_SHOT: "Here are examples of the correct format:",
             RetryStrategy.PROGRESSIVE: f"Attempt {retry_attempt + 1}: Let's try a simpler approach.",
-            RetryStrategy.ADAPTIVE: "The previous response had formatting issues. Let's be more specific:"
+            RetryStrategy.ADAPTIVE: "The previous response had formatting issues. Let's be more specific:",
         }.get(self.config.strategy, "Please try again with the correct format:")
 
         item_details = self.format_items_for_retry(failed_items)
@@ -115,7 +120,9 @@ Remember: Follow the format exactly as shown in the examples."""
         """Process items with automatic retry on parsing failures."""
 
         if self.config.enable_logging:
-            logger.info(f"Processing {len(items)} items with retry strategy: {self.config.strategy.value}")
+            logger.info(
+                f"Processing {len(items)} items with retry strategy: {self.config.strategy.value}"
+            )
 
         # Initial attempt
         initial_prompt = self.create_initial_prompt(items)
@@ -134,7 +141,9 @@ Remember: Follow the format exactly as shown in the examples."""
 
         while self.should_retry(current_failed, retry_attempt):
             if self.config.enable_logging:
-                logger.info(f"Retry attempt {retry_attempt + 1} for {len(current_failed)} failed items")
+                logger.info(
+                    f"Retry attempt {retry_attempt + 1} for {len(current_failed)} failed items"
+                )
 
             retry_prompt = self.create_retry_prompt(current_failed, initial_response, retry_attempt)
             retry_response = self.invoke_llm(retry_prompt)
@@ -160,14 +169,16 @@ Remember: Follow the format exactly as shown in the examples."""
         final_success_rate = len(all_successful) / len(items) if items else 0.0
 
         if self.config.enable_logging:
-            logger.info(f"Processing complete: {len(all_successful)}/{len(items)} successful "
-                       f"({final_success_rate:.1%}), {self._total_retries} retries used")
+            logger.info(
+                f"Processing complete: {len(all_successful)}/{len(items)} successful "
+                f"({final_success_rate:.1%}), {self._total_retries} retries used"
+            )
 
         return ParseResult(
             successful_items=all_successful,
             failed_items=current_failed,
             parsed_data=all_parsed_data,
-            success_rate=final_success_rate
+            success_rate=final_success_rate,
         )
 
     def get_stats(self) -> Dict[str, Any]:
@@ -178,16 +189,21 @@ Remember: Follow the format exactly as shown in the examples."""
             "config": {
                 "max_retries": self.config.max_retries,
                 "strategy": self.config.strategy.value,
-                "retry_threshold": self.config.retry_threshold
-            }
+                "retry_threshold": self.config.retry_threshold,
+            },
         }
 
 
 class SimpleTextRetryHandler(LLMRetryHandler[str, str]):
     """Example implementation for simple text processing."""
 
-    def __init__(self, llm_callable: Callable[[str], str], format_instructions: str,
-                 few_shot_examples: str, config: Optional[RetryConfig] = None):
+    def __init__(
+        self,
+        llm_callable: Callable[[str], str],
+        format_instructions: str,
+        few_shot_examples: str,
+        config: Optional[RetryConfig] = None,
+    ):
         super().__init__(config)
         self.llm_callable = llm_callable
         self.format_instructions = format_instructions
@@ -201,7 +217,7 @@ Items to process:
 
     def parse_response(self, items: List[str], response: str) -> ParseResult[str, str]:
         # Simple implementation - assumes one response line per item
-        lines = [line.strip() for line in response.split('\n') if line.strip()]
+        lines = [line.strip() for line in response.split("\n") if line.strip()]
 
         successful = []
         parsed = {}
@@ -218,7 +234,7 @@ Items to process:
             successful_items=successful,
             failed_items=failed,
             parsed_data=parsed,
-            success_rate=success_rate
+            success_rate=success_rate,
         )
 
     def create_few_shot_examples(self) -> str:
@@ -231,6 +247,7 @@ Items to process:
 @dataclass
 class FileSummary:
     """Structured file summary result."""
+
     purpose: str
     exports: str
     dependencies: str
@@ -270,7 +287,6 @@ CONCERNS: Any potential issues
     def parse_response(self, files: List[Path], response: str) -> ParseResult[Path, FileSummary]:
         """Parse file analysis response."""
         import re
-        from pathlib import Path
 
         # Enhanced parsing with multiple strategies
         file_sections = re.split(r"FILE:\s*([^\n]+)", response)
@@ -285,9 +301,11 @@ CONCERNS: Any potential issues
 
                     # Find matching file by name
                     for file_path in files:
-                        if (file_path.name in filename_part or
-                            str(file_path) in filename_part or
-                            str(file_path).replace("src/", "") in filename_part):
+                        if (
+                            file_path.name in filename_part
+                            or str(file_path) in filename_part
+                            or str(file_path).replace("src/", "") in filename_part
+                        ):
 
                             # Extract structured data
                             summary = self._extract_file_summary(summary_content)
@@ -303,7 +321,7 @@ CONCERNS: Any potential issues
             successful_items=successful_files,
             failed_items=failed_files,
             parsed_data=parsed_files,
-            success_rate=success_rate
+            success_rate=success_rate,
         )
 
     def _extract_file_summary(self, content: str) -> Optional[FileSummary]:
@@ -311,10 +329,10 @@ CONCERNS: Any potential issues
         import re
 
         patterns = {
-            'purpose': r'PURPOSE:\s*([^\n]+)',
-            'exports': r'EXPORTS:\s*([^\n]+)',
-            'dependencies': r'DEPENDENCIES:\s*([^\n]+)',
-            'concerns': r'CONCERNS:\s*([^\n]+)'
+            "purpose": r"PURPOSE:\s*([^\n]+)",
+            "exports": r"EXPORTS:\s*([^\n]+)",
+            "dependencies": r"DEPENDENCIES:\s*([^\n]+)",
+            "concerns": r"CONCERNS:\s*([^\n]+)",
         }
 
         extracted = {}
@@ -323,7 +341,7 @@ CONCERNS: Any potential issues
             extracted[key] = match.group(1).strip() if match else "Not specified"
 
         # Only return if we got at least purpose
-        if extracted['purpose'] != "Not specified":
+        if extracted["purpose"] != "Not specified":
             return FileSummary(**extracted)
         return None
 
@@ -350,7 +368,7 @@ CONCERNS: Limited error handling in file operations
         formatted = []
         for file_path in files:
             try:
-                content_preview = file_path.read_text(encoding='utf-8')[:500]
+                content_preview = file_path.read_text(encoding="utf-8")[:500]
                 formatted.append(f"FILE: {file_path}\nContent preview: {content_preview[:200]}...")
             except Exception:
                 formatted.append(f"FILE: {file_path}\nERROR: Could not read file")

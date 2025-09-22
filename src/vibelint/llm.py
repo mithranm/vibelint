@@ -14,16 +14,16 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
-
-import requests
-from dotenv import load_dotenv
-
 # Load environment variables from .env files in order of preference:
 # 1. Current working directory (.env)
 # 2. User's home directory (~/.vibelint.env)
 # 3. Project root directory (.env)
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+import requests
+from dotenv import load_dotenv
+
 
 def _load_env_files():
     """Load environment variables from multiple possible locations."""
@@ -37,6 +37,7 @@ def _load_env_files():
         if env_path.exists():
             load_dotenv(env_path)
             break
+
 
 _load_env_files()
 
@@ -85,18 +86,26 @@ class LLMManager:
         llm_config = config.get("llm", {})
 
         # Fast LLM configuration with fallback logic
-        self.fast_config = self._build_llm_config(llm_config, "fast", {
-            "temperature": DEFAULT_FAST_TEMPERATURE,
-            "max_tokens": DEFAULT_FAST_MAX_TOKENS,
-            "api_key_env": "FAST_LLM_API_KEY"
-        })
+        self.fast_config = self._build_llm_config(
+            llm_config,
+            "fast",
+            {
+                "temperature": DEFAULT_FAST_TEMPERATURE,
+                "max_tokens": DEFAULT_FAST_MAX_TOKENS,
+                "api_key_env": "FAST_LLM_API_KEY",
+            },
+        )
 
         # Orchestrator LLM configuration with fallback logic
-        self.orchestrator_config = self._build_llm_config(llm_config, "orchestrator", {
-            "temperature": DEFAULT_ORCHESTRATOR_TEMPERATURE,
-            "max_tokens": DEFAULT_ORCHESTRATOR_MAX_TOKENS,
-            "api_key_env": "ORCHESTRATOR_LLM_API_KEY"
-        })
+        self.orchestrator_config = self._build_llm_config(
+            llm_config,
+            "orchestrator",
+            {
+                "temperature": DEFAULT_ORCHESTRATOR_TEMPERATURE,
+                "max_tokens": DEFAULT_ORCHESTRATOR_MAX_TOKENS,
+                "api_key_env": "ORCHESTRATOR_LLM_API_KEY",
+            },
+        )
 
         # Routing configuration
         self.context_threshold = llm_config.get("context_threshold", DEFAULT_CONTEXT_THRESHOLD)
@@ -106,7 +115,9 @@ class LLMManager:
         self.session = requests.Session()
         # Note: timeout is set per-request rather than on session
 
-    def _build_llm_config(self, llm_config: Dict[str, Any], role: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_llm_config(
+        self, llm_config: Dict[str, Any], role: str, defaults: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Build LLM configuration with intelligent fallback logic.
 
         Supports multiple deployment scenarios:
@@ -120,40 +131,34 @@ class LLMManager:
         # Priority order for API URL:
         # 1. Role-specific URL (fast_api_url/orchestrator_api_url)
         # 2. Generic URL (api_url)
-        config["api_url"] = (
-            llm_config.get(f"{role}_api_url") or
-            llm_config.get("api_url")
-        )
+        config["api_url"] = llm_config.get(f"{role}_api_url") or llm_config.get("api_url")
 
         # Priority order for model:
         # 1. Role-specific model (fast_model/orchestrator_model)
         # 2. Generic model (model)
-        config["model"] = (
-            llm_config.get(f"{role}_model") or
-            llm_config.get("model")
-        )
+        config["model"] = llm_config.get(f"{role}_model") or llm_config.get("model")
 
         # Priority order for API key:
         # 1. Role-specific env var (FAST_LLM_API_KEY/ORCHESTRATOR_LLM_API_KEY)
         # 2. Generic env var (LLM_API_KEY)
         # 3. OpenAI fallback (OPENAI_API_KEY)
         config["api_key"] = (
-            os.getenv(defaults["api_key_env"]) or
-            os.getenv("LLM_API_KEY") or
-            os.getenv("OPENAI_API_KEY")
+            os.getenv(defaults["api_key_env"])
+            or os.getenv("LLM_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
         )
 
         # Role-specific settings with fallbacks
         config["temperature"] = (
-            llm_config.get(f"{role}_temperature") or
-            llm_config.get("temperature") or
-            defaults["temperature"]
+            llm_config.get(f"{role}_temperature")
+            or llm_config.get("temperature")
+            or defaults["temperature"]
         )
 
         config["max_tokens"] = (
-            llm_config.get(f"{role}_max_tokens") or
-            llm_config.get("max_tokens") or
-            defaults["max_tokens"]
+            llm_config.get(f"{role}_max_tokens")
+            or llm_config.get("max_tokens")
+            or defaults["max_tokens"]
         )
 
         return config
@@ -251,7 +256,9 @@ class LLMManager:
         logger.info(f"Model: {payload['model']}, Max tokens: {payload['max_tokens']}")
 
         # Set timeout based on LLM role - orchestrator needs more time for large prompts
-        timeout_seconds = ORCHESTRATOR_TIMEOUT_SECONDS if role == LLMRole.ORCHESTRATOR else FAST_TIMEOUT_SECONDS
+        timeout_seconds = (
+            ORCHESTRATOR_TIMEOUT_SECONDS if role == LLMRole.ORCHESTRATOR else FAST_TIMEOUT_SECONDS
+        )
 
         response = self.session.post(url, json=payload, headers=headers, timeout=timeout_seconds)
         response.raise_for_status()
@@ -275,7 +282,9 @@ class LLMManager:
         if role == LLMRole.FAST:
             return bool(self.fast_config.get("api_url") and self.fast_config.get("model"))
         else:
-            return bool(self.orchestrator_config.get("api_url") and self.orchestrator_config.get("model"))
+            return bool(
+                self.orchestrator_config.get("api_url") and self.orchestrator_config.get("model")
+            )
 
     def get_available_features(self) -> Dict[str, bool]:
         """Get which AI features are available based on LLM configuration."""
@@ -290,7 +299,6 @@ class LLMManager:
             "code_smell_detection": fast_available,  # Can use fast LLM
             "coverage_assessment": orchestrator_available,  # Requires orchestrator LLM
             "llm_validation": any_llm_available,  # Any LLM works
-
             # Embedding-only features (no LLM required)
             "semantic_similarity": True,  # Always available (uses local embeddings)
             "embedding_clustering": True,  # Always available (uses local embeddings)

@@ -12,7 +12,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from .llm import LLMManager, LLMRequest
 from .plugin_system import Finding, Severity

@@ -33,8 +33,8 @@ if TYPE_CHECKING or SENTENCE_TRANSFORMERS_AVAILABLE:
     except ImportError:
         SentenceTransformer = None
 
-from ...plugin_system import BaseValidator, Finding, Severity
 from ...embedding_client import EmbeddingClient
+from ...plugin_system import BaseValidator, Finding, Severity
 
 __all__ = ["SemanticSimilarityValidator"]
 logger = logging.getLogger(__name__)
@@ -109,11 +109,17 @@ class SemanticSimilarityValidator(BaseValidator):
 
         # Use new embeddings config if available, otherwise fall back to legacy config
         if embeddings_config:
-            similarity_threshold = self._safe_config_get(embeddings_config, "similarity_threshold", 0.85)
+            similarity_threshold = self._safe_config_get(
+                embeddings_config, "similarity_threshold", 0.85
+            )
             enabled = self._safe_config_get(embeddings_config, "use_specialized_embeddings", True)
         else:
-            model_name = self._safe_config_get(embedding_config, "model", "google/embeddinggemma-300m")
-            similarity_threshold = self._safe_config_get(embedding_config, "similarity_threshold", 0.85)
+            model_name = self._safe_config_get(
+                embedding_config, "model", "google/embeddinggemma-300m"
+            )
+            similarity_threshold = self._safe_config_get(
+                embedding_config, "similarity_threshold", 0.85
+            )
             enabled = self._safe_config_get(embedding_config, "enabled", False)
 
         # Check if embedding analysis is enabled
@@ -126,10 +132,12 @@ class SemanticSimilarityValidator(BaseValidator):
             try:
                 self._embedding_client = EmbeddingClient(config)
                 self._similarity_threshold = similarity_threshold
-                logger.info(f"Initialized EmbeddingClient with specialized endpoints (threshold: {similarity_threshold})")
+                logger.info(
+                    f"Initialized EmbeddingClient with specialized endpoints (threshold: {similarity_threshold})"
+                )
 
                 # Keep legacy _model for backward compatibility
-                if hasattr(self._embedding_client, '_local_model'):
+                if hasattr(self._embedding_client, "_local_model"):
                     self._model = self._embedding_client._local_model
                 return True
             except Exception as client_error:
@@ -255,7 +263,7 @@ class SemanticSimilarityValidator(BaseValidator):
         """Generate embedding for text using task-specific prompting."""
         try:
             # Try using the new EmbeddingClient first
-            if hasattr(self, '_embedding_client'):
+            if hasattr(self, "_embedding_client"):
                 # Determine content type for specialized routing
                 if task_type == "code":
                     embeddings = self._embedding_client.get_code_embeddings([text])

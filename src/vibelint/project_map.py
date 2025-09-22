@@ -10,9 +10,9 @@ vibelint/src/vibelint/project_map.py
 import json
 import logging
 from collections import defaultdict
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Any
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 

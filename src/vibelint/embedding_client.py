@@ -19,14 +19,14 @@ Usage:
 vibelint/src/vibelint/embedding_client.py
 """
 
-import os
 import logging
-from typing import List, Optional, Union, Dict, Any
-from pathlib import Path
+import os
+from typing import Any, Dict, List, Optional
+
 import requests
-import time
 
 logger = logging.getLogger(__name__)
+
 
 class EmbeddingClient:
     """
@@ -51,12 +51,11 @@ class EmbeddingClient:
 
         # Specialized endpoint configuration
         self.code_api_url = embedding_config.get(
-            "code_api_url",
-            "https://vanguardone-embedding-auth-worker.mithran-mohanraj.workers.dev"
+            "code_api_url", "https://vanguardone-embedding-auth-worker.mithran-mohanraj.workers.dev"
         )
         self.natural_api_url = embedding_config.get(
             "natural_api_url",
-            "https://vanguardtwo-embedding-auth-worker.mithran-mohanraj.workers.dev"
+            "https://vanguardtwo-embedding-auth-worker.mithran-mohanraj.workers.dev",
         )
 
         self.code_model = embedding_config.get("code_model", "text-embedding-ada-002")
@@ -84,7 +83,7 @@ class EmbeddingClient:
         if not (self._can_use_code_api and self._can_use_natural_api):
             self._initialize_local_model()
 
-        logger.info(f"Embedding client initialized:")
+        logger.info("Embedding client initialized:")
         logger.info(f"  Code API: {'✓' if self._can_use_code_api else '✗'}")
         logger.info(f"  Natural API: {'✓' if self._can_use_natural_api else '✗'}")
         logger.info(f"  Local fallback: {'✓' if self._local_model else '✗'}")
@@ -94,6 +93,7 @@ class EmbeddingClient:
         try:
             try:
                 from sentence_transformers import SentenceTransformer
+
                 self._local_model = SentenceTransformer(self.local_model_name)
                 logger.info(f"Local embedding model loaded: {self.local_model_name}")
             except ImportError:
@@ -101,7 +101,9 @@ class EmbeddingClient:
         except Exception as e:
             logger.warning(f"Failed to load local model {self.local_model_name}: {e}")
 
-    def _call_remote_api(self, api_url: str, api_key: str, model: str, texts: List[str]) -> List[List[float]]:
+    def _call_remote_api(
+        self, api_url: str, api_key: str, model: str, texts: List[str]
+    ) -> List[List[float]]:
         """
         Call remote embedding API.
 
@@ -114,22 +116,13 @@ class EmbeddingClient:
         Returns:
             List of embedding vectors
         """
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-        payload = {
-            "input": texts,
-            "model": model
-        }
+        payload = {"input": texts, "model": model}
 
         try:
             response = requests.post(
-                f"{api_url}/v1/embeddings",
-                headers=headers,
-                json=payload,
-                timeout=30
+                f"{api_url}/v1/embeddings", headers=headers, json=payload, timeout=30
             )
             response.raise_for_status()
 
@@ -172,10 +165,7 @@ class EmbeddingClient:
         if self._can_use_code_api:
             try:
                 return self._call_remote_api(
-                    self.code_api_url,
-                    self.code_api_key,
-                    self.code_model,
-                    code_texts
+                    self.code_api_url, self.code_api_key, self.code_model, code_texts
                 )
             except Exception as e:
                 logger.warning(f"Code API failed, falling back to local: {e}")
@@ -196,10 +186,7 @@ class EmbeddingClient:
         if self._can_use_natural_api:
             try:
                 return self._call_remote_api(
-                    self.natural_api_url,
-                    self.natural_api_key,
-                    self.natural_model,
-                    natural_texts
+                    self.natural_api_url, self.natural_api_key, self.natural_model, natural_texts
                 )
             except Exception as e:
                 logger.warning(f"Natural API failed, falling back to local: {e}")
@@ -254,8 +241,9 @@ class EmbeddingClient:
         similarity = dot_product / (norm1 * norm2)
         return float(similarity)
 
-    def find_similar_pairs(self, texts: List[str], content_type: str = "mixed",
-                          threshold: Optional[float] = None) -> List[Dict[str, Any]]:
+    def find_similar_pairs(
+        self, texts: List[str], content_type: str = "mixed", threshold: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
         """
         Find pairs of texts that exceed similarity threshold.
 
@@ -278,14 +266,16 @@ class EmbeddingClient:
                 similarity = self.compute_similarity(embeddings[i], embeddings[j])
 
                 if similarity >= threshold:
-                    similar_pairs.append({
-                        "index1": i,
-                        "index2": j,
-                        "text1": texts[i],
-                        "text2": texts[j],
-                        "similarity": similarity,
-                        "content_type": content_type
-                    })
+                    similar_pairs.append(
+                        {
+                            "index1": i,
+                            "index2": j,
+                            "text1": texts[i],
+                            "text2": texts[j],
+                            "similarity": similarity,
+                            "content_type": content_type,
+                        }
+                    )
 
         # Sort by similarity descending
         similar_pairs.sort(key=lambda x: x["similarity"], reverse=True)

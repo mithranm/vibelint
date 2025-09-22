@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from .discovery import discover_files, discover_files_from_paths
-from .reporting import BUILTIN_FORMATTERS
 from .plugin_system import Finding, Severity, plugin_manager
+from .reporting import BUILTIN_FORMATTERS
 from .rules import RuleEngine
 
 # Note: No longer importing BUILTIN_VALIDATORS - using plugin discovery instead

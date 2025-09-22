@@ -66,6 +66,7 @@ vibelint = "vibelint.cli:main"
 "LOGGER-NAME" = "vibelint.validators.single_file.logger_names:LoggerNameValidator"
 "TYPING-POOR-PRACTICE" = "vibelint.validators.single_file.typing_quality:TypingQualityValidator"
 "VIBELINT-SELF-VALIDATION" = "vibelint.validators.single_file.self_validation:VibelintSelfValidator"
+"FILE-TOO-LONG" = "vibelint.validators.single_file.line_count:LineCountValidator"
 
 # Project-wide validators (require knowledge of entire project)
 "DEAD-CODE-FOUND" = "vibelint.validators.project_wide.dead_code:DeadCodeValidator"
@@ -137,92 +138,35 @@ require_function_docstrings = false     # Require function docstrings (can be no
 path_reference_format = "relative"      # Options: "relative", "absolute", "module_path"
 include_private_functions = false       # Check docstrings for _private functions
 
-# Dual LLM configuration - clean and simple
+# LLM configuration - generic template (projects should override in their pyproject.toml)
 [tool.vibelint.llm]
-# Fast LLM: High-speed inference for quick tasks (vLLM)
-fast_api_url = "https://claudiallm-auth-worker.mithran-mohanraj.workers.dev"
-fast_model = "openai/gpt-oss-20b"
-fast_temperature = 0.1
-fast_max_tokens = 2048
+# Example configuration - projects should customize these values
+# fast_api_url = "https://your-llm-endpoint.com"
+# fast_model = "your-model-name"
+# fast_temperature = 0.1
+# fast_max_tokens = 2048
+# remove_thinking_tokens = true
+# thinking_format = "harmony"  # Options: "harmony", "qwen", "custom"
 
-# Orchestrator LLM: Large context for complex reasoning (llama.cpp)
-orchestrator_api_url = "https://chipllm-auth-worker.mithran-mohanraj.workers.dev"
-orchestrator_model = "C:\\dev\\openai_gpt-oss-120b-MXFP4.gguf"
-orchestrator_temperature = 0.2
-orchestrator_max_tokens = 8192
-orchestrator_max_context_tokens = 28800  # Discovered via diagnostics (32k with 10% safety margin)
-fast_max_context_tokens = 900  # Discovered via diagnostics (1k with 10% safety margin)
-
-# Automatic routing (when to use which LLM)
-context_threshold = 3000              # Use orchestrator for >3k tokens
-enable_context_probing = true         # Auto-discover actual limits
-enable_fallback = false               # Fail fast when configured models unavailable (unconfigured features gracefully degrade)
-
-# Thinking token removal configuration
-remove_thinking_tokens = true        # Set to false to keep all model output
-thinking_format = "harmony"          # Options: "harmony", "qwen", "custom"
-
-# For models using different thinking patterns, set thinking_format = "custom" and specify:
-# custom_thinking_patterns = [
-#     "r'<think>.*?</think>'",          # For models using <think> tags
-#     "r'<reasoning>.*?</reasoning>'",   # For models using <reasoning> tags
-#     "r'\\[THINKING\\].*?\\[/THINKING\\]'", # For models using [THINKING] blocks
-#     "r'```thinking.*?```'",           # For models using code block thinking
-# ]
-
-# Examples for common model families:
-# - Claude (Anthropic): thinking_format = "harmony" (default)
-# - Qwen models: thinking_format = "qwen"
-# - OpenAI o1 models: thinking_format = "custom" + patterns for their format
-# - Custom/local models: thinking_format = "custom" + custom_thinking_patterns
-
-# Specialized embedding configuration
+# Embedding configuration - generic template
 [tool.vibelint.embeddings]
-# Code embeddings: Optimized for function similarity, architectural patterns, duplicate logic
-code_api_url = "https://vanguardone-embedding-auth-worker.mithran-mohanraj.workers.dev"
-code_model = "text-embedding-ada-002"  # Model name expected by the API
-code_dimensions = 768  # Embedding vector size
-
-# Natural language embeddings: Optimized for documentation, comments, requirements
-natural_api_url = "https://vanguardtwo-embedding-auth-worker.mithran-mohanraj.workers.dev"
-natural_model = "text-embedding-ada-002"  # Model name expected by the API
-natural_dimensions = 1536  # Embedding vector size
-
-# Embedding usage routing
-use_specialized_embeddings = true  # Set to false to use local models only
+# Example configuration - projects should customize for their embedding providers
+# code_api_url = "https://your-embedding-endpoint.com"
+# code_model = "your-embedding-model"
+# code_dimensions = 768
+# use_specialized_embeddings = false  # Set to true when endpoints are configured
 similarity_threshold = 0.85  # Threshold for similarity detection
 
-# Vector database configuration
+# Vector database configuration - generic template
 [tool.vibelint.vector_store]
 # Backend options: "memory", "qdrant", "vectorize", "pinecone"
-backend = "qdrant"  # Default to Qdrant for proper vector performance
+backend = "memory"  # Default to in-memory for simplicity (projects should configure proper backends)
 
-# In-memory options (lightweight fallback only)
-cache_size = 10000  # Maximum vectors to keep in memory
-# Note: No persistence - use Qdrant for proper vector storage
-
-# Qdrant options (native ARM64 binary - no Docker needed)
-qdrant_url = "http://localhost:6333"
-qdrant_collection = "vibelint_embeddings"
-# qdrant_api_key via QDRANT_API_KEY environment variable
-
-# Chroma options (lightweight alternative)
-chroma_path = ".vibelint-cache/chroma"
-chroma_collection = "vibelint_embeddings"
-
-# Cloudflare Vectorize options (recommended for edge/cloud)
-vectorize_account_id = "your-cloudflare-account-id"
-vectorize_index = "vibelint-embeddings"
-# vectorize_api_token via VECTORIZE_API_TOKEN environment variable
-
-# Pinecone options (cloud)
-pinecone_environment = "us-west1-gcp"
-pinecone_index = "vibelint-embeddings"
-# pinecone_api_key via PINECONE_API_KEY environment variable
-
-# Performance tuning
-similarity_metric = "cosine"  # "cosine", "euclidean", "dot"
-batch_size = 100  # Vectors to process in batch operations
+# Example configurations for different backends (projects should uncomment and configure):
+# cache_size = 10000  # For memory backend
+# qdrant_url = "http://localhost:6333"  # For Qdrant
+# chroma_path = ".vibelint-cache/chroma"  # For Chroma
+# similarity_metric = "cosine"  # "cosine", "euclidean", "dot"
 
 [tool.black]
 target-version = ["py310", "py311", "py312"]

@@ -26,7 +26,6 @@ class PrintStatementValidator(BaseValidator):
     description = "Detects print() calls that should be replaced with logging"
     default_severity = Severity.WARN
 
-
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Validate print statement usage in a Python file."""
         # Check if file should be excluded based on configuration

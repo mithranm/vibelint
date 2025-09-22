@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Set
 
 from ...plugin_system import BaseValidator, Finding, Severity
-from ...utils import find_project_root, find_files_by_extension
+from ...utils import find_files_by_extension, find_project_root
 
 __all__ = ["DeadCodeValidator"]
 
@@ -47,15 +47,12 @@ class DeadCodeValidator(BaseValidator):
         yield from self._check_duplicate_patterns(file_path, content)
         yield from self._check_legacy_patterns(file_path, content)
 
-
     def _get_project_files(self, project_root: Path) -> List[Path]:
         """Get all Python files in the project."""
         if self._project_files_cache is None:
             exclude_patterns = ["*/__pycache__/*", "*/.pytest_cache/*", "*/build/*", "*/dist/*"]
             self._project_files_cache = find_files_by_extension(
-                project_root,
-                extension=".py",
-                exclude_globs=exclude_patterns
+                project_root, extension=".py", exclude_globs=exclude_patterns
             )
         return self._project_files_cache
 

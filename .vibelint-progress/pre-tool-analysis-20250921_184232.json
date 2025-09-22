@@ -1,0 +1,20 @@
+{
+  "timestamp": "2025-09-21T18:42:32.851427",
+  "tool_name": "unknown",
+  "target_files": [
+    ""
+  ],
+  "issues_found": {
+    "errors": [
+      {
+        "error": "vibelint_execution_error",
+        "message": "Usage: vibelint check [OPTIONS] [TARGETS]...\nTry 'vibelint check --help' for help.\n\nError: No such option: --format (Possible options: --output-format, --report)\n",
+        "stdout": ""
+      }
+    ]
+  },
+  "blocked": false,
+  "issue_summary": {
+    "errors": 1
+  }
+}

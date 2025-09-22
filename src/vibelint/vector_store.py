@@ -25,29 +25,31 @@ Usage:
 vibelint/src/vibelint/vector_store.py
 """
 
-import os
-import json
 import logging
-import tempfile
+import os
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any, Tuple, Union
-from pathlib import Path
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class VectorSearchResult:
     """Result from vector similarity search."""
+
     id: str
     score: float
     metadata: Dict[str, Any]
     embedding: Optional[List[float]] = None
 
+
 @dataclass
 class VectorStoreConfig:
     """Configuration for vector store backends."""
+
     backend: str = "memory"  # "memory", "qdrant", "pinecone"
 
     # In-memory options (fallback only)
@@ -72,6 +74,7 @@ class VectorStoreConfig:
     dimension: int = 768
     similarity_metric: str = "cosine"  # "cosine", "euclidean", "dot"
 
+
 class VectorStore(ABC):
     """Abstract base class for vector storage backends."""
 
@@ -85,8 +88,9 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    def search(self, query_embedding: List[float], top_k: int = 5,
-               filter: Optional[Dict[str, Any]] = None) -> List[VectorSearchResult]:
+    def search(
+        self, query_embedding: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None
+    ) -> List[VectorSearchResult]:
         """Search for similar vectors."""
         pass
 
@@ -115,6 +119,7 @@ class VectorStore(ABC):
         """Get storage statistics."""
         pass
 
+
 class InMemoryVectorStore(VectorStore):
     """In-memory vector store using FAISS for fast similarity search."""
 
@@ -123,12 +128,15 @@ class InMemoryVectorStore(VectorStore):
 
         try:
             import faiss
+
             self.faiss = faiss
 
             # Create FAISS index for fast similarity search
             if config.similarity_metric == "cosine":
                 # Normalize vectors for cosine similarity
-                self.index = faiss.IndexFlatIP(self.dimension)  # Inner product on normalized vectors = cosine
+                self.index = faiss.IndexFlatIP(
+                    self.dimension
+                )  # Inner product on normalized vectors = cosine
                 self.normalize_vectors = True
             elif config.similarity_metric == "euclidean":
                 self.index = faiss.IndexFlatL2(self.dimension)  # L2 distance
@@ -142,7 +150,9 @@ class InMemoryVectorStore(VectorStore):
             self.metadata: Dict[str, Dict[str, Any]] = {}
             self.next_index = 0
 
-            logger.info(f"InMemoryVectorStore: FAISS-powered similarity search ({config.similarity_metric})")
+            logger.info(
+                f"InMemoryVectorStore: FAISS-powered similarity search ({config.similarity_metric})"
+            )
 
         except ImportError:
             logger.error("FAISS not available. Install with: pip install faiss-cpu")
@@ -153,7 +163,9 @@ class InMemoryVectorStore(VectorStore):
         try:
             embedding_array = np.array(embedding, dtype=np.float32).reshape(1, -1)
             if embedding_array.shape[1] != self.dimension:
-                logger.warning(f"Embedding dimension mismatch: expected {self.dimension}, got {embedding_array.shape[1]}")
+                logger.warning(
+                    f"Embedding dimension mismatch: expected {self.dimension}, got {embedding_array.shape[1]}"
+                )
                 return False
 
             # Normalize if using cosine similarity
@@ -181,8 +193,9 @@ class InMemoryVectorStore(VectorStore):
             logger.error(f"Failed to upsert vector {id}: {e}")
             return False
 
-    def search(self, query_embedding: List[float], top_k: int = 5,
-               filter: Optional[Dict[str, Any]] = None) -> List[VectorSearchResult]:
+    def search(
+        self, query_embedding: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None
+    ) -> List[VectorSearchResult]:
         """Search for similar vectors using FAISS."""
         if self.index.ntotal == 0:
             return []
@@ -226,11 +239,11 @@ class InMemoryVectorStore(VectorStore):
                 else:  # dot product
                     final_score = score
 
-                results.append(VectorSearchResult(
-                    id=vec_id,
-                    score=final_score,
-                    metadata=self.metadata.get(vec_id, {})
-                ))
+                results.append(
+                    VectorSearchResult(
+                        id=vec_id, score=final_score, metadata=self.metadata.get(vec_id, {})
+                    )
+                )
 
             # Sort by score descending and limit to top_k
             results.sort(key=lambda x: x.score, reverse=True)
@@ -265,7 +278,7 @@ class InMemoryVectorStore(VectorStore):
         return VectorSearchResult(
             id=id,
             score=1.0,  # Perfect match
-            metadata=self.metadata.get(id, {})
+            metadata=self.metadata.get(id, {}),
             # Note: FAISS doesn't easily retrieve vectors, so no embedding returned
         )
 
@@ -303,7 +316,7 @@ class InMemoryVectorStore(VectorStore):
             "faiss_total": self.index.ntotal,
             "dimension": self.dimension,
             "similarity_metric": self.config.similarity_metric,
-            "index_type": type(self.index).__name__
+            "index_type": type(self.index).__name__,
         }
 
     # FAISS handles similarity computation internally
@@ -327,6 +340,7 @@ class InMemoryVectorStore(VectorStore):
 
     # JSON persistence removed - use Qdrant for proper vector storage
 
+
 class QdrantVectorStore(VectorStore):
     """Qdrant vector store adapter."""
 
@@ -337,12 +351,10 @@ class QdrantVectorStore(VectorStore):
 
         try:
             from qdrant_client import QdrantClient
-            from qdrant_client.models import Distance, VectorParams, PointStruct
+            from qdrant_client.models import (Distance, PointStruct,
+                                              VectorParams)
 
-            self.client = QdrantClient(
-                url=config.qdrant_url,
-                api_key=config.qdrant_api_key
-            )
+            self.client = QdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
 
             # Create collection if it doesn't exist
             try:
@@ -351,15 +363,15 @@ class QdrantVectorStore(VectorStore):
                 distance_map = {
                     "cosine": Distance.COSINE,
                     "euclidean": Distance.EUCLID,
-                    "dot": Distance.DOT
+                    "dot": Distance.DOT,
                 }
 
                 self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
                         size=self.dimension,
-                        distance=distance_map.get(config.similarity_metric, Distance.COSINE)
-                    )
+                        distance=distance_map.get(config.similarity_metric, Distance.COSINE),
+                    ),
                 )
 
             logger.info(f"Connected to Qdrant at {config.qdrant_url}")
@@ -374,37 +386,32 @@ class QdrantVectorStore(VectorStore):
     def upsert(self, id: str, embedding: List[float], metadata: Dict[str, Any] = None) -> bool:
         """Store or update a vector with metadata."""
         try:
-            from qdrant_client.models import PointStruct
             import uuid
+
+            from qdrant_client.models import PointStruct
 
             # Qdrant requires UUID or integer IDs, so convert string to UUID
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, id))
 
             # Store original ID in metadata for retrieval
             payload = metadata or {}
-            payload['original_id'] = id
+            payload["original_id"] = id
 
-            point = PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload=payload
-            )
+            point = PointStruct(id=point_id, vector=embedding, payload=payload)
 
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=[point]
-            )
+            self.client.upsert(collection_name=self.collection_name, points=[point])
             return True
 
         except Exception as e:
             logger.error(f"Failed to upsert vector {id}: {e}")
             return False
 
-    def search(self, query_embedding: List[float], top_k: int = 5,
-               filter: Optional[Dict[str, Any]] = None) -> List[VectorSearchResult]:
+    def search(
+        self, query_embedding: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None
+    ) -> List[VectorSearchResult]:
         """Search for similar vectors."""
         try:
-            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            from qdrant_client.models import FieldCondition, Filter, MatchValue
 
             # Convert filter to Qdrant format
             qdrant_filter = None
@@ -419,14 +426,14 @@ class QdrantVectorStore(VectorStore):
                 query_vector=query_embedding,
                 limit=top_k,
                 query_filter=qdrant_filter,
-                with_payload=True
+                with_payload=True,
             )
 
             return [
                 VectorSearchResult(
-                    id=hit.payload.get('original_id', str(hit.id)),  # Return original ID
+                    id=hit.payload.get("original_id", str(hit.id)),  # Return original ID
                     score=hit.score,
-                    metadata={k: v for k, v in (hit.payload or {}).items() if k != 'original_id'}
+                    metadata={k: v for k, v in (hit.payload or {}).items() if k != "original_id"},
                 )
                 for hit in results
             ]
@@ -439,13 +446,11 @@ class QdrantVectorStore(VectorStore):
         """Delete a vector by ID."""
         try:
             import uuid
+
             # Convert string ID to UUID
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, id))
 
-            self.client.delete(
-                collection_name=self.collection_name,
-                points_selector=[point_id]
-            )
+            self.client.delete(collection_name=self.collection_name, points_selector=[point_id])
             return True
         except Exception as e:
             logger.error(f"Failed to delete vector {id}: {e}")
@@ -455,6 +460,7 @@ class QdrantVectorStore(VectorStore):
         """Get a specific vector by ID."""
         try:
             import uuid
+
             # Convert string ID to UUID
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, id))
 
@@ -462,17 +468,17 @@ class QdrantVectorStore(VectorStore):
                 collection_name=self.collection_name,
                 ids=[point_id],
                 with_payload=True,
-                with_vectors=True
+                with_vectors=True,
             )
 
             if result:
                 point = result[0]
                 payload = point.payload or {}
                 return VectorSearchResult(
-                    id=payload.get('original_id', id),
+                    id=payload.get("original_id", id),
                     score=1.0,
-                    metadata={k: v for k, v in payload.items() if k != 'original_id'},
-                    embedding=point.vector
+                    metadata={k: v for k, v in payload.items() if k != "original_id"},
+                    embedding=point.vector,
                 )
             return None
 
@@ -484,7 +490,7 @@ class QdrantVectorStore(VectorStore):
         """List all vector IDs, optionally filtered."""
         try:
             # Qdrant doesn't have a direct "list IDs" method, so we do a scroll
-            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            from qdrant_client.models import FieldCondition, Filter, MatchValue
 
             qdrant_filter = None
             if filter:
@@ -497,7 +503,7 @@ class QdrantVectorStore(VectorStore):
                 collection_name=self.collection_name,
                 scroll_filter=qdrant_filter,
                 with_payload=False,
-                with_vectors=False
+                with_vectors=False,
             )
 
             return [str(point.id) for point in result]
@@ -513,18 +519,19 @@ class QdrantVectorStore(VectorStore):
             self.client.delete_collection(self.collection_name)
 
             from qdrant_client.models import Distance, VectorParams
+
             distance_map = {
                 "cosine": Distance.COSINE,
                 "euclidean": Distance.EUCLID,
-                "dot": Distance.DOT
+                "dot": Distance.DOT,
             }
 
             self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
                     size=self.dimension,
-                    distance=distance_map.get(self.config.similarity_metric, Distance.COSINE)
-                )
+                    distance=distance_map.get(self.config.similarity_metric, Distance.COSINE),
+                ),
             )
             return True
 
@@ -542,11 +549,12 @@ class QdrantVectorStore(VectorStore):
                 "dimension": self.dimension,
                 "collection": self.collection_name,
                 "url": self.config.qdrant_url,
-                "similarity_metric": self.config.similarity_metric
+                "similarity_metric": self.config.similarity_metric,
             }
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
             return {"backend": "qdrant", "error": str(e)}
+
 
 class PineconeVectorStore(VectorStore):
     """Pinecone vector store adapter."""
@@ -559,23 +567,16 @@ class PineconeVectorStore(VectorStore):
         try:
             import pinecone
 
-            pinecone.init(
-                api_key=config.pinecone_api_key,
-                environment=config.pinecone_environment
-            )
+            pinecone.init(api_key=config.pinecone_api_key, environment=config.pinecone_environment)
 
             # Create index if it doesn't exist
             if self.index_name not in pinecone.list_indexes():
-                metric_map = {
-                    "cosine": "cosine",
-                    "euclidean": "euclidean",
-                    "dot": "dotproduct"
-                }
+                metric_map = {"cosine": "cosine", "euclidean": "euclidean", "dot": "dotproduct"}
 
                 pinecone.create_index(
                     name=self.index_name,
                     dimension=self.dimension,
-                    metric=metric_map.get(config.similarity_metric, "cosine")
+                    metric=metric_map.get(config.similarity_metric, "cosine"),
                 )
 
             self.index = pinecone.Index(self.index_name)
@@ -597,23 +598,17 @@ class PineconeVectorStore(VectorStore):
             logger.error(f"Failed to upsert vector {id}: {e}")
             return False
 
-    def search(self, query_embedding: List[float], top_k: int = 5,
-               filter: Optional[Dict[str, Any]] = None) -> List[VectorSearchResult]:
+    def search(
+        self, query_embedding: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None
+    ) -> List[VectorSearchResult]:
         """Search for similar vectors."""
         try:
             results = self.index.query(
-                vector=query_embedding,
-                top_k=top_k,
-                filter=filter,
-                include_metadata=True
+                vector=query_embedding, top_k=top_k, filter=filter, include_metadata=True
             )
 
             return [
-                VectorSearchResult(
-                    id=match.id,
-                    score=match.score,
-                    metadata=match.metadata or {}
-                )
+                VectorSearchResult(id=match.id, score=match.score, metadata=match.metadata or {})
                 for match in results.matches
             ]
 
@@ -640,7 +635,7 @@ class PineconeVectorStore(VectorStore):
                     id=id,
                     score=1.0,
                     metadata=vector_data.metadata or {},
-                    embedding=vector_data.values
+                    embedding=vector_data.values,
                 )
             return None
         except Exception as e:
@@ -673,11 +668,12 @@ class PineconeVectorStore(VectorStore):
                 "dimension": self.dimension,
                 "index_name": self.index_name,
                 "environment": self.config.pinecone_environment,
-                "similarity_metric": self.config.similarity_metric
+                "similarity_metric": self.config.similarity_metric,
             }
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
             return {"backend": "pinecone", "error": str(e)}
+
 
 class CloudflareVectorizeStore(VectorStore):
     """Cloudflare Vectorize adapter - perfect for edge deployment."""
@@ -694,7 +690,7 @@ class CloudflareVectorizeStore(VectorStore):
         self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/vectorize/indexes/{self.index_name}"
         self.headers = {
             "Authorization": f"Bearer {self.api_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         # Create index if needed
@@ -715,8 +711,8 @@ class CloudflareVectorizeStore(VectorStore):
                     "name": self.index_name,
                     "config": {
                         "dimensions": self.dimension,
-                        "metric": "cosine"  # Vectorize uses cosine by default
-                    }
+                        "metric": "cosine",  # Vectorize uses cosine by default
+                    },
                 }
                 response = requests.post(create_url, headers=self.headers, json=payload)
                 response.raise_for_status()
@@ -730,21 +726,9 @@ class CloudflareVectorizeStore(VectorStore):
         try:
             import requests
 
-            payload = {
-                "vectors": [
-                    {
-                        "id": id,
-                        "values": embedding,
-                        "metadata": metadata or {}
-                    }
-                ]
-            }
+            payload = {"vectors": [{"id": id, "values": embedding, "metadata": metadata or {}}]}
 
-            response = requests.post(
-                f"{self.base_url}/upsert",
-                headers=self.headers,
-                json=payload
-            )
+            response = requests.post(f"{self.base_url}/upsert", headers=self.headers, json=payload)
             response.raise_for_status()
             return True
 
@@ -752,8 +736,9 @@ class CloudflareVectorizeStore(VectorStore):
             logger.error(f"Failed to upsert vector {id}: {e}")
             return False
 
-    def search(self, query_embedding: List[float], top_k: int = 5,
-               filter: Optional[Dict[str, Any]] = None) -> List[VectorSearchResult]:
+    def search(
+        self, query_embedding: List[float], top_k: int = 5, filter: Optional[Dict[str, Any]] = None
+    ) -> List[VectorSearchResult]:
         """Search for similar vectors."""
         try:
             import requests
@@ -762,18 +747,14 @@ class CloudflareVectorizeStore(VectorStore):
                 "vector": query_embedding,
                 "topK": top_k,
                 "returnValues": True,
-                "returnMetadata": True
+                "returnMetadata": True,
             }
 
             # Vectorize filter format (if supported)
             if filter:
                 payload["filter"] = filter
 
-            response = requests.post(
-                f"{self.base_url}/query",
-                headers=self.headers,
-                json=payload
-            )
+            response = requests.post(f"{self.base_url}/query", headers=self.headers, json=payload)
             response.raise_for_status()
 
             data = response.json()
@@ -783,12 +764,14 @@ class CloudflareVectorizeStore(VectorStore):
 
             results = []
             for match in data.get("result", {}).get("matches", []):
-                results.append(VectorSearchResult(
-                    id=match["id"],
-                    score=match["score"],
-                    metadata=match.get("metadata", {}),
-                    embedding=match.get("values")
-                ))
+                results.append(
+                    VectorSearchResult(
+                        id=match["id"],
+                        score=match["score"],
+                        metadata=match.get("metadata", {}),
+                        embedding=match.get("values"),
+                    )
+                )
 
             return results
 
@@ -802,11 +785,7 @@ class CloudflareVectorizeStore(VectorStore):
             import requests
 
             payload = {"ids": [id]}
-            response = requests.post(
-                f"{self.base_url}/delete",
-                headers=self.headers,
-                json=payload
-            )
+            response = requests.post(f"{self.base_url}/delete", headers=self.headers, json=payload)
             response.raise_for_status()
             return True
 
@@ -821,9 +800,7 @@ class CloudflareVectorizeStore(VectorStore):
 
             payload = {"ids": [id]}
             response = requests.post(
-                f"{self.base_url}/getByIds",
-                headers=self.headers,
-                json=payload
+                f"{self.base_url}/getByIds", headers=self.headers, json=payload
             )
             response.raise_for_status()
 
@@ -836,7 +813,7 @@ class CloudflareVectorizeStore(VectorStore):
                         id=vector["id"],
                         score=1.0,
                         metadata=vector.get("metadata", {}),
-                        embedding=vector.get("values")
+                        embedding=vector.get("values"),
                     )
             return None
 
@@ -885,13 +862,14 @@ class CloudflareVectorizeStore(VectorStore):
                     "account_id": self.account_id,
                     "similarity_metric": "cosine",
                     "created_on": index_info.get("created_on"),
-                    "modified_on": index_info.get("modified_on")
+                    "modified_on": index_info.get("modified_on"),
                 }
 
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
 
         return {"backend": "vectorize", "error": "Failed to get stats"}
+
 
 def get_vector_store(config: Union[Dict[str, Any], VectorStoreConfig]) -> VectorStore:
     """Factory function to get appropriate vector store based on configuration."""
@@ -911,7 +889,7 @@ def get_vector_store(config: Union[Dict[str, Any], VectorStoreConfig]) -> Vector
             pinecone_api_key=os.getenv("PINECONE_API_KEY"),
             pinecone_environment=vector_config.get("pinecone_environment", "us-west1-gcp"),
             pinecone_index=vector_config.get("pinecone_index", "vibelint-embeddings"),
-            similarity_metric=vector_config.get("similarity_metric", "cosine")
+            similarity_metric=vector_config.get("similarity_metric", "cosine"),
         )
     else:
         store_config = config

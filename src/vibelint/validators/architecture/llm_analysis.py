@@ -8,14 +8,11 @@ vibelint/validators/architecture/llm_analysis.py
 """
 
 import logging
-import os
 import re
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
 from ...plugin_system import BaseValidator, Finding, Severity
 
@@ -72,7 +69,11 @@ class LLMAnalysisValidator(BaseValidator):
         from ...llm import create_llm_manager
 
         # Get full vibelint config (not just llm_analysis section)
-        full_config = getattr(self.config, '_config_data', self.config) if hasattr(self.config, '_config_data') else self.config
+        full_config = (
+            getattr(self.config, "_config_data", self.config)
+            if hasattr(self.config, "_config_data")
+            else self.config
+        )
         self.llm_manager = create_llm_manager(full_config)
 
         # Generation settings from config with sensible defaults
@@ -114,7 +115,9 @@ class LLMAnalysisValidator(BaseValidator):
         # Architecture analysis will use the dual LLM system directly
         # No need for langchain setup - using our unified LLM manager
 
-    def _get_similarity_prioritized_pairs(self, analysis_files: List[Path]) -> List[Tuple[Path, Path, float]]:
+    def _get_similarity_prioritized_pairs(
+        self, analysis_files: List[Path]
+    ) -> List[Tuple[Path, Path, float]]:
         """
         Use semantic similarity to prioritize file pairs for LLM analysis.
 
@@ -134,7 +137,7 @@ class LLMAnalysisValidator(BaseValidator):
                 # Fallback: return files in original order with fake similarity scores
                 pairs = []
                 for i, file1 in enumerate(analysis_files):
-                    for file2 in analysis_files[i+1:]:
+                    for file2 in analysis_files[i + 1 :]:
                         pairs.append((file1, file2, 0.5))  # Neutral score
                 return pairs
 
@@ -142,7 +145,7 @@ class LLMAnalysisValidator(BaseValidator):
             file_embeddings = {}
             for file_path in analysis_files:
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
+                    with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
 
                     # Extract meaningful content for embedding
@@ -160,10 +163,9 @@ class LLMAnalysisValidator(BaseValidator):
             files_with_embeddings = list(file_embeddings.keys())
 
             for i, file1 in enumerate(files_with_embeddings):
-                for file2 in files_with_embeddings[i+1:]:
+                for file2 in files_with_embeddings[i + 1 :]:
                     similarity = similarity_validator._compute_similarity(
-                        file_embeddings[file1],
-                        file_embeddings[file2]
+                        file_embeddings[file1], file_embeddings[file2]
                     )
                     pairs.append((file1, file2, similarity))
 
@@ -172,7 +174,9 @@ class LLMAnalysisValidator(BaseValidator):
 
             logger.info(f"Prioritized {len(pairs)} file pairs by semantic similarity")
             if pairs:
-                logger.info(f"Highest similarity: {pairs[0][2]:.3f} between {pairs[0][0].name} and {pairs[0][1].name}")
+                logger.info(
+                    f"Highest similarity: {pairs[0][2]:.3f} between {pairs[0][0].name} and {pairs[0][1].name}"
+                )
 
             return pairs
 
@@ -181,7 +185,7 @@ class LLMAnalysisValidator(BaseValidator):
             # Fallback to original file order
             pairs = []
             for i, file1 in enumerate(analysis_files):
-                for file2 in analysis_files[i+1:]:
+                for file2 in analysis_files[i + 1 :]:
                     pairs.append((file1, file2, 0.5))  # Neutral score
             return pairs
 
@@ -224,7 +228,9 @@ class LLMAnalysisValidator(BaseValidator):
         priority_files = set()
 
         if high_similarity_pairs:
-            logger.info(f"Found {len(high_similarity_pairs)} high-similarity pairs (>0.8) for priority analysis")
+            logger.info(
+                f"Found {len(high_similarity_pairs)} high-similarity pairs (>0.8) for priority analysis"
+            )
             for file1, file2, score in high_similarity_pairs[:5]:  # Top 5 most similar pairs
                 priority_files.update([file1, file2])
                 logger.info(f"Priority pair: {file1.name} ↔ {file2.name} (similarity: {score:.3f})")
@@ -232,10 +238,14 @@ class LLMAnalysisValidator(BaseValidator):
         # Estimate analysis time - prioritize expensive LLM analysis
         priority_count = len(priority_files)
         remaining_count = len(analysis_files) - priority_count
-        estimated_minutes = max(1, (priority_count * 60 + remaining_count * 30) // 60)  # More time for priority pairs
+        estimated_minutes = max(
+            1, (priority_count * 60 + remaining_count * 30) // 60
+        )  # More time for priority pairs
         estimated_range = f"{max(1, estimated_minutes - 1)}-{estimated_minutes + 2}"
 
-        logger.info(f"Starting similarity-guided LLM analysis: {priority_count} priority + {remaining_count} regular files")
+        logger.info(
+            f"Starting similarity-guided LLM analysis: {priority_count} priority + {remaining_count} regular files"
+        )
         logger.info(f"ESTIMATED TIME: {estimated_range} minutes (depends on LLM response speed)")
         logger.info("Strategy: High-similarity pairs analyzed first for redundancy detection")
 
@@ -248,9 +258,16 @@ class LLMAnalysisValidator(BaseValidator):
             logger.warning("   vibelint check src/module2/ --rule ARCHITECTURE-LLM")
 
         # Run architectural analysis prioritized by semantic similarity
-        yield from self._analyze_similarity_guided_structure(file_path, analysis_files, similarity_pairs)
+        yield from self._analyze_similarity_guided_structure(
+            file_path, analysis_files, similarity_pairs
+        )
 
-    def _analyze_similarity_guided_structure(self, primary_file: Path, analysis_files: List[Path], similarity_pairs: List[Tuple[Path, Path, float]]) -> Iterator[Finding]:
+    def _analyze_similarity_guided_structure(
+        self,
+        primary_file: Path,
+        analysis_files: List[Path],
+        similarity_pairs: List[Tuple[Path, Path, float]],
+    ) -> Iterator[Finding]:
         """
         Perform similarity-guided architectural analysis.
 
@@ -262,16 +279,20 @@ class LLMAnalysisValidator(BaseValidator):
             high_sim_pairs = [pair for pair in similarity_pairs if pair[2] > 0.8]
 
             if high_sim_pairs:
-                logger.info(f"Phase 1: Analyzing {len(high_sim_pairs)} high-similarity pairs for redundancy")
+                logger.info(
+                    f"Phase 1: Analyzing {len(high_sim_pairs)} high-similarity pairs for redundancy"
+                )
 
                 for file1, file2, similarity in high_sim_pairs[:3]:  # Limit to top 3 for time
-                    logger.info(f"Analyzing similar pair: {file1.name} ↔ {file2.name} (similarity: {similarity:.3f})")
+                    logger.info(
+                        f"Analyzing similar pair: {file1.name} ↔ {file2.name} (similarity: {similarity:.3f})"
+                    )
 
                     # Read both files
                     try:
-                        with open(file1, 'r', encoding='utf-8') as f:
+                        with open(file1, "r", encoding="utf-8") as f:
                             content1 = f.read()
-                        with open(file2, 'r', encoding='utf-8') as f:
+                        with open(file2, "r", encoding="utf-8") as f:
                             content2 = f.read()
                     except Exception as e:
                         logger.debug(f"Failed to read files for similarity analysis: {e}")
@@ -315,7 +336,12 @@ Provide specific, actionable findings."""
                         continue
 
             # Step 2: Global analysis on remaining files
-            remaining_files = [f for f in analysis_files if f not in {pair[0] for pair in high_sim_pairs} | {pair[1] for pair in high_sim_pairs}]
+            remaining_files = [
+                f
+                for f in analysis_files
+                if f
+                not in {pair[0] for pair in high_sim_pairs} | {pair[1] for pair in high_sim_pairs}
+            ]
 
             if remaining_files:
                 logger.info(f"Phase 2: Global analysis on {len(remaining_files)} remaining files")
@@ -338,8 +364,7 @@ Provide specific, actionable findings."""
 
             # Try a simple request to test connectivity
             test_request = LLMRequest(
-                content="Test connectivity - respond with 'OK'",
-                task_type="connectivity_test"
+                content="Test connectivity - respond with 'OK'", task_type="connectivity_test"
             )
 
             # Test with available LLM (sync version for validator compatibility)
@@ -348,11 +373,15 @@ Provide specific, actionable findings."""
             async def test_async():
                 if self.llm_manager.is_llm_available(LLMRole.FAST):
                     response = await self.llm_manager._call_fast_llm(test_request)
-                    logger.debug(f"Fast LLM connectivity test successful: {response.get('content', '')[:50]}")
+                    logger.debug(
+                        f"Fast LLM connectivity test successful: {response.get('content', '')[:50]}"
+                    )
                     return True
                 elif self.llm_manager.is_llm_available(LLMRole.ORCHESTRATOR):
                     response = await self.llm_manager._call_orchestrator_llm(test_request)
-                    logger.debug(f"Orchestrator LLM connectivity test successful: {response.get('content', '')[:50]}")
+                    logger.debug(
+                        f"Orchestrator LLM connectivity test successful: {response.get('content', '')[:50]}"
+                    )
                     return True
                 else:
                     logger.debug("No LLMs available in dual system")
@@ -534,8 +563,9 @@ Respond with exactly: OK"""
 
         try:
             # Use new dual LLM system for analysis
-            from ...llm import LLMRequest, LLMRole
             import asyncio
+
+            from ...llm import LLMRequest, LLMRole
 
             async def call_llm():
                 # Use fast LLM for architectural analysis (orchestrator is too slow for interactive use)
@@ -543,7 +573,7 @@ Respond with exactly: OK"""
                     content=optimized_prompt,
                     task_type="architectural_analysis",
                     max_tokens=self.max_tokens,
-                    temperature=self.temperature
+                    temperature=self.temperature,
                 )
 
                 if self.llm_manager.is_llm_available(LLMRole.FAST):
@@ -850,9 +880,11 @@ CONCERNS: Any potential issues
 
                     # Find matching file by name
                     for file_path in batch_files:
-                        if (file_path.name in filename_part or
-                            str(file_path) in filename_part or
-                            str(file_path).replace("src/", "") in filename_part):
+                        if (
+                            file_path.name in filename_part
+                            or str(file_path) in filename_part
+                            or str(file_path).replace("src/", "") in filename_part
+                        ):
                             self._file_summaries[file_path] = summary_content
                             parsed_files.add(file_path)
                             break
@@ -878,9 +910,12 @@ CONCERNS: Any potential issues
         if still_unparsed and batch_response:
             # If we have a response but couldn't parse it properly,
             # try to split it among the files
-            response_chunks = re.split(r'\n\s*\n', batch_response.strip())
-            meaningful_chunks = [chunk.strip() for chunk in response_chunks
-                               if chunk.strip() and len(chunk.strip()) > 20]
+            response_chunks = re.split(r"\n\s*\n", batch_response.strip())
+            meaningful_chunks = [
+                chunk.strip()
+                for chunk in response_chunks
+                if chunk.strip() and len(chunk.strip()) > 20
+            ]
 
             if meaningful_chunks:
                 for i, file_path in enumerate(still_unparsed):
@@ -901,20 +936,17 @@ CONCERNS: Any potential issues
 
     def _process_batch_with_retry(self, batch_files: list[Path], initial_response: str):
         """Process batch using generalized retry pattern."""
-        from ...llm_retry import FileAnalysisRetryHandler, RetryConfig, RetryStrategy
+        from ...llm_retry import (FileAnalysisRetryHandler, RetryConfig,
+                                  RetryStrategy)
 
         # Create retry handler with configuration
         retry_config = RetryConfig(
-            max_retries=2,
-            strategy=RetryStrategy.FEW_SHOT,
-            retry_threshold=3,
-            enable_logging=True
+            max_retries=2, strategy=RetryStrategy.FEW_SHOT, retry_threshold=3, enable_logging=True
         )
 
         # Create handler with our LLM callable
         handler = FileAnalysisRetryHandler(
-            llm_callable=self._invoke_with_diagnostics,
-            config=retry_config
+            llm_callable=self._invoke_with_diagnostics, config=retry_config
         )
 
         # Since we already have the initial response, we need a slightly different approach
@@ -923,7 +955,9 @@ CONCERNS: Any potential issues
 
         # Store successful results
         for file_path, summary in initial_result.parsed_data.items():
-            self._file_summaries[file_path] = f"PURPOSE: {summary.purpose}\nEXPORTS: {summary.exports}\nDEPENDENCIES: {summary.dependencies}\nCONCERNS: {summary.concerns}"
+            self._file_summaries[file_path] = (
+                f"PURPOSE: {summary.purpose}\nEXPORTS: {summary.exports}\nDEPENDENCIES: {summary.dependencies}\nCONCERNS: {summary.concerns}"
+            )
 
         # If there are failures, use the retry mechanism
         if initial_result.failed_items:
@@ -934,7 +968,9 @@ CONCERNS: Any potential issues
 
             # Store retry results
             for file_path, summary in retry_result.parsed_data.items():
-                self._file_summaries[file_path] = f"PURPOSE: {summary.purpose}\nEXPORTS: {summary.exports}\nDEPENDENCIES: {summary.dependencies}\nCONCERNS: {summary.concerns}"
+                self._file_summaries[file_path] = (
+                    f"PURPOSE: {summary.purpose}\nEXPORTS: {summary.exports}\nDEPENDENCIES: {summary.dependencies}\nCONCERNS: {summary.concerns}"
+                )
 
             # Log final stats
             stats = handler.get_stats()
@@ -944,7 +980,9 @@ CONCERNS: Any potential issues
             for file_path in retry_result.failed_items:
                 self._file_summaries[file_path] = f"Python file: {file_path.name}. Analysis needed."
 
-    def _parse_batch_summaries_with_retry(self, batch_files: list[Path], initial_response: str, original_prompt: str) -> list[Path]:
+    def _parse_batch_summaries_with_retry(
+        self, batch_files: list[Path], initial_response: str, original_prompt: str
+    ) -> list[Path]:
         """Parse batch summaries with few-shot learning retry for failed parsing."""
 
         # First attempt with existing logic
@@ -988,7 +1026,9 @@ Remember: Use the exact format with FILE:, PURPOSE:, EXPORTS:, DEPENDENCIES:, CO
                 # Log success/failure of retry
                 retry_success_count = len(failed_files) - len(retry_failed)
                 if retry_success_count > 0:
-                    logger.info(f"Few-shot retry succeeded for {retry_success_count}/{len(failed_files)} files")
+                    logger.info(
+                        f"Few-shot retry succeeded for {retry_success_count}/{len(failed_files)} files"
+                    )
                 else:
                     logger.warning(f"Few-shot retry failed for all {len(failed_files)} files")
 

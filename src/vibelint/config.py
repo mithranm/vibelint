@@ -141,22 +141,47 @@ class Config:
 
 def load_config(start_path: Path) -> Config:
     """
-    Loads vibelint configuration *only* from the nearest pyproject.toml file.
+    Loads vibelint configuration with auto-discovery fallback.
 
-    Searches upwards from start_path. If pyproject.toml or the [tool.vibelint]
-    section isn't found or is invalid, returns a Config object with project_root
-    (if found) but an empty settings dictionary.
+    First tries manual config from pyproject.toml, then falls back to
+    zero-config auto-discovery for seamless single->multi-project scaling.
 
     Args:
     start_path: The directory to start searching upwards for pyproject.toml.
 
     Returns:
-    A Config object. Check `config.project_root` and `config.settings`.
+    A Config object with either manual or auto-discovered settings.
 
     vibelint/src/vibelint/config.py
     """
     project_root = find_package_root(start_path)
     loaded_settings: dict[str, Any] = {}
+
+    # Try auto-discovery first for zero-config scaling
+    try:
+        from .auto_discovery import discover_and_configure
+
+        auto_config = discover_and_configure(start_path)
+
+        # If we found a multi-project setup, use auto-discovery by default
+        if auto_config.get("discovered_topology") == "multi_project":
+            logger.info(f"Auto-discovered multi-project setup from {start_path}")
+            # Convert auto-discovered config to vibelint config format
+            loaded_settings = _convert_auto_config_to_vibelint(auto_config)
+            project_root = project_root or start_path
+
+            # Still allow manual config to override auto-discovery
+            manual_override = _load_manual_config(project_root)
+            if manual_override:
+                logger.debug("Manual config found, merging with auto-discovery")
+                loaded_settings.update(manual_override)
+
+            return Config(project_root=project_root, config_dict=loaded_settings)
+
+    except ImportError:
+        logger.debug("Auto-discovery not available, using manual config only")
+    except Exception as e:
+        logger.debug(f"Auto-discovery failed: {e}, falling back to manual config")
 
     if not project_root:
         logger.warning(
@@ -212,6 +237,90 @@ def load_config(start_path: Path) -> Config:
         logger.debug("Unexpected error loading config", exc_info=True)
 
     return Config(project_root=project_root, config_dict=loaded_settings)
+
+
+def _convert_auto_config_to_vibelint(auto_config: dict[str, Any]) -> dict[str, Any]:
+    """Convert auto-discovered config to vibelint config format."""
+    vibelint_config = {}
+
+    # Auto-route validation based on discovered services
+    services = auto_config.get("services", {})
+    routing = auto_config.get("auto_routing", {})
+
+    # Set include globs based on discovered projects
+    include_globs = []
+    for service_info in services.values():
+        service_path = Path(service_info["path"])
+        include_globs.extend([f"{service_path.name}/src/**/*.py", f"{service_path.name}/**/*.py"])
+
+    vibelint_config["include_globs"] = include_globs
+
+    # Configure distributed services if available
+    if auto_config.get("discovered_topology") == "multi_project":
+        vibelint_config["distributed"] = {
+            "enabled": True,
+            "auto_discovered": True,
+            "services": services,
+            "routing": routing,
+        }
+
+        # Use shared resources if discovered
+        shared_resources = auto_config.get("shared_resources", {})
+        if shared_resources.get("vector_stores"):
+            vibelint_config["vector_store"] = {
+                "backend": "qdrant",
+                "qdrant_collection": shared_resources["vector_stores"][0],
+            }
+
+    return vibelint_config
+
+
+def _load_manual_config(project_root: Path | None) -> dict[str, Any]:
+    """Load manual configuration from pyproject.toml."""
+    if not project_root:
+        return {}
+
+    pyproject_path = project_root / "pyproject.toml"
+    logger.debug(f"Attempting to load manual config from: {pyproject_path}")
+
+    try:
+        with open(pyproject_path, "rb") as f:
+            full_toml_config = tomllib.load(f)
+        logger.debug("Parsed pyproject.toml")
+
+        # Validate required configuration structure explicitly
+        tool_section = full_toml_config.get("tool")
+        if not isinstance(tool_section, dict):
+            logger.warning("pyproject.toml [tool] section is missing or invalid")
+            return {}
+
+        vibelint_config = tool_section.get("vibelint", {})
+
+        if isinstance(vibelint_config, dict):
+            if vibelint_config:
+                logger.debug(f"Loaded manual [tool.vibelint] settings from {pyproject_path}")
+                return vibelint_config
+            else:
+                logger.debug(f"Found {pyproject_path}, but [tool.vibelint] section is empty")
+                return {}
+        else:
+            logger.warning(
+                f"[tool.vibelint] section in {pyproject_path} is not a valid table. Ignoring."
+            )
+            return {}
+
+    except FileNotFoundError:
+        logger.debug(f"No pyproject.toml found at {pyproject_path}")
+        return {}
+    except tomllib.TOMLDecodeError as e:
+        logger.error(f"Error parsing {pyproject_path}: {e}")
+        return {}
+    except OSError as e:
+        logger.error(f"Error reading {pyproject_path}: {e}")
+        return {}
+    except Exception as e:
+        logger.error(f"Unexpected error loading manual config: {e}")
+        return {}
 
 
 __all__ = ["Config", "load_config"]

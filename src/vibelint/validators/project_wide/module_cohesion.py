@@ -75,7 +75,6 @@ class ModuleCohesionValidator(BaseValidator):
         # Check for unjustified files
         yield from self._check_file_justification(project_root)
 
-
     def _group_files_by_patterns(self, files: List[Path]) -> Dict[str, List[Path]]:
         """Group files by common naming patterns."""
         import re

@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 from typing import Iterator
 
+from vibelint.plugin_system import (BaseFormatter, BaseValidator, Finding,
+                                    Severity, plugin_manager)
 from vibelint.reporting import JsonFormatter, NaturalLanguageFormatter
-from vibelint.plugin_system import BaseFormatter, BaseValidator, Finding, Severity, plugin_manager
 from vibelint.rules import RuleEngine
 
 

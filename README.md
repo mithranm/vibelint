@@ -4,9 +4,9 @@
 [![PyPI version](https://badge.fury.io/py/vibelint.svg)](https://badge.fury.io/py/vibelint)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**A comprehensive Python code quality tool with AI-powered analysis for better maintainability and LLM interaction.**
+**A comprehensive Python code quality tool with AI-powered analysis and autonomous workflow orchestration.**
 
-`vibelint` is a modern code quality tool that combines traditional linting with AI-powered analysis to identify code smells, architectural issues, and patterns that hinder both human understanding and Large Language Model (LLM) effectiveness. It helps you build codebases with good "vibes" - clean, maintainable, and AI-friendly code.
+`vibelint` is a modern code quality tool that combines traditional linting with AI-powered analysis and autonomous workflow execution. It identifies code smells, architectural issues, and patterns that hinder both human understanding and Large Language Model (LLM) effectiveness, while providing autonomous multi-step workflow execution without manual approval bottlenecks. It helps you build codebases with good "vibes" - clean, maintainable, and AI-friendly code.
 
 ## Table of Contents
 
@@ -38,10 +38,12 @@ Modern Python development involves both human developers and AI assistants. Code
 - **Silent Failures**: Exception handling that masks errors
 - **Namespace Collisions**: Conflicting names that create ambiguity
 
-### 🤖 **AI Integration**
+### 🤖 **AI Integration & Autonomous Workflows**
 - **Emoji Usage**: Characters that break text encoding in AI tools
 - **Print Statements**: Debug code left in production (with suppression support)
 - **Semantic Similarity**: Duplicate functionality across modules
+- **Autonomous Orchestration**: Multi-step workflows without manual approval
+- **Intelligent Model Routing**: Fast models for quick tasks, deep models for complex reasoning
 
 ## Key Features
 

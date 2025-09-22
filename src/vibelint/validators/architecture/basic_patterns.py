@@ -9,7 +9,7 @@ vibelint/validators/architecture.py
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List
 
 from ...plugin_system import BaseValidator, Finding, Severity
 
@@ -25,7 +25,6 @@ class ArchitectureValidator(BaseValidator):
     name = "Architecture Consistency Checker"
     description = "Identifies competing systems, mixed patterns, and architectural violations"
     default_severity = Severity.WARN
-
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Analyze file for architectural inconsistencies."""

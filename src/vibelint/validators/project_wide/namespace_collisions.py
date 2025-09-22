@@ -9,8 +9,8 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 
-from ..config import Config
-from ..discovery import discover_files
+from ...config import Config
+from ...discovery import discover_files
 from ...utils import find_project_root, get_relative_path
 
 __all__ = [

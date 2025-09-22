@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from .plugin_system import BaseFormatter, Finding, Severity
 

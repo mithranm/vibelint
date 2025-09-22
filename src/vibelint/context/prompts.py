@@ -8,7 +8,7 @@ vibelint/src/vibelint/context/prompts.py
 """
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Any, Dict
 
 __all__ = ["AgentPrompts", "AnalysisLevel"]
 

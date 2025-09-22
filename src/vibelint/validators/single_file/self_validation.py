@@ -17,9 +17,9 @@ vibelint/src/vibelint/self_validation.py
 import logging
 import re
 from pathlib import Path
-from typing import Iterator, List, Dict, Any, Optional
-from ...plugin_system import BaseValidator, Finding, Severity
+from typing import Any, Dict, Iterator, List, Optional
 
+from ...plugin_system import BaseValidator, Finding, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,9 @@ class SelfValidationHook:
             # Check if we're analyzing vibelint's own code
             path_str = str(file_path.absolute())
             return (
-                'vibelint' in path_str and
-                '/src/vibelint/' in path_str and
-                file_path.suffix == '.py'
+                "vibelint" in path_str
+                and "/src/vibelint/" in path_str
+                and file_path.suffix == ".py"
             )
         except Exception:
             return False
@@ -61,11 +61,11 @@ class SelfValidationHook:
             for violation in violations:
                 yield Finding(
                     file_path=file_path,
-                    line=violation['line'],
+                    line=violation["line"],
                     message=f"Single-file validator violates isolation: {violation['issue']}",
                     rule_id="VIBELINT-SINGLE-FILE-ISOLATION",
                     severity=Severity.BLOCK,
-                    suggestion="Single-file validators should not access other files or require project context"
+                    suggestion="Single-file validators should not access other files or require project context",
                 )
 
     def validate_project_standards(self, file_path: Path, content: str) -> Iterator[Finding]:
@@ -82,7 +82,7 @@ class SelfValidationHook:
                 message="Code contains emoji characters (violates project standards)",
                 rule_id="VIBELINT-NO-EMOJI",
                 severity=Severity.BLOCK,
-                suggestion="Remove emoji characters from code and comments"
+                suggestion="Remove emoji characters from code and comments",
             )
 
         # Check for proper absolute path usage
@@ -94,7 +94,7 @@ class SelfValidationHook:
                 message=f"Path usage issue: {issue}",
                 rule_id="VIBELINT-ABSOLUTE-PATHS",
                 severity=Severity.WARN,
-                suggestion="Use absolute paths for file operations"
+                suggestion="Use absolute paths for file operations",
             )
 
     def validate_validator_categorization(self, file_path: Path, content: str) -> Iterator[Finding]:
@@ -107,9 +107,9 @@ class SelfValidationHook:
         is_project_wide = self._is_project_wide_validator(content)
 
         path_str = str(file_path)
-        in_single_file_dir = '/single_file/' in path_str
-        in_project_wide_dir = '/project_wide/' in path_str
-        in_architecture_dir = '/architecture/' in path_str
+        in_single_file_dir = "/single_file/" in path_str
+        in_project_wide_dir = "/project_wide/" in path_str
+        in_architecture_dir = "/architecture/" in path_str
 
         if is_single_file and not in_single_file_dir and not in_architecture_dir:
             yield Finding(
@@ -118,7 +118,7 @@ class SelfValidationHook:
                 message="Single-file validator should be in validators/single_file/ directory",
                 rule_id="VIBELINT-VALIDATOR-ORGANIZATION",
                 severity=Severity.WARN,
-                suggestion="Move to validators/single_file/ or implement project-wide validation"
+                suggestion="Move to validators/single_file/ or implement project-wide validation",
             )
 
         if is_project_wide and not in_project_wide_dir and not in_architecture_dir:
@@ -128,29 +128,29 @@ class SelfValidationHook:
                 message="Project-wide validator should be in validators/project_wide/ directory",
                 rule_id="VIBELINT-VALIDATOR-ORGANIZATION",
                 severity=Severity.WARN,
-                suggestion="Move to validators/project_wide/ or implement single-file validation"
+                suggestion="Move to validators/project_wide/ or implement single-file validation",
             )
 
     def _is_validator_file(self, file_path: Path) -> bool:
         """Check if file is a validator."""
         return (
-            '/validators/' in str(file_path) and
-            file_path.name != '__init__.py' and
-            file_path.suffix == '.py'
+            "/validators/" in str(file_path)
+            and file_path.name != "__init__.py"
+            and file_path.suffix == ".py"
         )
 
     def _is_single_file_validator(self, content: str) -> bool:
         """Check if validator is designed for single-file analysis."""
         patterns = [
-            r'class\s+\w+Validator.*BaseValidator',
-            r'def validate\(self, file_path.*content.*\)',
-            r'requires_project_context.*False'
+            r"class\s+\w+Validator.*BaseValidator",
+            r"def validate\(self, file_path.*content.*\)",
+            r"requires_project_context.*False",
         ]
 
         project_patterns = [
-            r'validate_project',
-            r'project_files',
-            r'requires_project_context.*True'
+            r"validate_project",
+            r"project_files",
+            r"requires_project_context.*True",
         ]
 
         has_single_file_indicators = any(re.search(pattern, content) for pattern in patterns)
@@ -160,11 +160,7 @@ class SelfValidationHook:
 
     def _is_project_wide_validator(self, content: str) -> bool:
         """Check if validator is designed for project-wide analysis."""
-        patterns = [
-            r'validate_project',
-            r'project_files.*Dict',
-            r'requires_project_context.*True'
-        ]
+        patterns = [r"validate_project", r"project_files.*Dict", r"requires_project_context.*True"]
         return any(re.search(pattern, content) for pattern in patterns)
 
     def requires_project_context(self) -> bool:
@@ -174,47 +170,44 @@ class SelfValidationHook:
     def _check_project_context_violations(self, content: str) -> List[Dict[str, Any]]:
         """Check for violations of single-file validator isolation."""
         violations = []
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         violation_patterns = [
-            (r'import.*discovery', 'Should not import discovery module'),
-            (r'import.*project_map', 'Should not import project mapping'),
-            (r'glob\.glob', 'Should not use glob to find other files'),
-            (r'os\.walk', 'Should not walk directory tree'),
-            (r'Path.*glob', 'Should not glob for other files'),
-            (r'open\(.*\.py', 'Should not open other Python files'),
+            (r"import.*discovery", "Should not import discovery module"),
+            (r"import.*project_map", "Should not import project mapping"),
+            (r"glob\.glob", "Should not use glob to find other files"),
+            (r"os\.walk", "Should not walk directory tree"),
+            (r"Path.*glob", "Should not glob for other files"),
+            (r"open\(.*\.py", "Should not open other Python files"),
         ]
 
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
-            if line.startswith('#'):  # Skip comments
+            if line.startswith("#"):  # Skip comments
                 continue
 
             for pattern, issue in violation_patterns:
                 if re.search(pattern, line):
-                    violations.append({
-                        'line': line_num,
-                        'issue': issue,
-                        'content': line
-                    })
+                    violations.append({"line": line_num, "issue": issue, "content": line})
 
         return violations
 
     def _check_emoji_violations(self, content: str) -> List[tuple]:
         """Check for emoji characters in code."""
         violations = []
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Unicode ranges for emoji
         emoji_pattern = re.compile(
             "["
-            "\U0001F600-\U0001F64F"  # emoticons
-            "\U0001F300-\U0001F5FF"  # symbols & pictographs
-            "\U0001F680-\U0001F6FF"  # transport & map symbols
-            "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-            "\U00002702-\U000027B0"  # dingbats
-            "\U000024C2-\U0001F251"  # enclosed characters
-            "]+", flags=re.UNICODE
+            "\U0001f600-\U0001f64f"  # emoticons
+            "\U0001f300-\U0001f5ff"  # symbols & pictographs
+            "\U0001f680-\U0001f6ff"  # transport & map symbols
+            "\U0001f1e0-\U0001f1ff"  # flags (iOS)
+            "\U00002702-\U000027b0"  # dingbats
+            "\U000024c2-\U0001f251"  # enclosed characters
+            "]+",
+            flags=re.UNICODE,
         )
 
         for line_num, line in enumerate(lines, 1):
@@ -226,18 +219,18 @@ class SelfValidationHook:
     def _check_path_violations(self, content: str) -> List[tuple]:
         """Check for improper path usage."""
         violations = []
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Patterns that suggest relative path usage in file operations
         problematic_patterns = [
-            (r'open\(["\'][^/]', 'Relative path in open()'),
-            (r'Path\(["\'][^/]', 'Relative path in Path()'),
-            (r'glob\(["\'][^/]', 'Relative path in glob()'),
+            (r'open\(["\'][^/]', "Relative path in open()"),
+            (r'Path\(["\'][^/]', "Relative path in Path()"),
+            (r'glob\(["\'][^/]', "Relative path in glob()"),
         ]
 
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
-            if line.startswith('#'):  # Skip comments
+            if line.startswith("#"):  # Skip comments
                 continue
 
             for pattern, issue in problematic_patterns:
@@ -255,9 +248,10 @@ class VibelintSelfValidator(BaseValidator):
     its own codebase.
     """
 
-    def __init__(self, severity: Severity = Severity.WARN):
+    def __init__(self, severity: Severity = Severity.WARN, config: Optional[Dict[str, Any]] = None):
         super().__init__(severity)
         self.hook = SelfValidationHook()
+        self.config = config or {}
 
     @property
     def rule_id(self) -> str:
@@ -295,7 +289,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     try:
-        content = file_path.read_text(encoding='utf-8')
+        content = file_path.read_text(encoding="utf-8")
         validator = VibelintSelfValidator()
         findings = list(validator.validate(file_path, content))
 
