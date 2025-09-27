@@ -8,8 +8,10 @@ This is the foundation of vibelint's software quality approach.
 """
 
 import ast
+import json
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -62,6 +64,11 @@ class JustificationEngine:
         # Cache for static analysis results
         self._import_cache: Dict[str, Set[str]] = {}
         self._method_cache: Dict[str, List[Dict[str, Any]]] = {}
+
+        # Logging infrastructure
+        self._session_id = f"justification_{int(time.time())}"
+        self._llm_call_logs: List[Dict[str, Any]] = []
+        self._create_log_directory()
 
     def justify_file(self, file_path: Path, content: str) -> JustificationResult:
         """Justify a single file's existence and structure."""
@@ -161,13 +168,35 @@ Answer: {{"similar": true/false, "confidence": 0.0-1.0, "reason": "brief explana
         )
 
         try:
+            start_time = time.time()
             response = self.llm_manager.process_request(request)
+            duration = time.time() - start_time
+
+            # Log the LLM interaction
+            self._log_llm_call({
+                "operation": "method_comparison",
+                "methods": [f"{method1_path}:{method1_name}", f"{method2_path}:{method2_name}"],
+                "prompt": prompt,
+                "response_raw": response.content,
+                "llm_role": "fast",
+                "duration_seconds": duration,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            })
+
             # Parse structured JSON response
-            import json
             result = json.loads(response.content)
             return result
         except Exception as e:
             logger.error(f"Fast LLM method comparison failed: {e}")
+            # Log the failure
+            self._log_llm_call({
+                "operation": "method_comparison",
+                "methods": [f"{method1_path}:{method1_name}", f"{method2_path}:{method2_name}"],
+                "prompt": prompt,
+                "error": str(e),
+                "llm_role": "fast",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            })
             return {"similar": False, "confidence": 0.0, "reasoning": f"Error: {e}"}
 
     def _justify_non_python_file(self, file_path: Path) -> JustificationResult:
@@ -444,3 +473,131 @@ Answer: {{"similar": true/false, "confidence": 0.0-1.0, "reason": "brief explana
             if method["name"] == method_name:
                 return method
         return None
+
+    def _create_log_directory(self):
+        """Create logging directory for justification outputs."""
+        # Look for existing .vibelint-reports directory
+        current_path = Path.cwd()
+        while current_path.parent != current_path:
+            reports_dir = current_path / ".vibelint-reports"
+            if reports_dir.exists():
+                self.log_dir = reports_dir / "justification"
+                break
+            current_path = current_path.parent
+        else:
+            # Fallback: create in current directory
+            self.log_dir = Path.cwd() / ".vibelint-reports" / "justification"
+
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Justification logs will be saved to: {self.log_dir}")
+
+    def _log_llm_call(self, call_data: Dict[str, Any]):
+        """Log an LLM call with full details."""
+        self._llm_call_logs.append(call_data)
+
+    def save_session_logs(self, file_path: str, result: JustificationResult):
+        """Save comprehensive session logs including all LLM calls and final justification."""
+
+        # Create session log with all details
+        session_log = {
+            "session_id": self._session_id,
+            "file_analyzed": file_path,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "llm_calls": self._llm_call_logs,
+            "final_justification": {
+                "justifications": [asdict(j) for j in result.justifications],
+                "redundancies_found": result.redundancies_found,
+                "recommendations": result.recommendations,
+                "quality_score": result.quality_score
+            },
+            "summary": {
+                "total_llm_calls": len(self._llm_call_logs),
+                "elements_analyzed": len(result.justifications),
+                "static_analysis_only": len(self._llm_call_logs) == 0
+            }
+        }
+
+        # Save detailed session log
+        session_file = self.log_dir / f"{self._session_id}_detailed.json"
+        with open(session_file, 'w', encoding='utf-8') as f:
+            json.dump(session_log, f, indent=2, ensure_ascii=False)
+
+        # Save human-readable summary
+        summary_file = self.log_dir / f"{self._session_id}_summary.md"
+        self._save_readable_summary(summary_file, session_log)
+
+        logger.info(f"Justification session logs saved:")
+        logger.info(f"  Detailed: {session_file}")
+        logger.info(f"  Summary: {summary_file}")
+
+        return session_file, summary_file
+
+    def _save_readable_summary(self, summary_file: Path, session_log: Dict[str, Any]):
+        """Save human-readable summary of justification analysis."""
+
+        content = f"""# Justification Analysis Summary
+
+**Session:** {session_log['session_id']}
+**File:** {session_log['file_analyzed']}
+**Timestamp:** {session_log['timestamp']}
+**Quality Score:** {session_log['final_justification']['quality_score']:.1%}
+
+## Analysis Summary
+
+- **Elements Analyzed:** {session_log['summary']['elements_analyzed']}
+- **LLM Calls Made:** {session_log['summary']['total_llm_calls']}
+- **Analysis Type:** {'Static Analysis Only' if session_log['summary']['static_analysis_only'] else 'Static + LLM Analysis'}
+
+## Code Justifications
+
+"""
+
+        for just_data in session_log['final_justification']['justifications']:
+            confidence_emoji = "✅" if just_data['confidence'] > 0.7 else "⚠️" if just_data['confidence'] > 0.4 else "❌"
+            content += f"""### {just_data['element_name']} ({just_data['element_type']})
+
+{confidence_emoji} **Confidence:** {just_data['confidence']:.1%}
+**Line:** {just_data['line_number']}
+**Complexity:** {just_data['complexity_score']}
+
+**Justification:** {just_data['justification']}
+
+"""
+
+        if session_log['final_justification']['redundancies_found']:
+            content += "## ⚠️ Potential Redundancies\n\n"
+            for redundancy in session_log['final_justification']['redundancies_found']:
+                content += f"- {redundancy}\n"
+            content += "\n"
+
+        if session_log['final_justification']['recommendations']:
+            content += "## 💡 Recommendations\n\n"
+            for rec in session_log['final_justification']['recommendations']:
+                content += f"- {rec}\n"
+            content += "\n"
+
+        if session_log['llm_calls']:
+            content += "## 🤖 LLM Call Details\n\n"
+            for i, call in enumerate(session_log['llm_calls'], 1):
+                content += f"""### Call {i}: {call['operation']}
+
+**LLM Role:** {call['llm_role']}
+**Duration:** {call.get('duration_seconds', 'N/A')}s
+**Timestamp:** {call['timestamp']}
+
+**Prompt:**
+```
+{call['prompt'][:500]}{'...' if len(call['prompt']) > 500 else ''}
+```
+
+**Response:**
+```
+{call.get('response_raw', call.get('error', 'No response'))[:500]}{'...' if len(call.get('response_raw', '')) > 500 else ''}
+```
+
+---
+
+"""
+
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            f.write(content)

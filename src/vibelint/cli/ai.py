@@ -46,9 +46,13 @@ def justify(ctx: click.Context, file_path: Path, rule_id: str | None) -> None:
         # Perform justification analysis
         result = engine.justify_file(file_path, content)
 
+        # Save session logs
+        detailed_log, summary_log = engine.save_session_logs(str(file_path), result)
+
         # Display results
         console.print(f"[green]✅ Analyzed {file_path}[/green]")
         console.print(f"Quality Score: {result.quality_score:.1%}")
+        console.print(f"[dim]Logs saved to: {summary_log}[/dim]")
 
         if rule_id:
             # Filter to specific rule if requested

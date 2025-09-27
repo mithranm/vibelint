@@ -17,8 +17,8 @@ from typing import Any, Dict, List, Optional
 
 import networkx as nx
 
-from .dependency_graph_manager import DependencyGraphManager, GraphQuery
-from .multi_representation_analyzer import (ImprovementOpportunity,
+from ..dependency_graph_manager import DependencyGraphManager, GraphQuery
+from ..multi_representation_analyzer import (ImprovementOpportunity,
                                             MultiRepresentationAnalyzer)
 
 

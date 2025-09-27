@@ -42,7 +42,7 @@ class EmojiUsageValidator(BaseValidator):
             r"\U00002700-\U000027BF"  # Dingbats
             r"\U0000FE00-\U0000FE0F"  # Variation Selectors
             r"\U0001F018-\U0001F270"  # Various Asian characters
-            r"\U0000238C-\U00002454"  # Misc technical (fixed)
+            r"\U0000238C-\U00002454"  # Misc technical (fixed with leading zeros)
             r"\U000020D0-\U000020FF"  # Combining Diacritical Marks for Symbols (fixed)
             r"]+"
         )
@@ -97,16 +97,42 @@ class EmojiUsageValidator(BaseValidator):
                 r"\U00002700-\U000027BF"  # Dingbats
                 r"\U0000FE00-\U0000FE0F"  # Variation Selectors
                 r"\U0001F018-\U0001F270"  # Various Asian characters
-                r"\U238C-\U2454"  # Misc technical
-                r"\U20D0-\U20FF"  # Combining Diacritical Marks for Symbols
+                r"\U0000238C-\U00002454"  # Misc technical (fixed with leading zeros)
+                r"\U000020D0-\U000020FF"  # Combining Diacritical Marks for Symbols (fixed)
                 r"]+"
             )
 
             # Remove emojis from the line
             fixed_line = emoji_pattern.sub("", line)
 
-            # Clean up any double spaces that might result
-            fixed_line = re.sub(r"\s+", " ", fixed_line)
+            # Clean up any double spaces that might result, but preserve indentation and newlines
+            # Extract leading whitespace (indentation)
+            leading_whitespace = ""
+            content_start = 0
+            for char in fixed_line:
+                if char in [' ', '\t']:
+                    leading_whitespace += char
+                    content_start += 1
+                else:
+                    break
+
+            # Split into content and line ending
+            if fixed_line.endswith('\n'):
+                content = fixed_line[content_start:-1]  # Remove leading whitespace and newline
+                line_ending = '\n'
+            elif fixed_line.endswith('\r\n'):
+                content = fixed_line[content_start:-2]  # Remove leading whitespace and CRLF
+                line_ending = '\r\n'
+            else:
+                content = fixed_line[content_start:]  # Remove leading whitespace
+                line_ending = ''
+
+            # Clean up only multiple consecutive spaces in content
+            content = re.sub(r" {2,}", " ", content)  # Multiple spaces to single space
+            content = content.rstrip()  # Remove trailing spaces only
+
+            # Reconstruct the line with original indentation
+            fixed_line = leading_whitespace + content + line_ending
 
             lines[finding.line - 1] = fixed_line
 
