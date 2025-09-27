@@ -15,7 +15,7 @@ from typing import Any, Dict
 import requests
 
 from .context.probing import ProbeResult
-from .llm import LLMRole, create_llm_manager
+from .llm import create_llm_manager, LLMRole
 
 logger = logging.getLogger(__name__)
 

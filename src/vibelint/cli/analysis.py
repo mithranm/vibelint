@@ -78,10 +78,17 @@ def snapshot(ctx: click.Context, output: Path) -> None:
 
     console.print("[bold green]📸 Creating Project Snapshot...[/bold green]\n")
 
-    # TODO: Move implementation from monolithic cli.py
-    console.print("[yellow]⚠️  Snapshot command moved to modular structure[/yellow]")
-    console.print(f"   Project: {project_root}")
-    console.print(f"   Output: {output}")
+    # Import and use the actual snapshot implementation
+    from ..config import load_config
+    from ..snapshot import create_snapshot
+
+    try:
+        config = load_config(project_root)
+        create_snapshot(output, [project_root], config)
+        console.print(f"[green]✅ Snapshot created: {output}[/green]")
+    except Exception as e:
+        console.print(f"[red]❌ Snapshot failed: {e}[/red]")
+        raise
 
 
 @cli.command("diagnostics")

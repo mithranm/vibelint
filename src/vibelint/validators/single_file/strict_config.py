@@ -7,8 +7,9 @@ All configuration should go through the CM (Configuration Management) system wit
 
 import ast
 import re
-from typing import List, Dict, Any, Optional, Tuple, NamedTuple
 from pathlib import Path
+from typing import Dict, List, NamedTuple
+
 
 # Standalone versions for CLI usage
 class ValidationResult(NamedTuple):
@@ -21,9 +22,11 @@ class ValidationResult(NamedTuple):
     fix_suggestion: str = ""
     category: str = "general"
 
+
 class CodeContext(NamedTuple):
     file_path: Path
     content: str
+
 
 class ValidationRule:
     def __init__(self, name: str, description: str, category: str, severity: str):
@@ -41,7 +44,7 @@ class StrictConfigRule(ValidationRule):
             name="strict-config",
             description="Enforce strict configuration management - no fallbacks",
             category="configuration",
-            severity="error"
+            severity="error",
         )
 
     def validate(self, context: CodeContext) -> List[ValidationResult]:
@@ -49,14 +52,14 @@ class StrictConfigRule(ValidationRule):
         results = []
 
         # Check Python files for .get() patterns with fallbacks
-        if context.file_path.suffix == '.py':
+        if context.file_path.suffix == ".py":
             results.extend(self._check_python_config_fallbacks(context))
 
         # Check for hardcoded workers.dev URLs
         results.extend(self._check_hardcoded_endpoints(context))
 
         # Check TOML/YAML config files for hardcoded fallbacks
-        if context.file_path.suffix in ['.toml', '.yaml', '.yml']:
+        if context.file_path.suffix in [".toml", ".yaml", ".yml"]:
             results.extend(self._check_config_file_fallbacks(context))
 
         return results
@@ -73,9 +76,11 @@ class StrictConfigRule(ValidationRule):
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 # Check for .get() calls with default values
-                if (isinstance(node.func, ast.Attribute) and
-                    node.func.attr == 'get' and
-                    len(node.args) >= 2):
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get"
+                    and len(node.args) >= 2
+                ):
 
                     # Get the object being called (e.g., 'config', 'embeddings_config')
                     if isinstance(node.func.value, ast.Name):
@@ -95,16 +100,18 @@ class StrictConfigRule(ValidationRule):
                         default_value = self._extract_node_value(default_node)
 
                         # Flag as error
-                        results.append(ValidationResult(
-                            rule_name=self.name,
-                            severity="error",
-                            message=f"Configuration fallback detected: {var_name}.get('{key}', {default_value})",
-                            line_number=node.lineno,
-                            column=node.col_offset,
-                            suggestion=f"Use strict config: {var_name}['{key}'] and ensure value exists in config",
-                            fix_suggestion=f"{var_name}['{key}']  # STRICT: No fallbacks",
-                            category="configuration"
-                        ))
+                        results.append(
+                            ValidationResult(
+                                rule_name=self.name,
+                                severity="error",
+                                message=f"Configuration fallback detected: {var_name}.get('{key}', {default_value})",
+                                line_number=node.lineno,
+                                column=node.col_offset,
+                                suggestion=f"Use strict config: {var_name}['{key}'] and ensure value exists in config",
+                                fix_suggestion=f"{var_name}['{key}']  # STRICT: No fallbacks",
+                                category="configuration",
+                            )
+                        )
 
         return results
 
@@ -114,11 +121,11 @@ class StrictConfigRule(ValidationRule):
 
         # Patterns that indicate hardcoded endpoints
         dangerous_patterns = [
-            (r'workers\.dev', 'Cloudflare Workers endpoint'),
-            (r'https?://[^/]*\.workers\.dev', 'Cloudflare Workers URL'),
-            (r'https?://\d+\.\d+\.\d+\.\d+:\d+', 'Hardcoded IP endpoint'),
-            (r'localhost:\d+', 'Hardcoded localhost endpoint'),
-            (r'127\.0\.0\.1:\d+', 'Hardcoded localhost endpoint'),
+            (r"workers\.dev", "Cloudflare Workers endpoint"),
+            (r"https?://[^/]*\.workers\.dev", "Cloudflare Workers URL"),
+            (r"https?://\d+\.\d+\.\d+\.\d+:\d+", "Hardcoded IP endpoint"),
+            (r"localhost:\d+", "Hardcoded localhost endpoint"),
+            (r"127\.0\.0\.1:\d+", "Hardcoded localhost endpoint"),
         ]
 
         lines = context.content.splitlines()
@@ -127,19 +134,21 @@ class StrictConfigRule(ValidationRule):
                 matches = re.finditer(pattern, line)
                 for match in matches:
                     # Skip if it's in a comment explaining the pattern
-                    if '#' in line and line.index('#') < match.start():
+                    if "#" in line and line.index("#") < match.start():
                         continue
 
-                    results.append(ValidationResult(
-                        rule_name=self.name,
-                        severity="error",
-                        message=f"Hardcoded endpoint detected: {description}",
-                        line_number=line_num,
-                        column=match.start(),
-                        suggestion="Move endpoint configuration to dev.pyproject.toml or pyproject.toml",
-                        fix_suggestion="# FIXME: Move to configuration management",
-                        category="configuration"
-                    ))
+                    results.append(
+                        ValidationResult(
+                            rule_name=self.name,
+                            severity="error",
+                            message=f"Hardcoded endpoint detected: {description}",
+                            line_number=line_num,
+                            column=match.start(),
+                            suggestion="Move endpoint configuration to dev.pyproject.toml or pyproject.toml",
+                            fix_suggestion="# FIXME: Move to configuration management",
+                            category="configuration",
+                        )
+                    )
 
         return results
 
@@ -149,35 +158,44 @@ class StrictConfigRule(ValidationRule):
 
         # Check for production URLs in config files
         production_patterns = [
-            r'workers\.dev',
-            r'\.vercel\.app',
-            r'\.netlify\.app',
-            r'\.herokuapp\.com'
+            r"workers\.dev",
+            r"\.vercel\.app",
+            r"\.netlify\.app",
+            r"\.herokuapp\.com",
         ]
 
         lines = context.content.splitlines()
         for line_num, line in enumerate(lines, 1):
             for pattern in production_patterns:
                 if re.search(pattern, line):
-                    results.append(ValidationResult(
-                        rule_name=self.name,
-                        severity="warning",
-                        message=f"Production URL in config file may need dev override",
-                        line_number=line_num,
-                        column=0,
-                        suggestion="Ensure dev.pyproject.toml overrides production URLs",
-                        category="configuration"
-                    ))
+                    results.append(
+                        ValidationResult(
+                            rule_name=self.name,
+                            severity="warning",
+                            message="Production URL in config file may need dev override",
+                            line_number=line_num,
+                            column=0,
+                            suggestion="Ensure dev.pyproject.toml overrides production URLs",
+                            category="configuration",
+                        )
+                    )
 
         return results
 
     def _is_config_variable(self, var_name: str) -> bool:
         """Check if variable name suggests it's a config object."""
         config_indicators = [
-            'config', 'settings', 'cfg', 'conf',
-            'embedding_config', 'embeddings_config',
-            'llm_config', 'kaia_config', 'tool_config',
-            'vibelint_config', 'guardrails_config'
+            "config",
+            "settings",
+            "cfg",
+            "conf",
+            "embedding_config",
+            "embeddings_config",
+            "llm_config",
+            "kaia_config",
+            "tool_config",
+            "vibelint_config",
+            "guardrails_config",
         ]
 
         var_lower = var_name.lower()
@@ -190,7 +208,7 @@ class StrictConfigRule(ValidationRule):
         elif isinstance(node, ast.Str):  # Python < 3.8 compatibility
             return node.s
         else:
-            return ast.unparse(node) if hasattr(ast, 'unparse') else '<complex>'
+            return ast.unparse(node) if hasattr(ast, "unparse") else "<complex>"
 
     def _extract_node_value(self, node: ast.AST) -> str:
         """Extract a readable representation of the node value."""
@@ -201,9 +219,9 @@ class StrictConfigRule(ValidationRule):
         elif isinstance(node, ast.Num):
             return str(node.n)
         elif isinstance(node, (ast.List, ast.Tuple, ast.Dict)):
-            return ast.unparse(node) if hasattr(ast, 'unparse') else '<collection>'
+            return ast.unparse(node) if hasattr(ast, "unparse") else "<collection>"
         else:
-            return ast.unparse(node) if hasattr(ast, 'unparse') else '<complex>'
+            return ast.unparse(node) if hasattr(ast, "unparse") else "<complex>"
 
 
 class ConfigFallbackDetector:
@@ -216,9 +234,9 @@ class ConfigFallbackDetector:
         """Scan a directory for configuration fallbacks."""
         results = {}
 
-        for file_path in directory.rglob('*.py'):
+        for file_path in directory.rglob("*.py"):
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
                 context = CodeContext(file_path=file_path, content=content)

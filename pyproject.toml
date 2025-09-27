@@ -105,69 +105,6 @@ llm = "vibelint.reporting:LLMFormatter"
 where = ["src"]
 include = ["vibelint*"]
 
-[tool.vibelint]
-# Simple configuration - most users just need this
-include_globs = ["src/**/*.py", "tests/**/*.py"]
-exclude_globs = ["tests/fixtures/*"]
-
-# Report configuration
-reports_dir = ".vibelint-reports"  # Directory for detailed analysis reports (gitignored)
-llm_trace_logs = true              # Log complete LLM workflow traces for debugging/auditing
-
-# Organized report subdirectories
-[tool.vibelint.reports]
-output_dir = ".vibelint-reports"
-justification_dir = ".vibelint-reports/justification/current"
-workflow_dir = ".vibelint-reports/workflow/current"
-analysis_dir = ".vibelint-reports/analysis/current"
-auto_archive_days = 7  # Move reports older than N days to archived/ subdirectories
-
-# Rule severity levels: "OFF", "INFO", "WARN", "BLOCK"
-[tool.vibelint.rules]
-"PRINT-STATEMENT" = "WARN"
-"EMOJI-IN-STRING" = "WARN"
-"DEAD-CODE-FOUND" = "INFO"
-"ARCHITECTURE-LLM" = "WARN"
-
-# Docstring configuration
-[tool.vibelint.docstring]
-require_path_references = false         # Set to true to require filepath at end of docstrings
-require_module_docstrings = true        # Require module-level docstrings
-require_class_docstrings = true         # Require class docstrings
-require_function_docstrings = false     # Require function docstrings (can be noisy)
-path_reference_format = "relative"      # Options: "relative", "absolute", "module_path"
-include_private_functions = false       # Check docstrings for _private functions
-
-# LLM configuration - generic template (projects should override in their pyproject.toml)
-[tool.vibelint.llm]
-# Example configuration - projects should customize these values
-# fast_api_url = "https://your-llm-endpoint.com"
-# fast_model = "your-model-name"
-# fast_temperature = 0.1
-# fast_max_tokens = 2048
-# remove_thinking_tokens = true
-# thinking_format = "harmony"  # Options: "harmony", "qwen", "custom"
-
-# Embedding configuration - generic template
-[tool.vibelint.embeddings]
-# Example configuration - projects should customize for their embedding providers
-# code_api_url = "https://your-embedding-endpoint.com"
-# code_model = "your-embedding-model"
-# code_dimensions = 768
-# use_specialized_embeddings = false  # Set to true when endpoints are configured
-similarity_threshold = 0.85  # Threshold for similarity detection
-
-# Vector database configuration - generic template
-[tool.vibelint.vector_store]
-# Backend options: "memory", "qdrant", "vectorize", "pinecone"
-backend = "memory"  # Default to in-memory for simplicity (projects should configure proper backends)
-
-# Example configurations for different backends (projects should uncomment and configure):
-# cache_size = 10000  # For memory backend
-# qdrant_url = "http://localhost:6333"  # For Qdrant
-# chroma_path = ".vibelint-cache/chroma"  # For Chroma
-# similarity_metric = "cosine"  # "cosine", "euclidean", "dot"
-
 [tool.black]
 target-version = ["py310", "py311", "py312"]
 line-length=100

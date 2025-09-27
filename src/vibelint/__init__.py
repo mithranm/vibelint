@@ -37,7 +37,9 @@ from typing import Any, Dict, List, Optional, Union
 from .auto_discovery import AutoDiscovery
 from .config import Config as VibelintConfig
 from .dependency_graph_manager import DependencyGraphManager
-from .llm_context_engineer import VibelintContextEngineer as LLMContextEngineer
+from .justification import JustificationEngine
+from .llm.llm_context_engineer import VibelintContextEngineer as LLMContextEngineer
+from .llm import get_llm_config
 from .multi_representation_analyzer import MultiRepresentationAnalyzer
 from .runtime_tracer import RuntimeTracer
 from .self_improvement import VibelintSelfImprover as SelfImprovementSystem
@@ -435,6 +437,8 @@ __all__ = [
     "VibelintEngine",
     "AnalysisResults",
     "CapabilityRegistry",
+    "get_llm_config",  # LLM configuration (top-level export)
+    "JustificationEngine",  # Justification workflow (top-level export)
     "quick_analyze",
     "self_improve_vibelint",
     "create_engine",

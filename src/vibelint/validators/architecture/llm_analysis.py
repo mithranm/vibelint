@@ -936,8 +936,8 @@ CONCERNS: Any potential issues
 
     def _process_batch_with_retry(self, batch_files: list[Path], initial_response: str):
         """Process batch using generalized retry pattern."""
-        from ...llm_retry import (FileAnalysisRetryHandler, RetryConfig,
-                                  RetryStrategy)
+        from ...llm.llm_retry import (FileAnalysisRetryHandler, RetryConfig,
+                                      RetryStrategy)
 
         # Create retry handler with configuration
         retry_config = RetryConfig(

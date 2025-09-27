@@ -16,9 +16,10 @@ and easier to extend.
 vibelint/src/vibelint/cli/__init__.py
 """
 
-import sys
 import logging
-from .core import cli, VibelintContext
+import sys
+
+from .core import VibelintContext, cli
 
 __all__ = ["cli", "main"]
 
@@ -26,7 +27,7 @@ __all__ = ["cli", "main"]
 def main() -> None:
     """
     Main entry point for the vibelint CLI application.
-    
+
     This function provides the entry point specified in pyproject.toml.
     """
     try:
@@ -35,9 +36,10 @@ def main() -> None:
         sys.exit(e.code)
     except (RuntimeError, ValueError, OSError, ImportError) as e:
         from rich.console import Console
+
         console = Console()
         console.print(f"[bold red]An unexpected error occurred: {e}[/bold red]")
-        
+
         logger = logging.getLogger(__name__)
         # Check if logger was configured before logging error
         if logger.hasHandlers():
@@ -45,5 +47,6 @@ def main() -> None:
         else:
             # Fallback if error happened before logging setup
             import traceback
+
             traceback.print_exc()
         sys.exit(1)

@@ -161,7 +161,8 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
 
     # Import and use the single file validation workflow
     try:
-        from ..workflows.implementations.single_file_validation import SingleFileValidationWorkflow
+        from ..workflows.implementations.single_file_validation import \
+            SingleFileValidationWorkflow
 
         # Create workflow instance
         workflow = SingleFileValidationWorkflow(config)
@@ -170,7 +171,7 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
         files_to_validate = []
 
         if path.is_file():
-            if path.suffix == '.py':
+            if path.suffix == ".py":
                 files_to_validate = [path]
             else:
                 console.print(f"[bold red]Error:[/bold red] {path} is not a Python file")
@@ -178,9 +179,9 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
         else:
             # Directory validation
             if recursive:
-                files_to_validate = list(path.rglob('*.py'))
+                files_to_validate = list(path.rglob("*.py"))
             else:
-                files_to_validate = list(path.glob('*.py'))
+                files_to_validate = list(path.glob("*.py"))
 
             if not files_to_validate:
                 console.print("[bold red]Error:[/bold red] No Python files found to validate")
@@ -194,6 +195,7 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
         for file_path in files_to_validate:
             try:
                 import time
+
                 start_time = time.time()
                 result = workflow.validate_file(file_path)
                 execution_time = (time.time() - start_time) * 1000
@@ -205,7 +207,7 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
                     "violations": [v.to_dict() for v in result.violations],
                     "execution_time_ms": execution_time,
                     "success": True,
-                    "error": None
+                    "error": None,
                 }
                 results.append(file_result)
                 total_violations += len(result.violations)
@@ -222,7 +224,7 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
                     "violations": [],
                     "execution_time_ms": 0.0,
                     "success": False,
-                    "error": str(e)
+                    "error": str(e),
                 }
                 results.append(file_result)
                 console.print(f"[bold red]Error validating {file_path}:[/bold red] {e}")
@@ -230,13 +232,14 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
         # Display results
         if output_format == "json":
             import json
+
             output = {
                 "summary": {
                     "total_files": len(results),
                     "failed_files": failed_files,
-                    "total_violations": total_violations
+                    "total_violations": total_violations,
                 },
-                "files": results
+                "files": results,
             }
             print(json.dumps(output, indent=2))
         else:
@@ -270,7 +273,9 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
                 if failed_files == 0 and total_violations == 0:
                     console.print("\n[green]All files passed validation![/green]")
                 else:
-                    console.print(f"\n[red]{failed_files} files failed, {total_violations} violations found[/red]")
+                    console.print(
+                        f"\n[red]{failed_files} files failed, {total_violations} violations found[/red]"
+                    )
 
         # Determine exit code
         exit_code = 1 if failed_files > 0 or total_violations > 0 else 0
@@ -283,5 +288,6 @@ def validate_cmd(ctx: click.Context, path: Path, output_format: str, recursive: 
         console.print(f"[bold red]Error:[/bold red] Unexpected error during validation: {e}")
         if logger.level == logging.DEBUG:
             import traceback
+
             console.print(traceback.format_exc())
         ctx.exit(1)
