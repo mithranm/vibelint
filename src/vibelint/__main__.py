@@ -6,7 +6,7 @@ Allows execution via: python -m vibelint
 vibelint/src/vibelint/__main__.py
 """
 
-from .cli import main
+from vibelint.cli import main
 
 if __name__ == "__main__":
     main()

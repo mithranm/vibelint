@@ -34,15 +34,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from .auto_discovery import AutoDiscovery
-from .config import Config as VibelintConfig
-from .dependency_graph_manager import DependencyGraphManager
-from .justification import JustificationEngine
-from .llm.llm_context_engineer import VibelintContextEngineer as LLMContextEngineer
-from .llm import get_llm_config
-from .multi_representation_analyzer import MultiRepresentationAnalyzer
-from .runtime_tracer import RuntimeTracer
-from .self_improvement import VibelintSelfImprover as SelfImprovementSystem
+from vibelint.auto_discovery import AutoDiscovery
+from vibelint.config import Config as VibelintConfig
+from vibelint.dependency_graph_manager import DependencyGraphManager
+from vibelint.justification import JustificationEngine
+from vibelint.llm.llm_context_engineer import VibelintContextEngineer as LLMContextEngineer
+from vibelint.llm import get_llm_config
+from vibelint.multi_representation_analyzer import MultiRepresentationAnalyzer
+from vibelint.runtime_tracer import RuntimeTracer
+from vibelint.self_improvement import VibelintSelfImprover as SelfImprovementSystem
 
 # Setup logging
 logger = logging.getLogger(__name__)

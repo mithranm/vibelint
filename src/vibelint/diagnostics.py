@@ -15,7 +15,7 @@ from typing import Any, Dict
 import requests
 
 from .context.probing import ProbeResult
-from .llm import create_llm_manager, LLMRole
+from vibelint.llm import create_llm_manager, LLMRole
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ class DualLLMDiagnostics:
         correct = 0
 
         for scenario in scenarios:
-            from .llm import LLMRequest
+            from vibelint.llm import LLMRequest
 
             request = LLMRequest(scenario["content"], scenario["task_type"])
             selected = self.llm_manager.select_llm(request)

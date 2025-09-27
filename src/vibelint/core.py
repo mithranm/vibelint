@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .llm import LLMManager, LLMRequest
-from .plugin_system import Finding, Severity
+from vibelint.llm import LLMManager, LLMRequest
+from vibelint.plugin_system import Finding, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +323,7 @@ class CustomValidator(BaseValidator):
 
 def create_dynamic_analyzer(config: Dict[str, Any]) -> Optional[DynamicAnalyzer]:
     """Create dynamic analyzer with LLM configuration."""
-    from .llm import create_llm_manager
+    from vibelint.llm import create_llm_manager
 
     llm_manager = create_llm_manager(config)
     if not llm_manager:

@@ -26,7 +26,7 @@ try:
 except ImportError:
     HTTPX_AVAILABLE = False
 
-from .runtime_tracer import (DependencyNode, TraceSession,
+from vibelint.runtime_tracer import (DependencyNode, TraceSession,
                              VanguardEmbeddingIntegration)
 
 
@@ -613,7 +613,7 @@ async def build_vibelint_dependency_graph(
 if __name__ == "__main__":
     # Example usage
     async def demo():
-        from .runtime_tracer import trace_vibelint_module
+        from vibelint.runtime_tracer import trace_vibelint_module
 
         # Trace a module
         session = trace_vibelint_module("config")

@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Union
 
-from .utils import find_package_root
+from vibelint.utils import find_package_root
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ def load_config(start_path: Path) -> Config:
 
     # Try auto-discovery first for zero-config scaling
     try:
-        from .auto_discovery import discover_and_configure
+        from vibelint.auto_discovery import discover_and_configure
 
         auto_config = discover_and_configure(start_path)
 

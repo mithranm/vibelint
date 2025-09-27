@@ -9,9 +9,9 @@ import fnmatch
 import logging
 from pathlib import Path
 
-from .config import Config
-from .discovery import discover_files
-from .utils import get_relative_path, is_binary
+from vibelint.config import Config
+from vibelint.discovery import discover_files
+from vibelint.utils import get_relative_path, is_binary
 
 __all__ = ["create_snapshot"]
 

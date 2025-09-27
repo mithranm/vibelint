@@ -15,7 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .plugin_system import BaseFormatter, Finding, Severity
+from vibelint.plugin_system import BaseFormatter, Finding, Severity
 
 __all__ = [
     "ReportGenerator",

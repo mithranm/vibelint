@@ -12,10 +12,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
-from .discovery import discover_files, discover_files_from_paths
-from .plugin_system import Finding, Severity, plugin_manager
-from .reporting import BUILTIN_FORMATTERS
-from .rules import RuleEngine
+from vibelint.discovery import discover_files, discover_files_from_paths
+from vibelint.plugin_system import Finding, Severity, plugin_manager
+from vibelint.reporting import BUILTIN_FORMATTERS
+from vibelint.rules import RuleEngine
 
 # Note: No longer importing BUILTIN_VALIDATORS - using plugin discovery instead
 
@@ -135,7 +135,7 @@ def run_plugin_validation(
     Returns:
         PluginValidationRunner with results
     """
-    from .config import Config
+    from vibelint.config import Config
 
     runner = PluginValidationRunner(config_dict, project_root)
 

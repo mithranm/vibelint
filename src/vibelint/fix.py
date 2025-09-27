@@ -9,8 +9,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .config import Config
-from .plugin_system import Finding
+from vibelint.config import Config
+from vibelint.plugin_system import Finding
 
 __all__ = ["FixEngine", "can_fix_finding", "apply_fixes", "regenerate_all_docstrings"]
 
@@ -28,7 +28,7 @@ class FixEngine:
         self.config = config
 
         # Initialize LLM manager for dual LLM support
-        from .llm import create_llm_manager
+        from vibelint.llm import create_llm_manager
 
         config_dict = config.settings if isinstance(config.settings, dict) else {}
         self.llm_manager = create_llm_manager(config_dict)
@@ -168,7 +168,7 @@ class FixEngine:
             return None
 
         try:
-            from .llm import LLMRequest
+            from vibelint.llm import LLMRequest
 
             # Safe prompt - only asks for docstring text, never code
             if isinstance(node, ast.ClassDef):

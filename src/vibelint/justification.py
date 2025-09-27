@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .llm import LLMRequest, LLMRole, create_llm_manager
+from vibelint.llm import LLMRequest, LLMRole, create_llm_manager
 
 logger = logging.getLogger(__name__)
 

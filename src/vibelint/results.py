@@ -7,7 +7,7 @@ vibelint/src/vibelint/results.py
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .plugin_system import Finding
+from vibelint.plugin_system import Finding
 from .validators.project_wide.namespace_collisions import (NamespaceCollision,
                                                            NamespaceNode)
 

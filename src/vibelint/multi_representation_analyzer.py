@@ -1600,8 +1600,8 @@ if __name__ == "__main__":
     async def demo():
         from pathlib import Path
 
-        from .dependency_graph_manager import DependencyGraphManager
-        from .runtime_tracer import VanguardEmbeddingIntegration
+        from vibelint.dependency_graph_manager import DependencyGraphManager
+        from vibelint.runtime_tracer import VanguardEmbeddingIntegration
 
         project_root = Path(__file__).parent.parent.parent
         embedding_integration = VanguardEmbeddingIntegration()

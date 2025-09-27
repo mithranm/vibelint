@@ -83,8 +83,8 @@ class VibelintSelfImprover:
 
         try:
             # Run vibelint on its own source code
-            from .config import load_config
-            from .core import AnalysisRequest, create_dynamic_analyzer
+            from vibelint.config import load_config
+            from vibelint.core import AnalysisRequest, create_dynamic_analyzer
 
             config = load_config(self.vibelint_src_path)
             analyzer = create_dynamic_analyzer(config.settings)
