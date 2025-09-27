@@ -15,6 +15,7 @@ from . import architecture, project_wide, single_file
 from .registry import (get_all_validators, get_validator, register_validator,
                        validator_registry)
 # Re-export specific validators for backward compatibility
+from .single_file.absolute_imports import AbsoluteImportValidator
 from .single_file.docstring import (DocstringPathValidator,
                                     MissingDocstringValidator)
 from .single_file.emoji import EmojiUsageValidator
@@ -42,6 +43,7 @@ __all__ = [
     "project_wide",
     "architecture",
     # Individual validators (backward compatibility)
+    "AbsoluteImportValidator",
     "MissingDocstringValidator",
     "DocstringPathValidator",
     "EmojiUsageValidator",
