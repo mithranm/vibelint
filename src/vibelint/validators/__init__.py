@@ -11,26 +11,17 @@ vibelint/src/vibelint/validators/__init__.py
 
 # Import validator categories for direct access
 from . import architecture, project_wide, single_file
+
 # Import registry system
 from .registry import (get_all_validators, get_validator, register_validator,
                        validator_registry)
-# Re-export specific validators for backward compatibility
-from .single_file.absolute_imports import AbsoluteImportValidator
-from .single_file.docstring import (DocstringPathValidator,
-                                    MissingDocstringValidator)
-from .single_file.emoji import EmojiUsageValidator
-from .single_file.exports import InitAllValidator, MissingAllValidator
-from .single_file.line_count import LineCountValidator
-from .single_file.logger_names import LoggerNameValidator
-from .single_file.print_statements import PrintStatementValidator
-from .single_file.self_validation import VibelintSelfValidator
 
-try:
-    from .architecture.basic_patterns import ArchitectureValidator
-    from .project_wide.dead_code import DeadCodeValidator
-except ImportError:
-    # These might not exist yet or have import issues
-    pass
+# Note: Individual validators should be imported from their specific modules:
+# from vibelint.validators.single_file.absolute_imports import AbsoluteImportValidator
+# from vibelint.validators.architecture.basic_patterns import ArchitectureValidator
+# etc.
+#
+# This prevents duplicate import paths and keeps the module hierarchy clear.
 
 __all__ = [
     # Registry system
@@ -42,15 +33,4 @@ __all__ = [
     "single_file",
     "project_wide",
     "architecture",
-    # Individual validators (backward compatibility)
-    "AbsoluteImportValidator",
-    "MissingDocstringValidator",
-    "DocstringPathValidator",
-    "EmojiUsageValidator",
-    "MissingAllValidator",
-    "InitAllValidator",
-    "LoggerNameValidator",
-    "PrintStatementValidator",
-    "VibelintSelfValidator",
-    "LineCountValidator",
 ]

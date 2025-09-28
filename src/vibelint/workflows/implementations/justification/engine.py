@@ -730,31 +730,9 @@ class JustificationEngine:
 
     def _get_vibelint_snapshot(self, directory_path: Path) -> str:
         """Get the vibelint snapshot markdown tree."""
-        try:
-            import subprocess
-            import os
-
-            # Run vibelint snapshot from the target directory
-            result = subprocess.run(
-                ["/Users/briyamanick/miniconda3/envs/mcp-unified/bin/python", "-m", "vibelint", "snapshot", "--output", "temp_snapshot.md"],
-                cwd=str(directory_path),
-                capture_output=True,
-                text=True
-            )
-
-            if result.returncode == 0:
-                snapshot_file = directory_path / "temp_snapshot.md"
-                if snapshot_file.exists():
-                    content = snapshot_file.read_text()
-                    snapshot_file.unlink()  # Clean up temp file
-                    return content
-
-            logger.error(f"vibelint snapshot failed: {result.stderr}")
-            return self._fallback_tree_generation(directory_path)
-
-        except Exception as e:
-            logger.error(f"Failed to run vibelint snapshot: {e}")
-            return self._fallback_tree_generation(directory_path)
+        # Use direct tree generation since snapshot command was removed in CLI simplification
+        logger.info("Generating project tree directly (snapshot command not available)")
+        return self._fallback_tree_generation(directory_path)
 
     def _fallback_tree_generation(self, directory_path: Path) -> str:
         """Generate a basic tree if vibelint snapshot fails."""
