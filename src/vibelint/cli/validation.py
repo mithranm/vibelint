@@ -13,8 +13,8 @@ from typing import Optional
 import click
 from rich.console import Console
 
-from ..config import Config, load_config
-from .cli_group import VibelintContext, cli
+from vibelint.config import Config, load_config
+from vibelint.cli.cli_group import VibelintContext, cli
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -39,8 +39,8 @@ def check(ctx: click.Context, targets: tuple[Path, ...], format: str, exclude_ai
         ctx.exit(1)
 
     # Import validation engine
-    from ..validation_engine import PluginValidationRunner
-    from ..discovery import discover_files_from_paths
+    from vibelint.validation_engine import PluginValidationRunner
+    from vibelint.discovery import discover_files_from_paths
 
     # Determine target files
     if targets:
