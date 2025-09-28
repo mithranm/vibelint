@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from ..context.analyzer import ContextAnalyzer
 from ..context.prompts import AgentPrompts, AnalysisLevel
-from ..llm import LLMManager, LLMRequest, LLMRole
+from ..llm import create_llm_manager, LLMRequest, LLMRole
 from ..project_map import ProjectMapper
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class AnalysisReport:
 class AnalysisOrchestrator:
     """Orchestrates multi-level code quality analysis using specialized agents."""
 
-    def __init__(self, llm_manager: LLMManager, project_root: Path):
+    def __init__(self, llm_manager, project_root: Path):
         self.llm = llm_manager
         self.project_root = project_root
         self.context_analyzer = ContextAnalyzer(project_root)

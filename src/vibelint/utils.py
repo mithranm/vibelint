@@ -23,7 +23,8 @@ __all__ = [
     "is_python_file",
     "read_file_safe",
     "write_file_safe",
-    "find_project_root",
+    "walk_up_for_project_root",
+    "walk_up_for_config",
     "is_binary",
     "console",
     "scale_ascii_art_by_height",
@@ -31,16 +32,17 @@ __all__ = [
 ]
 
 
-def find_project_root(start_path: Path) -> Path | None:
+def walk_up_for_project_root(start_path: Path) -> Path | None:
     """
-    Find the root directory of a project containing the given path.
+    Walk up directory tree to find project root markers.
 
-    A project root is identified by containing either:
-    1. A pyproject.toml file
-    2. A .git directory
+    Project root markers (in order of precedence):
+    1. .git directory (definitive project boundary)
+    2. pyproject.toml file (Python project config)
+    3. dev.pyproject.toml file (development/parent project config)
 
     Args:
-    start_path: Path to start the search from
+    start_path: Path to start walking up from
 
     Returns:
     Path to project root, or None if not found
@@ -50,13 +52,77 @@ def find_project_root(start_path: Path) -> Path | None:
 
     current_path = start_path.resolve()
     while True:
-        if (current_path / "pyproject.toml").is_file():
-            return current_path
+        # Check for git repo (strongest indicator of project root)
         if (current_path / ".git").is_dir():
             return current_path
+        # Check for standard Python project config
+        if (current_path / "pyproject.toml").is_file():
+            return current_path
+        # Check for development/parent project config (e.g., kaia's dev.pyproject.toml)
+        if (current_path / "dev.pyproject.toml").is_file():
+            return current_path
+        # Stop at filesystem root
         if current_path.parent == current_path:
             return None
         current_path = current_path.parent
+
+
+def walk_up_for_config(start_path: Path) -> Path | None:
+    """
+    Walk up directory tree to find vibelint configuration.
+
+    Searches for configuration files in this order:
+    1. pyproject.toml with [tool.vibelint] section
+    2. dev.pyproject.toml with [tool.vibelint] section
+    3. .git directory (fallback to git repo root)
+
+    Args:
+    start_path: Path to start walking up from
+
+    Returns:
+    Path containing viable configuration, or None if not found
+    """
+    current_path = start_path.resolve()
+    if current_path.is_file():
+        current_path = current_path.parent
+
+    while True:
+        # Check for standard pyproject.toml with vibelint config
+        pyproject_path = current_path / "pyproject.toml"
+        if pyproject_path.is_file():
+            if _has_vibelint_config(pyproject_path):
+                return current_path
+
+        # Check for dev.pyproject.toml with vibelint config (kaia pattern)
+        dev_pyproject_path = current_path / "dev.pyproject.toml"
+        if dev_pyproject_path.is_file():
+            if _has_vibelint_config(dev_pyproject_path):
+                return current_path
+
+        # Fallback to git repo root
+        if (current_path / ".git").is_dir():
+            return current_path
+
+        # Stop at filesystem root
+        if current_path.parent == current_path:
+            return None
+        current_path = current_path.parent
+
+
+def _has_vibelint_config(toml_path: Path) -> bool:
+    """Check if a TOML file contains vibelint configuration."""
+    try:
+        import sys
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            import tomli as tomllib
+
+        with open(toml_path, 'rb') as f:
+            data = tomllib.load(f)
+            return 'tool' in data and 'vibelint' in data.get('tool', {})
+    except Exception:
+        return False
 
 
 def find_package_root(start_path: Path) -> Path | None:
@@ -83,7 +149,7 @@ def find_package_root(start_path: Path) -> Path | None:
 
     while True:
         if (current_path / "__init__.py").is_file():
-            project_root_marker = find_project_root(current_path)
+            project_root_marker = walk_up_for_project_root(current_path)
             if project_root_marker and current_path.is_relative_to(project_root_marker):
                 pass
 

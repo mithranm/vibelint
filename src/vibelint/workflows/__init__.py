@@ -11,8 +11,8 @@ Individual workflow logic belongs in specific implementation modules.
 vibelint/src/vibelint/workflow/__init__.py
 """
 
-# Import implementation categories for direct access
-from . import implementations
+# Avoid importing implementations directly to prevent circular imports
+# Access implementations through lazy loading
 # Import core workflow system
 from .core.base import (BaseWorkflow, WorkflowConfig, WorkflowMetrics,
                         WorkflowPriority, WorkflowResult, WorkflowStatus)
@@ -23,14 +23,11 @@ from .orchestrator import AnalysisOrchestrator
 # Import registry system
 from .registry import WorkflowRegistry, register_workflow, workflow_registry
 
-# Import specific implementations for backward compatibility
-try:
-    from .implementations.justification import FileJustificationWorkflow
-    from .implementations.single_file_validation import \
-        SingleFileValidationWorkflow
-except ImportError:
-    # These might not exist yet or have import issues
-    pass
+# Lazy imports for specific implementations to avoid circular dependencies
+def get_justification_engine():
+    """Get JustificationEngine class."""
+    from .implementations.justification import JustificationEngine
+    return JustificationEngine
 
 __all__ = [
     # Core workflow system
@@ -48,6 +45,6 @@ __all__ = [
     "WorkflowManager",
     "AnalysisOrchestrator",
     "WorkflowEvaluator",
-    # Implementation modules
-    "implementations",
+    # Lazy import functions
+    "get_justification_engine",
 ]

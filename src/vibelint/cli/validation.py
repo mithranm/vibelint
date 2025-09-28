@@ -14,7 +14,7 @@ import click
 from rich.console import Console
 
 from ..config import Config, load_config
-from .core import VibelintContext, cli
+from .cli_group import VibelintContext, cli
 
 console = Console()
 logger = logging.getLogger(__name__)

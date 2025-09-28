@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .base import BaseWorkflow, WorkflowConfig, WorkflowResult, WorkflowStatus
+from ..core.base import BaseWorkflow, WorkflowConfig, WorkflowResult, WorkflowStatus
 
 logger = logging.getLogger(__name__)
 

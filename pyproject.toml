@@ -94,9 +94,21 @@ sarif = "vibelint.reporting:SarifFormatter"
 llm = "vibelint.reporting:LLMFormatter"
 
 [project.entry-points."vibelint.workflows"]
-# Built-in workflows are auto-discovered from vibelint.workflows package
-# Users can add custom workflows here:
-# my-custom-workflow = "my_package.workflows:MyCustomWorkflow"
+# Built-in workflows - can be simple functions or complex multi-file implementations
+"justification" = "vibelint.workflows.implementations.justification:JustificationEngine"
+"cleanup" = "vibelint.workflows.cleanup:CleanupWorkflow"
+"evaluation" = "vibelint.workflows.evaluation:EvaluationWorkflow"
+
+# Third-party workflows can be added here by other packages:
+# Examples of different workflow types:
+# Simple function workflow:
+# "my-simple-check" = "my_package.workflows:simple_check_function"
+#
+# Class-based workflow:
+# "my-complex-workflow" = "my_package.workflows:MyComplexWorkflow"
+#
+# Multi-file workflow module:
+# "my-enterprise-workflow" = "my_package.workflows.enterprise_suite:EnterpriseWorkflowEngine"
 
 [project.urls]
 "Homepage" = "https://github.com/mithranm/vibelint"
@@ -151,3 +163,39 @@ ignore = [
 
 [tool.setuptools.package-data]
 vibelint = ["VIBECHECKER.txt"]
+
+# Local vibelint config for analyzing vibelint itself
+[tool.vibelint]
+include_globs = ["**/*", "tests/**/*.py", "*.py"]
+exclude_globs = [
+    "**/__pycache__/**",
+    "**/.*",           # dotfiles/directories
+    "build/**",
+    "dist/**",
+    "*cache*/**",      # any cache directories
+    "*.vibelint*",     # vibelint artifacts
+    ".vibelint-*/**",  # vibelint directories
+    "*.pyc", "*.pyo", "*.pyd",  # compiled python
+    "*.log"            # log files
+]
+# LLM config will be inherited from parent project
+
+# Workflow-specific configurations
+[tool.vibelint.workflows.justification]
+# Configuration for justification workflow
+max_file_size_lines = 2000  # Files larger than this get flagged for splitting
+enable_llm_analysis = true
+enable_static_analysis = true
+enable_dependency_analysis = true
+reports_directory = ".vibelint-reports/justification_workflow"
+
+[tool.vibelint.workflows.cleanup]
+# Configuration for cleanup workflow
+aggressive_mode = false
+backup_before_cleanup = true
+
+# Third-party workflows can define their own config sections:
+# [tool.vibelint.workflows.my-custom-workflow]
+# custom_setting = "value"
+# another_setting = 123
+

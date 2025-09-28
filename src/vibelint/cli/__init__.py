@@ -3,7 +3,7 @@ Modular CLI architecture for vibelint.
 
 This package breaks down the monolithic CLI into logical, maintainable modules:
 
-- core.py: Main CLI group and shared utilities
+- cli_group.py: Main CLI group and shared utilities
 - validation.py: check, validate commands
 - analysis.py: namespace, snapshot, diagnostics commands
 - maintenance.py: regen-docstrings, rollback, setup commands
@@ -19,7 +19,7 @@ vibelint/src/vibelint/cli/__init__.py
 import logging
 import sys
 
-from .core import VibelintContext, cli
+from .cli_group import VibelintContext, cli
 
 __all__ = ["cli", "main"]
 

@@ -12,7 +12,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from .core import VibelintContext, cli
+from .cli_group import VibelintContext, cli
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def justify(ctx: click.Context, file_path: Path, rule_id: str | None) -> None:
     console.print("[bold purple]🤖 Analyzing Code Justification...[/bold purple]\n")
 
     try:
-        from ..justification import JustificationEngine
+        from ..workflows.implementations.justification import JustificationEngine
         from ..config import load_config
 
         # Load config
@@ -98,7 +98,7 @@ def compare_methods(ctx: click.Context, method1: str, method2: str) -> None:
     console.print("[bold cyan]🔍 Comparing Methods...[/bold cyan]\n")
 
     try:
-        from ..justification import JustificationEngine
+        from ..workflows.implementations.justification import JustificationEngine
         from ..config import load_config
 
         # Parse method specifications (file:method format)

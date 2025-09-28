@@ -14,9 +14,74 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Union
 
-from vibelint.utils import find_package_root
+from vibelint.utils import walk_up_for_config
 
 logger = logging.getLogger(__name__)
+
+
+def _find_config_file(project_root: Path) -> Path | None:
+    """Find the config file (pyproject.toml or dev.pyproject.toml) with vibelint settings."""
+    # Check standard pyproject.toml first
+    pyproject_path = project_root / "pyproject.toml"
+    if pyproject_path.exists():
+        try:
+            with open(pyproject_path, "rb") as f:
+                data = tomllib.load(f)
+                if "tool" in data and "vibelint" in data.get("tool", {}):
+                    return pyproject_path
+        except Exception:
+            pass
+
+    # Check dev.pyproject.toml (kaia pattern)
+    dev_pyproject_path = project_root / "dev.pyproject.toml"
+    if dev_pyproject_path.exists():
+        try:
+            with open(dev_pyproject_path, "rb") as f:
+                data = tomllib.load(f)
+                if "tool" in data and "vibelint" in data.get("tool", {}):
+                    return dev_pyproject_path
+        except Exception:
+            pass
+
+    return None
+
+
+def _load_parent_config(project_root: Path, current_config_path: Path) -> dict | None:
+    """Load parent configuration for inheritance."""
+    # Walk up from the project root to find parent configurations
+    parent_path = project_root.parent
+
+    while parent_path != parent_path.parent:  # Stop at filesystem root
+        # Check for dev.pyproject.toml (kaia pattern)
+        dev_config = parent_path / "dev.pyproject.toml"
+        if dev_config.exists() and dev_config != current_config_path:
+            try:
+                with open(dev_config, "rb") as f:
+                    data = tomllib.load(f)
+                    vibelint_config = data.get("tool", {}).get("vibelint", {})
+                    if vibelint_config:
+                        logger.debug(f"Found parent config in {dev_config}")
+                        return vibelint_config
+            except Exception:
+                pass
+
+        # Check for regular pyproject.toml
+        parent_config = parent_path / "pyproject.toml"
+        if parent_config.exists() and parent_config != current_config_path:
+            try:
+                with open(parent_config, "rb") as f:
+                    data = tomllib.load(f)
+                    vibelint_config = data.get("tool", {}).get("vibelint", {})
+                    if vibelint_config:
+                        logger.debug(f"Found parent config in {parent_config}")
+                        return vibelint_config
+            except Exception:
+                pass
+
+        parent_path = parent_path.parent
+
+    return None
+
 
 if sys.version_info >= (3, 11):
 
@@ -139,6 +204,73 @@ class Config:
         return self._project_root is not None and bool(self._config_dict)
 
 
+def load_hierarchical_config(start_path: Path) -> Config:
+    """
+    Loads vibelint configuration with hierarchical merging.
+
+    1. Loads local config (file patterns, local settings)
+    2. Walks up to find parent config (LLM settings, shared config)
+    3. Merges them: local config takes precedence for file patterns,
+       parent config provides LLM settings
+
+    Args:
+    start_path: The directory to start searching from.
+
+    Returns:
+    A Config object with merged local and parent settings.
+    """
+    # Find local config first
+    local_root = find_package_root(start_path)
+    local_settings = {}
+
+    if local_root:
+        pyproject_path = local_root / "pyproject.toml"
+        if pyproject_path.exists():
+            try:
+                with open(pyproject_path, "rb") as f:
+                    data = tomllib.load(f)
+                    local_settings = data.get("tool", {}).get("vibelint", {})
+                    if local_settings:
+                        logger.info(f"Loaded local vibelint config from {pyproject_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load local config from {pyproject_path}: {e}")
+
+    # Walk up to find parent config with LLM settings
+    parent_settings = {}
+    current_path = start_path.parent if start_path.is_file() else start_path
+
+    while current_path.parent != current_path:
+        parent_pyproject = current_path / "pyproject.toml"
+        if parent_pyproject.exists() and parent_pyproject != (local_root / "pyproject.toml" if local_root else None):
+            try:
+                with open(parent_pyproject, "rb") as f:
+                    data = tomllib.load(f)
+                    parent_config = data.get("tool", {}).get("vibelint", {})
+                    if parent_config:
+                        parent_settings = parent_config
+                        logger.info(f"Found parent vibelint config at {parent_pyproject}")
+                        break
+            except Exception as e:
+                logger.debug(f"Failed to read {parent_pyproject}: {e}")
+        current_path = current_path.parent
+
+    # Merge configs: local file patterns override parent, but inherit LLM settings
+    merged_settings = parent_settings.copy()
+
+    # Local config takes precedence for file discovery patterns
+    if local_settings:
+        for key in ["include_globs", "exclude_globs", "ignore"]:
+            if key in local_settings:
+                merged_settings[key] = local_settings[key]
+
+        # Also copy other local-specific settings
+        for key in local_settings:
+            if key not in ["include_globs", "exclude_globs", "ignore"]:
+                merged_settings[key] = local_settings[key]
+
+    return Config(local_root or start_path, merged_settings)
+
+
 def load_config(start_path: Path) -> Config:
     """
     Loads vibelint configuration with auto-discovery fallback.
@@ -154,7 +286,7 @@ def load_config(start_path: Path) -> Config:
 
     vibelint/src/vibelint/config.py
     """
-    project_root = find_package_root(start_path)
+    project_root = walk_up_for_config(start_path)
     loaded_settings: dict[str, Any] = {}
 
     # Try auto-discovery first for zero-config scaling
@@ -190,15 +322,20 @@ def load_config(start_path: Path) -> Config:
         )
         return Config(project_root=None, config_dict=loaded_settings)
 
-    pyproject_path = project_root / "pyproject.toml"
+    # Try both pyproject.toml and dev.pyproject.toml
+    pyproject_path = _find_config_file(project_root)
     logger.debug(f"Found project root: {project_root}")
+
+    if not pyproject_path:
+        logger.debug(f"No vibelint configuration found in {project_root}")
+        return Config(project_root, {})
+
     logger.debug(f"Attempting to load config from: {pyproject_path}")
 
     try:
         with open(pyproject_path, "rb") as f:
-
             full_toml_config = tomllib.load(f)
-        logger.debug("Parsed pyproject.toml")
+        logger.debug(f"Parsed {pyproject_path.name}")
 
         # Validate required configuration structure explicitly
         tool_section = full_toml_config.get("tool")
@@ -210,6 +347,15 @@ def load_config(start_path: Path) -> Config:
 
         if isinstance(vibelint_config, dict):
             loaded_settings = vibelint_config
+            # Check for parent config inheritance
+            parent_config = _load_parent_config(project_root, pyproject_path)
+            if parent_config:
+                # Merge parent config with local config (local takes precedence)
+                merged_settings = parent_config.copy()
+                merged_settings.update(loaded_settings)
+                loaded_settings = merged_settings
+                logger.debug("Merged parent configuration")
+
             if loaded_settings:
                 logger.debug(f"Loaded [tool.vibelint] settings from {pyproject_path}")
                 logger.debug(f"Loaded settings: {loaded_settings}")

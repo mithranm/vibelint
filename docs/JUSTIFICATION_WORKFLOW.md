@@ -1,5 +1,12 @@
 # Justification Workflow: Core of vibelint
 
+The core of the justification workflow
+is that it forces the vibelint llms to create a comprehensive analysis of the entire project, file by file. 
+we use vibelint snapshot to generate a markdown tree of the project, and then add llm written summaries for 
+each file to the end of every line in the tree. then we also add deterministic dependency list (calculated 
+from parsing imports) to build a master dependency tree, which should also find circular imports, incorrect 
+imports, and disconnected modules (dead code).
+
 ## Overview
 
 The justification workflow is the **foundation of vibelint's code quality analysis**. Every other feature (linting, validation, reporting) builds on top of justification. It ensures every code element justifies its existence through static analysis and targeted LLM usage.

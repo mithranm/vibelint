@@ -9,18 +9,7 @@ Individual workflow logic belongs in specific implementation modules.
 vibelint/src/vibelint/workflow/implementations/__init__.py
 """
 
-# Import available implementations
-from . import (coverage_analysis, justification, justification_analysis,
-               redundancy_detection, single_file_validation)
-
-# Re-export specific workflows for convenience
-try:
-    from .justification import FileJustificationWorkflow
-    from .single_file_validation import SingleFileValidationWorkflow
-except ImportError:
-    # These might have import issues
-    pass
-
+# Import available implementations - avoid circular imports by importing lazily
 __all__ = [
     # Implementation modules
     "justification",
@@ -29,3 +18,14 @@ __all__ = [
     "redundancy_detection",
     "justification_analysis",
 ]
+
+# Lazy imports to avoid circular dependencies
+def get_justification_engine():
+    """Get JustificationEngine class."""
+    from .justification import JustificationEngine
+    return JustificationEngine
+
+def get_single_file_validation_workflow():
+    """Get SingleFileValidationWorkflow class."""
+    from .single_file_validation import SingleFileValidationWorkflow
+    return SingleFileValidationWorkflow

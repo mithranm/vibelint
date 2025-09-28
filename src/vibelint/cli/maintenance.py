@@ -12,7 +12,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from .core import VibelintContext, cli
+from .cli_group import VibelintContext, cli
 
 console = Console()
 logger = logging.getLogger(__name__)

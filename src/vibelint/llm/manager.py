@@ -68,10 +68,10 @@ class LLMRequest:
     """Simple request specification for LLM processing."""
 
     content: str
-    task_type: str
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
-    json_mode: bool = False  # Request JSON-formatted response
+    structured_output: Optional[Dict[str, Any]] = None  # JSON schema for structured responses
+    # If structured_output is None, expects unstructured natural language response
 
 
 class LLMManager:
@@ -164,25 +164,56 @@ class LLMManager:
         return config
 
     def select_llm(self, request: LLMRequest) -> LLMRole:
-        """Select appropriate LLM based on request characteristics.
+        """Select appropriate LLM based on hard constraints.
 
-        Simple routing logic:
-        - Use orchestrator for large content (>context_threshold)
-        - Use orchestrator for complex tasks (architecture, planning)
-        - Use fast for everything else
+        Routes based on actual LLM hard limits:
+        - Context window size (input tokens)
+        - Max output tokens
+        - Use cheapest/fastest LLM that can handle the request
         """
         content_size = len(request.content)
+        max_tokens = request.max_tokens or 50
 
-        # Size-based routing
-        if content_size > self.context_threshold:
+        # Get LLM hard limits from configs
+        fast_max_tokens = self.fast_config.get("max_tokens", DEFAULT_FAST_MAX_TOKENS)
+        fast_max_context = self.fast_config.get("fast_max_context_tokens", 1000)  # Fast LLMs typically have small context
+
+        orchestrator_max_tokens = self.orchestrator_config.get("max_tokens", DEFAULT_ORCHESTRATOR_MAX_TOKENS)
+        # Orchestrator typically has much larger context window
+
+        fast_available = bool(self.fast_config.get("api_url"))
+        orchestrator_available = bool(self.orchestrator_config.get("api_url"))
+
+        # Estimate input tokens (rough approximation: 4 chars per token)
+        estimated_input_tokens = content_size // 4
+
+        # Hard constraint: If request exceeds fast LLM's output token limit
+        if max_tokens > fast_max_tokens:
+            if orchestrator_available:
+                logger.debug(f"Routing to orchestrator: output tokens ({max_tokens}) > fast limit ({fast_max_tokens})")
+                return LLMRole.ORCHESTRATOR
+            else:
+                logger.warning(f"Request needs {max_tokens} tokens but orchestrator unavailable, truncating to fast LLM limit")
+                return LLMRole.FAST
+
+        # Hard constraint: If input exceeds fast LLM's context window
+        if estimated_input_tokens > fast_max_context:
+            if orchestrator_available:
+                logger.debug(f"Routing to orchestrator: input tokens (~{estimated_input_tokens}) > fast context ({fast_max_context})")
+                return LLMRole.ORCHESTRATOR
+            else:
+                logger.warning(f"Large input (~{estimated_input_tokens} tokens) but orchestrator unavailable, truncating to fast LLM")
+                return LLMRole.FAST
+
+        # No hard constraints violated - use fast LLM (cheaper/faster)
+        if fast_available:
+            logger.debug(f"Routing to fast: within limits (input~{estimated_input_tokens}, output={max_tokens})")
+            return LLMRole.FAST
+        elif orchestrator_available:
+            logger.debug(f"Routing to orchestrator: fast LLM unavailable")
             return LLMRole.ORCHESTRATOR
-
-        # Task-based routing
-        complex_tasks = ["architecture", "planning", "summarization", "multi_file"]
-        if any(task in request.task_type.lower() for task in complex_tasks):
-            return LLMRole.ORCHESTRATOR
-
-        return LLMRole.FAST
+        else:
+            raise ValueError("No LLMs configured - need either fast_api_url or orchestrator_api_url in config")
 
     async def process_request(self, request: LLMRequest) -> Dict[str, Any]:
         """Process request using the appropriate LLM."""
@@ -191,12 +222,12 @@ class LLMManager:
         # Check if required LLM is configured
         if selected_llm == LLMRole.FAST and not self.fast_config.get("api_url"):
             raise ValueError(
-                f"Fast LLM required for task '{request.task_type}' but not configured. "
+                f"Fast LLM required but not configured. "
                 f"Add [tool.vibelint.llm] fast_api_url and fast_model to pyproject.toml"
             )
         elif selected_llm == LLMRole.ORCHESTRATOR and not self.orchestrator_config.get("api_url"):
             raise ValueError(
-                f"Orchestrator LLM required for task '{request.task_type}' but not configured. "
+                f"Orchestrator LLM required but not configured. "
                 f"Add [tool.vibelint.llm] orchestrator_api_url and orchestrator_model to pyproject.toml"
             )
 
@@ -247,9 +278,17 @@ class LLMManager:
             "stream": False,
         }
 
-        # Add JSON mode if requested
-        if request.json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        # Add structured output if requested
+        if request.structured_output:
+            if "json_schema" in request.structured_output:
+                # OpenAI-style structured output with schema
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": request.structured_output["json_schema"]
+                }
+            else:
+                # Simple JSON mode
+                payload["response_format"] = {"type": "json_object"}
 
         # Debug: Log the request details
         logger.info(f"LLM Request: {role.value} to {url}")
@@ -314,6 +353,29 @@ class LLMManager:
             "fallback_enabled": False,  # Always disabled for predictable behavior
             "available_features": self.get_available_features(),
         }
+
+    def process_request_sync(self, request: LLMRequest) -> Dict[str, Any]:
+        """Synchronous wrapper for process_request to support legacy code."""
+        import asyncio
+        try:
+            # Always create a new event loop for sync calls
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(self.process_request(request))
+            finally:
+                new_loop.close()
+                asyncio.set_event_loop(None)
+        except Exception as e:
+            logger.error(f"Sync LLM request failed: {e}")
+            return {
+                "content": f"LLM sync call failed: {e}",
+                "llm_used": "error",
+                "duration_seconds": 0,
+                "input_tokens": 0,
+                "success": False,
+                "error": str(e)
+            }
 
 
 def create_llm_manager(config: Dict[str, Any]) -> Optional[LLMManager]:
