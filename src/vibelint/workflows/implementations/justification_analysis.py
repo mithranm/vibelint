@@ -10,6 +10,9 @@ This is implemented as a workflow, not validators, because it requires:
 2. State collection across multiple files
 3. Embedding generation and similarity analysis
 4. Multi-phase processing (collection → analysis → reporting)
+
+This file now serves as a legacy wrapper around the new modular JustificationEngineV2.
+For direct justification analysis, use the JustificationEngineV2 instead.
 """
 
 import ast
@@ -1134,3 +1137,39 @@ class JustificationAnalysisWorkflow:
             json.dump(report, f, indent=2)
 
         logger.info(f"Exported justification analysis data to {output_dir}")
+
+
+# New simple wrapper for backward compatibility
+def run_justification_workflow(directory_path: Path, config: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Run the comprehensive justification workflow using the new modular engine.
+
+    This is a simple wrapper for backward compatibility. For new code, use JustificationEngine directly.
+    """
+    try:
+        from .justification.engine import JustificationEngine
+
+        engine = JustificationEngine(config)
+        result = engine.run_justification_workflow(directory_path)
+
+        # Return the comprehensive report
+        return result
+
+    except ImportError as e:
+        logger.error(f"Failed to import JustificationEngineV2: {e}")
+        logger.info("Falling back to legacy JustificationAnalysisWorkflow")
+
+        # Fallback to the old workflow (keeping existing functionality)
+        workflow = JustificationAnalysisWorkflow(config)
+
+        # Process all Python files in the directory
+        for file_path in directory_path.rglob("*.py"):
+            try:
+                content = file_path.read_text(encoding='utf-8')
+                workflow.analyze_file(file_path, content)
+            except Exception as e:
+                logger.warning(f"Failed to analyze {file_path}: {e}")
+
+        # Generate and return report
+        report = workflow.generate_report()
+        return json.dumps(report, indent=2)

@@ -52,16 +52,16 @@ class JustificationWorkflow(BaseWorkflow):
             # Use project_root as target directory
             target_dir = str(project_root)
 
-            # Run the analysis
-            result = engine.run_full_analysis(target_dir)
+            # Run the analysis using the new V2 engine
+            result = engine.run_justification_safe(project_root)
 
             # Convert engine result to WorkflowResult
             workflow_result = WorkflowResult(
                 workflow_id=self.workflow_id,
                 status=WorkflowStatus.COMPLETED,
                 data=result,
-                artifacts=result.get('reports', {}),
-                summary=f"Justification analysis completed. Exit code: {result.get('exit_code', 'unknown')}"
+                artifacts={"report": result.get("report")} if "report" in result else {},
+                summary=f"Justification analysis completed. Exit code: {result.get('exit_code') if 'exit_code' in result else 'unknown'}"
             )
 
             self._status = WorkflowStatus.COMPLETED
@@ -112,4 +112,4 @@ class JustificationWorkflow(BaseWorkflow):
 
     def run_full_analysis(self, target_directory: str = "."):
         """Backward compatibility method."""
-        return self._get_engine().run_full_analysis(target_directory)
+        return self._get_engine().run_justification_safe(Path(target_directory))
