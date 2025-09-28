@@ -68,6 +68,7 @@ vibelint = "vibelint.cli:main"
 "TYPING-POOR-PRACTICE" = "vibelint.validators.single_file.typing_quality:TypingQualityValidator"
 "VIBELINT-SELF-VALIDATION" = "vibelint.validators.single_file.self_validation:VibelintSelfValidator"
 "FILE-TOO-LONG" = "vibelint.validators.single_file.line_count:LineCountValidator"
+"RELATIVE-IMPORTS" = "vibelint.validators.single_file.relative_imports:RelativeImportValidator"
 
 # Project-wide validators (require knowledge of entire project)
 "DEAD-CODE-FOUND" = "vibelint.validators.project_wide.dead_code:DeadCodeValidator"

@@ -1827,7 +1827,8 @@ Respond with ONLY a single sentence description of the file's purpose."""
         issues = {
             "redundant_files": [],
             "naming_issues": [],
-            "useless_files": []
+            "useless_files": [],
+            "backup_files": []
         }
 
         # Get all Python files
@@ -1889,7 +1890,75 @@ Respond with ONLY a single sentence description of the file's purpose."""
             except Exception:
                 pass  # Skip files we can't read
 
+        # Use LLM to identify backup and temporary files
+        issues["backup_files"] = self._detect_backup_files_with_llm(directory_path)
+
         return issues
+
+    def _detect_backup_files_with_llm(self, directory_path: Path) -> List[Dict[str, str]]:
+        """Use LLM to intelligently detect backup and temporary files."""
+        if not self.llm_manager:
+            return []
+
+        # Get all files (not just Python)
+        all_files = []
+        for file_path in directory_path.rglob("*"):
+            if file_path.is_file():
+                # Skip very large files and binary files
+                try:
+                    if file_path.stat().st_size < 1024 * 1024:  # < 1MB
+                        all_files.append(str(file_path.relative_to(directory_path)))
+                except (OSError, ValueError):
+                    continue
+
+        if not all_files:
+            return []
+
+        # Create prompt for LLM to identify backup files
+        file_list = "\n".join(all_files[:100])  # Limit to first 100 files
+        prompt = f"""Analyze this file list and identify backup, temporary, or archive files that should NOT be committed to version control.
+
+File List:
+{file_list}
+
+Look for patterns like:
+- .bak, .backup, .orig extensions
+- Files ending with ~ (Unix backup)
+- .tmp, .temp extensions
+- Numbered versions (file_v2.py, file2.py when file.py exists)
+- OS-specific temporary files (.DS_Store, Thumbs.db, etc.)
+- Editor backup files (.swp, .swo, etc.)
+- Archive files in source directories (.zip, .tar, etc.)
+- Any file that appears to be a backup or temporary copy
+
+Return ONLY a JSON array of objects with this format:
+[{{"file": "path/to/file", "reason": "why this should not be committed"}}]
+
+If no backup files found, return: []"""
+
+        try:
+            from vibelint.llm.manager import LLMRequest
+            llm_request = LLMRequest(
+                content=prompt,
+                max_tokens=1000,  # Moderate token count for list processing
+                temperature=0.1   # Low temperature for precise identification
+            )
+
+            response = self.llm_manager.process_request_sync(llm_request)
+
+            if response and response.get("success") and response.get("content"):
+                import json
+                try:
+                    backup_files = json.loads(response["content"].strip())
+                    if isinstance(backup_files, list):
+                        return backup_files
+                except json.JSONDecodeError:
+                    logger.warning("LLM backup file detection returned invalid JSON")
+
+        except Exception as e:
+            logger.debug(f"LLM backup file detection failed: {e}")
+
+        return []
 
     def _format_static_issues(self, static_issues: Dict[str, Any]) -> str:
         """Format static issues for inclusion in analysis report."""
@@ -1911,6 +1980,12 @@ Respond with ONLY a single sentence description of the file's purpose."""
             formatted += "## Potentially Useless Files\n\n"
             for issue in static_issues["useless_files"]:
                 formatted += f"- `{issue['file']}`: {issue['reason']} ({issue['lines']} lines)\n"
+            formatted += "\n"
+
+        if static_issues["backup_files"]:
+            formatted += "## Backup/Temporary Files (Should Not Be Committed)\n\n"
+            for backup in static_issues["backup_files"]:
+                formatted += f"- `{backup['file']}`: {backup['reason']}\n"
             formatted += "\n"
 
         if not any(static_issues.values()):
