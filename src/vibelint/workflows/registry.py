@@ -26,7 +26,8 @@ class WorkflowRegistry:
     def __init__(self):
         self._workflows: Dict[str, Type[BaseWorkflow]] = {}
         self._metadata: Dict[str, Dict] = {}
-        self._loaded = False
+        self._builtin_loaded = False
+        self._plugins_loaded = False
 
     def register(self, workflow_class: Type[BaseWorkflow]) -> None:
         """Register a workflow class."""
@@ -60,10 +61,12 @@ class WorkflowRegistry:
 
     def get_workflow(self, workflow_id: str) -> Optional[Type[BaseWorkflow]]:
         """Get workflow class by ID."""
+        self.ensure_loaded()
         return self._workflows.get(workflow_id)
 
     def get_all_workflows(self) -> Dict[str, Type[BaseWorkflow]]:
         """Get all registered workflows."""
+        self.ensure_loaded()
         return self._workflows.copy()
 
     def get_workflows_by_category(self, category: str) -> Dict[str, Type[BaseWorkflow]]:
@@ -88,6 +91,7 @@ class WorkflowRegistry:
 
     def list_workflow_ids(self) -> List[str]:
         """List all workflow IDs."""
+        self.ensure_loaded()
         return list(self._workflows.keys())
 
     def validate_dependencies(self, workflow_ids: List[str]) -> Dict[str, List[str]]:
@@ -121,7 +125,48 @@ class WorkflowRegistry:
         """Clear all registered workflows."""
         self._workflows.clear()
         self._metadata.clear()
+        self._builtin_loaded = False
+        self._plugins_loaded = False
         logger.debug("Cleared all workflows from registry")
+
+    def _load_builtin_workflows(self) -> None:
+        """Load built-in workflows directly."""
+        if self._builtin_loaded:
+            return
+
+        # Import and register built-in workflows
+        try:
+            from .implementations.justification.workflow import JustificationWorkflow
+            self.register(JustificationWorkflow)
+            logger.debug("Registered built-in workflow: justification")
+        except ImportError as e:
+            logger.warning(f"Failed to load built-in justification workflow: {e}")
+
+        self._builtin_loaded = True
+
+    def _load_plugin_workflows(self) -> None:
+        """Load plugin workflows from entry points."""
+        if self._plugins_loaded:
+            return
+
+        try:
+            import pkg_resources
+            for entry_point in pkg_resources.iter_entry_points("vibelint.workflows"):
+                try:
+                    workflow_class = entry_point.load()
+                    self.register(workflow_class)
+                    logger.debug(f"Registered plugin workflow: {entry_point.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to load plugin workflow {entry_point.name}: {e}")
+        except ImportError:
+            logger.debug("pkg_resources not available, skipping plugin workflows")
+
+        self._plugins_loaded = True
+
+    def ensure_loaded(self) -> None:
+        """Ensure both built-in and plugin workflows are loaded."""
+        self._load_builtin_workflows()
+        self._load_plugin_workflows()
 
 
 # Global registry instance
@@ -134,69 +179,6 @@ def register_workflow(workflow_class: Type[BaseWorkflow]) -> Type[BaseWorkflow]:
     return workflow_class
 
 
-# Auto-discover and register workflows
-def _discover_and_register_workflows():
-    """Auto-discover and register all workflow classes."""
-    import importlib
-    from pathlib import Path
-
-    # Discover built-in workflows in this package
-    workflows_dir = Path(__file__).parent
-
-    for file_path in workflows_dir.glob("*.py"):
-        if file_path.name.startswith("__") or file_path.name in [
-            "base.py",
-            "registry.py",
-            "manager.py",
-            "evaluation.py",
-        ]:
-            continue
-
-        module_name = file_path.stem
-        try:
-            module = importlib.import_module(f".{module_name}", package="vibelint.workflow")
-
-            # Find workflow classes in the module
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if (
-                    isinstance(attr, type)
-                    and issubclass(attr, BaseWorkflow)
-                    and attr != BaseWorkflow
-                    and hasattr(attr, "workflow_id")
-                    and attr.workflow_id
-                ):
-
-                    logger.debug(
-                        f"Auto-registering workflow: {attr.workflow_id} from {module_name}"
-                    )
-                    workflow_registry.register(attr)
-
-        except Exception as e:
-            logger.warning(f"Failed to load workflow module {module_name}: {e}")
-
-    # Also check for user workflows in project entry points
-    _register_entry_point_workflows()
-
-
-def _register_entry_point_workflows():
-    """Register workflows from project entry points."""
-    try:
-        import pkg_resources
-
-        for entry_point in pkg_resources.iter_entry_points("vibelint.workflows"):
-            try:
-                workflow_class = entry_point.load()
-                if issubclass(workflow_class, BaseWorkflow):
-                    logger.info(f"Registering user workflow: {workflow_class.workflow_id}")
-                    workflow_registry.register(workflow_class)
-            except Exception as e:
-                logger.warning(f"Failed to load workflow from entry point {entry_point.name}: {e}")
-
-    except ImportError:
-        # pkg_resources not available, skip entry point discovery
-        pass
-
-
-# Auto-register workflows on module import
-_discover_and_register_workflows()
+# Note: Built-in workflows are now registered via workflow_registry._load_builtin_workflows()
+# Plugin workflows are loaded via workflow_registry._load_plugin_workflows()
+# This ensures clean separation between built-in and external workflows

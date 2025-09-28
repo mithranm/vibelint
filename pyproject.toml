@@ -96,10 +96,8 @@ sarif = "vibelint.reporting:SarifFormatter"
 llm = "vibelint.reporting:LLMFormatter"
 
 [project.entry-points."vibelint.workflows"]
-# Built-in workflows - can be simple functions or complex multi-file implementations
-"justification" = "vibelint.workflows.implementations.justification:JustificationEngine"
-"cleanup" = "vibelint.workflows.cleanup:CleanupWorkflow"
-"evaluation" = "vibelint.workflows.evaluation:EvaluationWorkflow"
+# Entry points for EXTERNAL packages to extend vibelint with custom workflows
+# Built-in workflows are registered directly in code, not here
 
 # Third-party workflows can be added here by other packages:
 # Examples of different workflow types:
@@ -168,7 +166,7 @@ vibelint = ["VIBECHECKER.txt"]
 
 # Local vibelint config for analyzing vibelint itself
 [tool.vibelint]
-include_globs = ["**/*", "tests/**/*.py", "*.py"]
+include_globs = ["**/*"]
 exclude_globs = [
     "**/__pycache__/**",
     "**/.*",           # dotfiles/directories
