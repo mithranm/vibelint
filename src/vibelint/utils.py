@@ -125,6 +125,9 @@ def _has_vibelint_config(toml_path: Path) -> bool:
         return False
 
 
+# Backward compatibility alias
+find_project_root = walk_up_for_project_root
+
 def find_package_root(start_path: Path) -> Path | None:
     """
     Find the root directory of a Python package containing the given path.

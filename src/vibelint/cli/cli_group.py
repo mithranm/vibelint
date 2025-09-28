@@ -31,43 +31,22 @@ class VibelintContext:
 
 
 @click.group()
-@click.option(
-    "--project-root",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
-    help="Project root directory (auto-detected if not specified)",
-)
-@click.option(
-    "--config",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Configuration file path",
-)
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
+@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 @click.pass_context
-def cli(
-    ctx: click.Context,
-    project_root: Path | None,
-    config: Path | None,
-    verbose: bool,
-) -> None:
-    """
-    vibelint: Intelligent code quality and style validator.
-
-    Advanced linting with LLM-powered analysis, namespace collision detection,
-    and project-wide validation rules.
-    """
-    # Auto-detect project root if not specified
-    if not project_root:
-        current = Path.cwd()
-        # Walk up looking for pyproject.toml or .git
-        for parent in [current] + list(current.parents):
-            if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
-                project_root = parent
-                break
+def cli(ctx: click.Context, verbose: bool) -> None:
+    """vibelint: Code quality linter."""
+    # Auto-detect project root
+    current = Path.cwd()
+    project_root = None
+    for parent in [current] + list(current.parents):
+        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
+            project_root = parent
+            break
 
     # Store context for subcommands
     ctx.obj = VibelintContext(
         project_root=project_root,
-        config_path=config,
+        config_path=None,
         verbose=verbose,
     )
 
@@ -78,21 +57,14 @@ def cli(
         logging.basicConfig(level=logging.INFO)
 
 
-# Import command modules to register them with the CLI group
-# Each module registers its commands using @cli.command() decorators
+# Import essential command modules
 def register_commands():
-    """Import all command modules to register their commands."""
+    """Import essential command modules."""
     try:
-        from . import ai  # justify, thinking-tokens
-        from . import analysis  # namespace, snapshot, diagnostics
-        from . import maintenance  # setup, rollback, regen-docstrings
-        from . import validation  # check, validate
-
-        logger.debug("All command modules registered successfully")
+        from . import validation  # check
+        logger.debug("Command modules registered successfully")
     except ImportError as e:
         logger.error(f"Failed to register command modules: {e}")
-        # Don't fail completely - some modules might work
-
 
 # Register commands on import
 register_commands()

@@ -21,9 +21,10 @@ class RelativeImportValidator(BaseValidator):
     rule_id = "RELATIVE-IMPORTS"
     description = "Detect relative imports and suggest absolute alternatives"
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, severity=None):
         super().__init__(config)
         self.config = config or {}
+        self.severity = severity
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """
