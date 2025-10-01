@@ -108,10 +108,9 @@ class VibelintContextEngineer:
         # Context engineering templates
         self.context_templates = self._load_context_templates()
 
-        # LLM model configurations
+        # LLM model configurations - URLs must be provided via config, no hardcoded fallbacks
         self.model_configs = {
             "chip": {
-                "url": "https://chipllm-auth-worker.mithran-mohanraj.workers.dev",
                 "strengths": ["deep_reasoning", "complex_architecture", "performance_optimization"],
                 "max_context": 28800,
                 "ideal_for": [
@@ -121,7 +120,6 @@ class VibelintContextEngineer:
                 ],
             },
             "claudia": {
-                "url": "https://claudiallm-auth-worker.mithran-mohanraj.workers.dev",
                 "strengths": ["fast_iteration", "simple_fixes", "code_generation"],
                 "max_context": 900,
                 "ideal_for": ["simple_fixes", "code_generation", "quick_improvements"],

@@ -12,11 +12,11 @@ __pycache__/
 .tox
 debug.txt
 
-# Vibelint analysis reports - not committed
+# Vibelint old reports directory (deprecated)
 .vibelint-reports/*
-# Keep examples for documentation
-!.vibelint-reports/example-analysis.json
-!.vibelint-reports/example-llm-trace.json
-!.vibelint-reports/example-single-llm-config.toml
-!.vibelint-reports/README.md.vibelint-cache/
+
+# Vibelint analysis output directory
+.vibes/
+
+.vibelint-cache/
 .claude/

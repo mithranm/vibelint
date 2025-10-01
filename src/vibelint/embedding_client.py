@@ -47,21 +47,16 @@ class EmbeddingClient:
 
     def _load_configuration(self):
         """Load configuration from various sources."""
-        embedding_config = self.config.get("embeddings", {})
+        from .llm.llm_config import get_embedding_config
 
-        # Specialized endpoint configuration
-        self.code_api_url = embedding_config.get(
-            "code_api_url", "https://vanguardone-embedding-auth-worker.mithran-mohanraj.workers.dev"
-        )
-        self.natural_api_url = embedding_config.get(
-            "natural_api_url",
-            "https://vanguardtwo-embedding-auth-worker.mithran-mohanraj.workers.dev",
-        )
+        # Use typed configuration with explicit validation
+        embedding_config = get_embedding_config()
 
-        self.code_model = embedding_config.get("code_model", "text-embedding-ada-002")
-        self.natural_model = embedding_config.get("natural_model", "text-embedding-ada-002")
-
-        self.use_specialized = embedding_config.get("use_specialized_embeddings", True)
+        self.code_api_url = embedding_config.code_api_url
+        self.natural_api_url = embedding_config.natural_api_url
+        self.code_model = embedding_config.code_model
+        self.natural_model = embedding_config.natural_model
+        self.use_specialized = embedding_config.use_specialized_embeddings
         self.similarity_threshold = embedding_config.get("similarity_threshold", 0.85)
 
         # Load API keys from environment

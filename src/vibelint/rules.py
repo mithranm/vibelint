@@ -58,6 +58,13 @@ class RuleEngine:
                 if not setting:
                     self._rule_overrides[rule_id] = Severity.OFF
 
+        # Load disabled validators from ignore list
+        ignore_codes = self.config.get("ignore", [])
+        if isinstance(ignore_codes, list):
+            for rule_id in ignore_codes:
+                if isinstance(rule_id, str):
+                    self._rule_overrides[rule_id] = Severity.OFF
+
         # Load enabled plugins
         plugins_config = self.config.get("plugins", {})
         enabled = plugins_config.get("enabled", ["vibelint.core"])

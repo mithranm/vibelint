@@ -418,8 +418,8 @@ Synthesize these results into actionable development feedback with prioritized r
 
     async def _generate_reports(self, synthesis_result: Dict[str, Any]) -> List[str]:
         """Generate analysis reports for development feedback."""
-        reports_dir = self.project_root / ".vibelint-reports"
-        reports_dir.mkdir(exist_ok=True)
+        reports_dir = self.project_root / ".vibes/reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         report_paths = []

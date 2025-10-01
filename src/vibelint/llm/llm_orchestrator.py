@@ -112,29 +112,35 @@ class VLLMClient(LLMBackendClient):
             "max_tokens": request.max_tokens or 2048,
         }
 
-        # Add structured JSON if requested
+        # Add structured JSON if requested (vLLM format with json_schema)
         if request.require_json:
-            # Define a flexible JSON schema for structured output
+            # Define flexible schema for any JSON response
             json_schema = {
                 "type": "object",
-                "properties": {
-                    "analysis": {"type": "string"},
-                    "result": {"type": "string"},
-                    "score": {"type": "number"},
-                    "compliant": {"type": "boolean"},
-                    "violations": {"type": "array", "items": {"type": "string"}},
-                    "reasoning": {"type": "string"},
-                    "suggestions": {"type": "array", "items": {"type": "string"}},
-                    "severity": {"type": "string"},
-                    "confidence": {"type": "number"},
-                },
-                "additionalProperties": True,  # Allow flexibility for different tasks
+                "properties": {},  # Allow any JSON structure
+                "additionalProperties": True
             }
 
-            data["extra_body"] = {
-                "guided_json": json_schema,
-                "guided_decoding_backend": "xgrammar",
+            data["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "flexible_response",
+                    "schema": json_schema
+                }
             }
+
+            # Use system message approach for better JSON generation
+            if not any(msg["role"] == "system" for msg in messages):
+                messages.insert(0, {
+                    "role": "system",
+                    "content": "Reason briefly step-by-step, then output only JSON matching the schema."
+                })
+            else:
+                # Enhance existing system message
+                for msg in messages:
+                    if msg["role"] == "system":
+                        msg["content"] += " Output only JSON matching the schema."
+                        break
 
         try:
             # Make HTTP request
@@ -194,14 +200,22 @@ class LlamaCppClient(LLMBackendClient):
             "max_tokens": request.max_tokens or 2048,
         }
 
-        # Add JSON mode if requested
+        # Add JSON mode if requested (llama.cpp format)
         if request.require_json:
             data["response_format"] = {"type": "json_object"}
 
-            # Enhance prompt for JSON mode
-            json_instruction = "\n\nRespond with valid JSON only. No other text."
-            if messages:
-                messages[-1]["content"] += json_instruction
+            # Use system message approach for better JSON generation
+            if not any(msg["role"] == "system" for msg in messages):
+                messages.insert(0, {
+                    "role": "system",
+                    "content": "Reason briefly step-by-step with low effort, then output only valid JSON."
+                })
+            else:
+                # Enhance existing system message
+                for msg in messages:
+                    if msg["role"] == "system":
+                        msg["content"] += " Output only valid JSON format."
+                        break
 
         try:
             # Make HTTP request
@@ -244,70 +258,8 @@ class OpenAIClient(LLMBackendClient):
         return True
 
     def make_request(self, request: LLMRequest) -> LLMResponse:
-        """Make request to OpenAI API with structured outputs."""
-        start_time = time.time()
-
-        # Build messages
-        messages = []
-        if request.system_prompt:
-            messages.append({"role": "system", "content": request.system_prompt})
-        messages.append({"role": "user", "content": request.content})
-
-        # Base request data
-        data = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": request.temperature or 0.1,
-            "max_tokens": request.max_tokens or 2048,
-        }
-
-        # Add structured outputs if requested
-        if request.require_json:
-            data["response_format"] = {"type": "json_object"}
-
-            # Enhance prompt for JSON mode
-            json_instruction = "\n\nRespond with valid JSON only."
-            if messages:
-                messages[-1]["content"] += json_instruction
-
-        try:
-            # Build headers with API key
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            }
-
-            # Make HTTP request
-            req = Request(
-                f"{self.api_url}/v1/chat/completions",
-                data=json.dumps(data).encode("utf-8"),
-                headers=headers,
-            )
-
-            with urlopen(req, timeout=30) as response:
-                result = json.loads(response.read().decode("utf-8"))
-                content = result["choices"][0]["message"]["content"]
-
-                # Parse JSON if requested
-                parsed_json = None
-                if request.require_json:
-                    try:
-                        parsed_json = json.loads(content)
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"Failed to parse JSON from OpenAI: {e}")
-
-                return LLMResponse(
-                    content=content,
-                    role_used=LLMRole.FAST,  # Will be corrected by orchestrator
-                    backend_used=LLMBackend.OPENAI,
-                    processing_time=time.time() - start_time,
-                    parsed_json=parsed_json,
-                    raw_response=result,
-                )
-
-        except Exception as e:
-            logger.error(f"OpenAI request failed: {e}")
-            raise
+        """OpenAI client not implemented - use vLLM or llama.cpp instead."""
+        raise NotImplementedError("OpenAI client not implemented - configure vLLM or llama.cpp backends instead")
 
 
 class LLMOrchestrator:

@@ -7,13 +7,14 @@ and environment overrides.
 Configuration priority order:
 1. Environment variables
 2. dev.pyproject.toml (development overrides)
-3. pyproject.toml (production config) 
+3. pyproject.toml (production config)
 4. Default values
 
 This is the authoritative config implementation - kaia imports from here.
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -31,6 +32,66 @@ DEFAULT_FAST_MAX_TOKENS = 2048
 DEFAULT_ORCHESTRATOR_TEMPERATURE = 0.2
 DEFAULT_ORCHESTRATOR_MAX_TOKENS = 8192
 DEFAULT_CONTEXT_THRESHOLD = 3000
+
+
+@dataclass
+class LLMConfig:
+    """Typed LLM configuration with explicit validation."""
+
+    # Required fields first
+    fast_api_url: str
+    fast_model: str
+    orchestrator_api_url: str
+    orchestrator_model: str
+
+    # Optional fields with defaults
+    fast_backend: str = "vllm"
+    fast_temperature: float = DEFAULT_FAST_TEMPERATURE
+    fast_max_tokens: int = DEFAULT_FAST_MAX_TOKENS
+    fast_max_context_tokens: Optional[int] = None
+    fast_api_key: Optional[str] = None
+
+    orchestrator_backend: str = "llamacpp"
+    orchestrator_temperature: float = DEFAULT_ORCHESTRATOR_TEMPERATURE
+    orchestrator_max_tokens: int = DEFAULT_ORCHESTRATOR_MAX_TOKENS
+    orchestrator_max_context_tokens: Optional[int] = None
+    orchestrator_api_key: Optional[str] = None
+
+    context_threshold: int = DEFAULT_CONTEXT_THRESHOLD
+    enable_context_probing: bool = True
+    enable_fallback: bool = False
+
+    def __post_init__(self):
+        """Validate required configuration."""
+        if not self.fast_api_url:
+            raise ValueError("fast_api_url is required - configure in [tool.vibelint.llm]")
+        if not self.fast_model:
+            raise ValueError("fast_model is required - configure in [tool.vibelint.llm]")
+        if not self.orchestrator_api_url:
+            raise ValueError("orchestrator_api_url is required - configure in [tool.vibelint.llm]")
+        if not self.orchestrator_model:
+            raise ValueError("orchestrator_model is required - configure in [tool.vibelint.llm]")
+
+
+@dataclass
+class EmbeddingConfig:
+    """Typed embedding configuration with explicit validation."""
+
+    # Required fields first
+    code_api_url: str
+    natural_api_url: str
+
+    # Optional fields with defaults
+    code_model: str = "text-embedding-ada-002"
+    natural_model: str = "text-embedding-ada-002"
+    use_specialized_embeddings: bool = True
+
+    def __post_init__(self):
+        """Validate required configuration."""
+        if not self.code_api_url:
+            raise ValueError("code_api_url is required - configure in [tool.vibelint.embeddings]")
+        if not self.natural_api_url:
+            raise ValueError("natural_api_url is required - configure in [tool.vibelint.embeddings]")
 
 
 def load_env_files(project_root: Optional[Path] = None):
@@ -134,59 +195,119 @@ def get_vibelint_config() -> Dict[str, Any]:
     return merged_config
 
 
-def get_llm_config() -> Dict[str, Any]:
+def get_llm_config() -> LLMConfig:
     """
-    Get LLM configuration for vibelint.
+    Get typed LLM configuration for vibelint.
 
     Returns:
-    LLM configuration dict with environment variable overrides
+    Validated LLMConfig object with environment variable overrides
     """
     config = get_vibelint_config()
-    llm_config = config.get("llm", {}).copy()
+    llm_dict = config.get("llm", {})
 
-    # Apply environment variable overrides
-    env_overrides = {
-        # Fast LLM overrides
-        "fast_api_url": os.getenv("VIBELINT_FAST_LLM_API_URL") or os.getenv("FAST_LLM_API_URL"),
-        "fast_model": os.getenv("VIBELINT_FAST_LLM_MODEL") or os.getenv("FAST_LLM_MODEL"),
-        "fast_backend": os.getenv("VIBELINT_FAST_LLM_BACKEND") or os.getenv("FAST_LLM_BACKEND"),
-        "fast_api_key": os.getenv("VIBELINT_FAST_LLM_API_KEY") or os.getenv("FAST_LLM_API_KEY"),
-        "fast_temperature": _get_env_float("VIBELINT_FAST_LLM_TEMPERATURE") or _get_env_float("FAST_LLM_TEMPERATURE"),
-        "fast_max_tokens": _get_env_int("VIBELINT_FAST_LLM_MAX_TOKENS") or _get_env_int("FAST_LLM_MAX_TOKENS"),
+    # Build kwargs with environment overrides
+    kwargs = {
+        # Fast LLM
+        "fast_api_url": (
+            os.getenv("VIBELINT_FAST_LLM_API_URL") or
+            os.getenv("FAST_LLM_API_URL") or
+            llm_dict.get("fast_api_url")
+        ),
+        "fast_model": (
+            os.getenv("VIBELINT_FAST_LLM_MODEL") or
+            os.getenv("FAST_LLM_MODEL") or
+            llm_dict.get("fast_model")
+        ),
+        "fast_backend": (
+            os.getenv("VIBELINT_FAST_LLM_BACKEND") or
+            os.getenv("FAST_LLM_BACKEND") or
+            llm_dict.get("fast_backend", "vllm")
+        ),
+        "fast_api_key": (
+            os.getenv("VIBELINT_FAST_LLM_API_KEY") or
+            os.getenv("FAST_LLM_API_KEY") or
+            llm_dict.get("fast_api_key")
+        ),
+        "fast_temperature": (
+            _get_env_float("VIBELINT_FAST_LLM_TEMPERATURE") or
+            _get_env_float("FAST_LLM_TEMPERATURE") or
+            llm_dict.get("fast_temperature", DEFAULT_FAST_TEMPERATURE)
+        ),
+        "fast_max_tokens": (
+            _get_env_int("VIBELINT_FAST_LLM_MAX_TOKENS") or
+            _get_env_int("FAST_LLM_MAX_TOKENS") or
+            llm_dict.get("fast_max_tokens", DEFAULT_FAST_MAX_TOKENS)
+        ),
+        "fast_max_context_tokens": llm_dict.get("fast_max_context_tokens"),
 
-        # Orchestrator LLM overrides
-        "orchestrator_api_url": os.getenv("VIBELINT_ORCHESTRATOR_LLM_API_URL") or os.getenv("ORCHESTRATOR_LLM_API_URL"),
-        "orchestrator_model": os.getenv("VIBELINT_ORCHESTRATOR_LLM_MODEL") or os.getenv("ORCHESTRATOR_LLM_MODEL"),
-        "orchestrator_backend": os.getenv("VIBELINT_ORCHESTRATOR_LLM_BACKEND") or os.getenv("ORCHESTRATOR_LLM_BACKEND"),
-        "orchestrator_api_key": os.getenv("VIBELINT_ORCHESTRATOR_LLM_API_KEY") or os.getenv("ORCHESTRATOR_LLM_API_KEY"),
-        "orchestrator_temperature": _get_env_float("VIBELINT_ORCHESTRATOR_LLM_TEMPERATURE") or _get_env_float("ORCHESTRATOR_LLM_TEMPERATURE"),
-        "orchestrator_max_tokens": _get_env_int("VIBELINT_ORCHESTRATOR_LLM_MAX_TOKENS") or _get_env_int("ORCHESTRATOR_LLM_MAX_TOKENS"),
+        # Orchestrator LLM
+        "orchestrator_api_url": (
+            os.getenv("VIBELINT_ORCHESTRATOR_LLM_API_URL") or
+            os.getenv("ORCHESTRATOR_LLM_API_URL") or
+            llm_dict.get("orchestrator_api_url")
+        ),
+        "orchestrator_model": (
+            os.getenv("VIBELINT_ORCHESTRATOR_LLM_MODEL") or
+            os.getenv("ORCHESTRATOR_LLM_MODEL") or
+            llm_dict.get("orchestrator_model")
+        ),
+        "orchestrator_backend": (
+            os.getenv("VIBELINT_ORCHESTRATOR_LLM_BACKEND") or
+            os.getenv("ORCHESTRATOR_LLM_BACKEND") or
+            llm_dict.get("orchestrator_backend", "llamacpp")
+        ),
+        "orchestrator_api_key": (
+            os.getenv("VIBELINT_ORCHESTRATOR_LLM_API_KEY") or
+            os.getenv("ORCHESTRATOR_LLM_API_KEY") or
+            llm_dict.get("orchestrator_api_key")
+        ),
+        "orchestrator_temperature": (
+            _get_env_float("VIBELINT_ORCHESTRATOR_LLM_TEMPERATURE") or
+            _get_env_float("ORCHESTRATOR_LLM_TEMPERATURE") or
+            llm_dict.get("orchestrator_temperature", DEFAULT_ORCHESTRATOR_TEMPERATURE)
+        ),
+        "orchestrator_max_tokens": (
+            _get_env_int("VIBELINT_ORCHESTRATOR_LLM_MAX_TOKENS") or
+            _get_env_int("ORCHESTRATOR_LLM_MAX_TOKENS") or
+            llm_dict.get("orchestrator_max_tokens", DEFAULT_ORCHESTRATOR_MAX_TOKENS)
+        ),
+        "orchestrator_max_context_tokens": llm_dict.get("orchestrator_max_context_tokens"),
 
         # Routing configuration
-        "context_threshold": _get_env_int("VIBELINT_LLM_CONTEXT_THRESHOLD") or _get_env_int("LLM_CONTEXT_THRESHOLD"),
+        "context_threshold": (
+            _get_env_int("VIBELINT_LLM_CONTEXT_THRESHOLD") or
+            _get_env_int("LLM_CONTEXT_THRESHOLD") or
+            llm_dict.get("context_threshold", DEFAULT_CONTEXT_THRESHOLD)
+        ),
+        "enable_context_probing": llm_dict.get("enable_context_probing", True),
+        "enable_fallback": llm_dict.get("enable_fallback", False),
     }
 
-    # Apply non-None overrides
-    for key, value in env_overrides.items():
-        if value is not None:
-            llm_config[key] = value
+    return LLMConfig(**kwargs)
 
-    # Apply defaults for missing values
-    defaults = {
-        "fast_temperature": DEFAULT_FAST_TEMPERATURE,
-        "fast_max_tokens": DEFAULT_FAST_MAX_TOKENS,
-        "fast_backend": "vllm",
-        "orchestrator_temperature": DEFAULT_ORCHESTRATOR_TEMPERATURE,
-        "orchestrator_max_tokens": DEFAULT_ORCHESTRATOR_MAX_TOKENS,
-        "orchestrator_backend": "llamacpp",
-        "context_threshold": DEFAULT_CONTEXT_THRESHOLD,
+
+def get_embedding_config() -> EmbeddingConfig:
+    """
+    Get typed embedding configuration for vibelint.
+
+    Returns:
+    Validated EmbeddingConfig object
+    """
+    config = get_vibelint_config()
+    embedding_dict = config.get("embeddings", {})
+
+    kwargs = {
+        "code_api_url": embedding_dict.get("code_api_url"),
+        "natural_api_url": embedding_dict.get("natural_api_url"),
+        "code_model": embedding_dict.get("code_model", "text-embedding-ada-002"),
+        "natural_model": embedding_dict.get("natural_model", "text-embedding-ada-002"),
+        "use_specialized_embeddings": embedding_dict.get("use_specialized_embeddings", True),
     }
 
-    for key, default_value in defaults.items():
-        if key not in llm_config:
-            llm_config[key] = default_value
+    return EmbeddingConfig(**kwargs)
 
-    return llm_config
+
+# All functions now use typed configuration - no legacy dict functions
 
 
 def _get_env_float(key: str) -> Optional[float]:

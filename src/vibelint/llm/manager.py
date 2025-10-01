@@ -70,6 +70,7 @@ class LLMRequest:
     content: str
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
+    system_prompt: Optional[str] = None
     structured_output: Optional[Dict[str, Any]] = None  # JSON schema for structured responses
     # If structured_output is None, expects unstructured natural language response
 
@@ -77,91 +78,89 @@ class LLMRequest:
 class LLMManager:
     """Simple manager for dual LLM setup."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any] = None):
         """Initialize with vibelint configuration.
 
         Args:
-            config: Vibelint configuration dictionary with [tool.vibelint.llm] section
+            config: Optional legacy configuration dictionary - will be replaced with typed config
         """
-        llm_config = config.get("llm", {})
+        from .llm_config import get_llm_config, LLMConfig
 
-        # Fast LLM configuration with fallback logic
-        self.fast_config = self._build_llm_config(
-            llm_config,
-            "fast",
-            {
-                "temperature": DEFAULT_FAST_TEMPERATURE,
-                "max_tokens": DEFAULT_FAST_MAX_TOKENS,
-                "api_key_env": "FAST_LLM_API_KEY",
-            },
-        )
+        # Load typed configuration
+        self.llm_config = get_llm_config()
 
-        # Orchestrator LLM configuration with fallback logic
-        self.orchestrator_config = self._build_llm_config(
-            llm_config,
-            "orchestrator",
-            {
-                "temperature": DEFAULT_ORCHESTRATOR_TEMPERATURE,
-                "max_tokens": DEFAULT_ORCHESTRATOR_MAX_TOKENS,
-                "api_key_env": "ORCHESTRATOR_LLM_API_KEY",
-            },
-        )
+        # Build configs for fast and orchestrator using typed config
+        self.fast_config = self._build_fast_config(self.llm_config)
+        self.orchestrator_config = self._build_orchestrator_config(self.llm_config)
 
-        # Routing configuration
-        self.context_threshold = llm_config.get("context_threshold", DEFAULT_CONTEXT_THRESHOLD)
-        self.enable_fallback = llm_config.get("enable_fallback", False)
+        # Routing configuration from typed config
+        self.context_threshold = self.llm_config.context_threshold
+        self.enable_fallback = self.llm_config.enable_fallback
 
         # Session for HTTP requests
         self.session = requests.Session()
         # Note: timeout is set per-request rather than on session
 
-    def _build_llm_config(
-        self, llm_config: Dict[str, Any], role: str, defaults: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Build LLM configuration with intelligent fallback logic.
+        # Optional logging callback for external logging (e.g., JSONL workflow logs)
+        self.log_callback = None
 
-        Supports multiple deployment scenarios:
-        1. Two separate endpoints (fast_api_url + orchestrator_api_url)
-        2. Single endpoint, two models (api_url + fast_model + orchestrator_model)
-        3. Single endpoint, single model (api_url + model)
-        4. Mixed scenarios with role-specific overrides
+    def set_log_callback(self, callback):
+        """Set a callback function for logging LLM requests/responses.
+
+        Callback signature: callback(log_entry: Dict[str, Any]) -> None
         """
-        config = {}
+        self.log_callback = callback
 
-        # Priority order for API URL:
-        # 1. Role-specific URL (fast_api_url/orchestrator_api_url)
-        # 2. Generic URL (api_url)
-        config["api_url"] = llm_config.get(f"{role}_api_url") or llm_config.get("api_url")
+    def _log_request_response(self, request: "LLMRequest", response: Dict[str, Any], llm_used: str):
+        """Log request/response pair if callback is registered."""
+        if self.log_callback:
+            try:
+                import time
+                log_entry = {
+                    "type": "llm_call",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "llm_used": llm_used,
+                    "request": {
+                        "content_length": len(request.content),
+                        "content_preview": request.content[:500] + "..." if len(request.content) > 500 else request.content,
+                        "max_tokens": request.max_tokens,
+                        "temperature": request.temperature
+                    },
+                    "response": {
+                        "success": response.get("success", False),
+                        "content_length": len(response.get("content", "")),
+                        "content_preview": response.get("content", "")[:500] + "..." if len(response.get("content", "")) > 500 else response.get("content", ""),
+                        "duration_seconds": response.get("duration_seconds", 0),
+                        "error": response.get("error")
+                    }
+                }
+                self.log_callback(log_entry)
+            except Exception as e:
+                logger.debug(f"Log callback failed: {e}")
 
-        # Priority order for model:
-        # 1. Role-specific model (fast_model/orchestrator_model)
-        # 2. Generic model (model)
-        config["model"] = llm_config.get(f"{role}_model") or llm_config.get("model")
+    def _build_fast_config(self, llm_config) -> Dict[str, Any]:
+        """Build configuration for fast LLM from typed config."""
+        return {
+            "backend": llm_config.fast_backend,
+            "api_url": llm_config.fast_api_url,
+            "model": llm_config.fast_model,
+            "api_key": llm_config.fast_api_key,
+            "temperature": llm_config.fast_temperature,
+            "max_tokens": llm_config.fast_max_tokens,
+            "max_context_tokens": llm_config.fast_max_context_tokens,
+        }
 
-        # Priority order for API key:
-        # 1. Role-specific env var (FAST_LLM_API_KEY/ORCHESTRATOR_LLM_API_KEY)
-        # 2. Generic env var (LLM_API_KEY)
-        # 3. OpenAI fallback (OPENAI_API_KEY)
-        config["api_key"] = (
-            os.getenv(defaults["api_key_env"])
-            or os.getenv("LLM_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-        )
-
-        # Role-specific settings with fallbacks
-        config["temperature"] = (
-            llm_config.get(f"{role}_temperature")
-            or llm_config.get("temperature")
-            or defaults["temperature"]
-        )
-
-        config["max_tokens"] = (
-            llm_config.get(f"{role}_max_tokens")
-            or llm_config.get("max_tokens")
-            or defaults["max_tokens"]
-        )
-
-        return config
+    def _build_orchestrator_config(self, llm_config) -> Dict[str, Any]:
+        """Build configuration for orchestrator LLM from typed config."""
+        return {
+            "backend": llm_config.orchestrator_backend,
+            "api_url": llm_config.orchestrator_api_url,
+            "model": llm_config.orchestrator_model,
+            "api_key": llm_config.orchestrator_api_key,
+            "temperature": llm_config.orchestrator_temperature,
+            "max_tokens": llm_config.orchestrator_max_tokens,
+            "max_context_tokens": llm_config.orchestrator_max_context_tokens,
+        }
 
     def select_llm(self, request: LLMRequest) -> LLMRole:
         """Select appropriate LLM based on hard constraints.
@@ -174,18 +173,18 @@ class LLMManager:
         content_size = len(request.content)
         max_tokens = request.max_tokens or 50
 
-        # Get LLM hard limits from configs
-        fast_max_tokens = self.fast_config.get("max_tokens", DEFAULT_FAST_MAX_TOKENS)
-        fast_max_context = self.fast_config.get("fast_max_context_tokens", 1000)  # Fast LLMs typically have small context
+        # Get LLM hard limits from typed config
+        fast_max_tokens = self.llm_config.fast_max_tokens
+        fast_max_context = self.llm_config.fast_max_context_tokens or 1000  # Default if not specified
 
-        orchestrator_max_tokens = self.orchestrator_config.get("max_tokens", DEFAULT_ORCHESTRATOR_MAX_TOKENS)
+        orchestrator_max_tokens = self.llm_config.orchestrator_max_tokens
         # Orchestrator typically has much larger context window
 
         fast_available = bool(self.fast_config.get("api_url"))
         orchestrator_available = bool(self.orchestrator_config.get("api_url"))
 
-        # Estimate input tokens (rough approximation: 4 chars per token)
-        estimated_input_tokens = content_size // 4
+        # Estimate input tokens (conservative: 3 chars per token)
+        estimated_input_tokens = content_size // 3
 
         # Hard constraint: If request exceeds fast LLM's output token limit
         if max_tokens > fast_max_tokens:
@@ -216,36 +215,96 @@ class LLMManager:
             raise ValueError("No LLMs configured - need either fast_api_url or orchestrator_api_url in config")
 
     async def process_request(self, request: LLMRequest) -> Dict[str, Any]:
-        """Process request using the appropriate LLM."""
+        """Process request using intelligent routing with fallback."""
+        # Check if at least one LLM is configured
+        fast_available = bool(self.llm_config.fast_api_url)
+        orchestrator_available = bool(self.llm_config.orchestrator_api_url)
+
+        if not fast_available and not orchestrator_available:
+            raise ValueError("No LLM configured. Add fast_api_url or orchestrator_api_url to pyproject.toml")
+
+        # Handle oversized content with truncation warning
+        if len(request.content) > 50000:  # ~50k chars for huge log files
+            logger.warning(f"Content too large ({len(request.content)} chars), truncating to 50k chars")
+            request.content = request.content[:50000] + "\n[...content truncated...]"
+
+        # Use intelligent routing to select appropriate LLM
         selected_llm = self.select_llm(request)
 
-        # Check if required LLM is configured
-        if selected_llm == LLMRole.FAST and not self.fast_config.get("api_url"):
-            raise ValueError(
-                f"Fast LLM required but not configured. "
-                f"Add [tool.vibelint.llm] fast_api_url and fast_model to pyproject.toml"
-            )
-        elif selected_llm == LLMRole.ORCHESTRATOR and not self.orchestrator_config.get("api_url"):
-            raise ValueError(
-                f"Orchestrator LLM required but not configured. "
-                f"Add [tool.vibelint.llm] orchestrator_api_url and orchestrator_model to pyproject.toml"
-            )
+        # Try primary LLM based on routing decision
+        primary_failed = False
+        if selected_llm == LLMRole.FAST and fast_available:
+            try:
+                logger.debug("Attempting fast LLM (selected by routing)")
+                result = await self._call_fast_llm(request)
+                if result.get("content") and result["content"].strip():
+                    self._log_request_response(request, result, "fast")
+                    return result
+                else:
+                    logger.warning("Fast LLM returned empty content")
+                    primary_failed = True
+            except Exception as e:
+                logger.warning(f"Fast LLM failed: {e}")
+                primary_failed = True
+        elif selected_llm == LLMRole.ORCHESTRATOR and orchestrator_available:
+            try:
+                logger.debug("Attempting orchestrator LLM (selected by routing)")
+                # Ensure minimum tokens for orchestrator
+                orchestrator_request = LLMRequest(
+                    content=request.content,
+                    max_tokens=max(request.max_tokens or 0, 1000),
+                    temperature=request.temperature,
+                    system_prompt=request.system_prompt,
+                    structured_output=request.structured_output
+                )
+                result = await self._call_orchestrator_llm(orchestrator_request)
+                if result.get("content") and result["content"].strip():
+                    self._log_request_response(request, result, "orchestrator")
+                    return result
+                else:
+                    logger.warning("Orchestrator LLM returned empty content")
+                    primary_failed = True
+            except Exception as e:
+                logger.warning(f"Orchestrator LLM failed: {e}")
+                primary_failed = True
 
-        try:
-            if selected_llm == LLMRole.FAST:
-                return await self._call_fast_llm(request)
-            else:
-                return await self._call_orchestrator_llm(request)
+        # Fallback to other LLM if primary failed
+        if primary_failed:
+            if selected_llm == LLMRole.FAST and orchestrator_available:
+                try:
+                    logger.info("Falling back to orchestrator LLM")
+                    orchestrator_request = LLMRequest(
+                        content=request.content,
+                        max_tokens=max(request.max_tokens or 0, 1000),
+                        temperature=request.temperature,
+                        system_prompt=request.system_prompt,
+                        structured_output=request.structured_output
+                    )
+                    result = await self._call_orchestrator_llm(orchestrator_request)
+                    if result.get("content") and result["content"].strip():
+                        self._log_request_response(request, result, "orchestrator_fallback")
+                        return result
+                except Exception as e:
+                    logger.warning(f"Orchestrator fallback failed: {e}")
+            elif selected_llm == LLMRole.ORCHESTRATOR and fast_available:
+                try:
+                    logger.info("Falling back to fast LLM")
+                    result = await self._call_fast_llm(request)
+                    if result.get("content") and result["content"].strip():
+                        self._log_request_response(request, result, "fast_fallback")
+                        return result
+                except Exception as e:
+                    logger.warning(f"Fast LLM fallback failed: {e}")
 
-        except (requests.exceptions.RequestException, ValueError, KeyError) as e:
-            # Configured but unavailable - fail fast
-            logger.error(
-                f"{selected_llm.value} LLM configured but unavailable - aborting analysis: {e}"
-            )
-            raise RuntimeError(
-                f"LLM analysis failed: {selected_llm.value} model configured but unavailable. "
-                f"Check model server status and network connectivity. Error: {e}"
-            ) from e
+        # All attempts failed - return graceful failure
+        return {
+            "content": f"[LLM analysis unavailable: All configured LLMs failed or returned empty content]",
+            "llm_used": "none",
+            "duration_seconds": 0,
+            "input_tokens": 0,
+            "success": False,
+            "error": "All LLM attempts failed or returned empty content"
+        }
 
     async def _call_fast_llm(self, request: LLMRequest) -> Dict[str, Any]:
         """Call the fast LLM."""
@@ -270,9 +329,15 @@ class LLMManager:
         if llm_config.get("api_key"):
             headers["Authorization"] = f"Bearer {llm_config['api_key']}"
 
+        # Build messages with optional system prompt
+        messages = []
+        if request.system_prompt:
+            messages.append({"role": "system", "content": request.system_prompt})
+        messages.append({"role": "user", "content": request.content})
+
         payload = {
             "model": llm_config["model"],
-            "messages": [{"role": "user", "content": request.content}],
+            "messages": messages,
             "temperature": request.temperature or llm_config["temperature"],
             "max_tokens": request.max_tokens or llm_config["max_tokens"],
             "stream": False,
@@ -280,41 +345,131 @@ class LLMManager:
 
         # Add structured output if requested
         if request.structured_output:
-            if "json_schema" in request.structured_output:
-                # OpenAI-style structured output with schema
-                payload["response_format"] = {
-                    "type": "json_schema",
-                    "json_schema": request.structured_output["json_schema"]
-                }
+            backend_type = self._get_backend_type_for_role(role)
+
+            if backend_type == "vllm":
+                # vLLM now uses OpenAI-compatible response_format (updated API)
+                if "json_schema" in request.structured_output:
+                    payload["response_format"] = {
+                        "type": "json_schema",
+                        "json_schema": request.structured_output["json_schema"]
+                    }
+                else:
+                    payload["response_format"] = {"type": "json_object"}
+            elif backend_type == "llamacpp":
+                # llama.cpp uses grammar constraints (simplified JSON grammar)
+                json_grammar = self._create_json_grammar(request.structured_output)
+                payload["grammar"] = json_grammar
             else:
-                # Simple JSON mode
-                payload["response_format"] = {"type": "json_object"}
+                # OpenAI and other backends use response_format
+                if "json_schema" in request.structured_output:
+                    payload["response_format"] = {
+                        "type": "json_schema",
+                        "json_schema": request.structured_output["json_schema"]
+                    }
+                else:
+                    payload["response_format"] = {"type": "json_object"}
 
         # Debug: Log the request details
         logger.info(f"LLM Request: {role.value} to {url}")
         logger.info(f"Model: {payload['model']}, Max tokens: {payload['max_tokens']}")
+        logger.debug(f"Request payload: {payload}")
 
         # Set timeout based on LLM role - orchestrator needs more time for large prompts
         timeout_seconds = (
             ORCHESTRATOR_TIMEOUT_SECONDS if role == LLMRole.ORCHESTRATOR else FAST_TIMEOUT_SECONDS
         )
 
+        logger.debug(f"Making HTTP request to {url} with timeout {timeout_seconds}s")
         response = self.session.post(url, json=payload, headers=headers, timeout=timeout_seconds)
+        logger.debug(f"HTTP response status: {response.status_code}")
+        logger.debug(f"HTTP response headers: {dict(response.headers)}")
+
         response.raise_for_status()
+
+        logger.debug(f"Raw response text length: {len(response.text)} chars")
+        logger.debug(f"Raw response preview: {response.text[:500]}...")
 
         data = response.json()
         duration = time.time() - start_time
+        logger.debug(f"Response parsed successfully, duration: {duration:.2f}s")
 
         if "choices" not in data or not data["choices"]:
+            logger.error(f"Invalid LLM response format. Response keys: {list(data.keys())}")
+            logger.error(f"Full response: {data}")
             raise ValueError("Invalid LLM response format")
 
+        message = data["choices"][0]["message"]
+        logger.debug(f"Message keys: {list(message.keys())}")
+
+        # Extract content and reasoning content separately (vLLM/llama.cpp format)
+        content = message.get("content", "")
+        reasoning_content = message.get("reasoning_content", "")
+
+        logger.debug(f"Extracted content length: {len(content)} chars")
+        logger.debug(f"Content preview: {content[:200]}...")
+
+        if not content:
+            logger.error(f"LLM response content is empty. Message: {message}")
+            raise ValueError("LLM response content is empty")
+
         return {
-            "content": data["choices"][0]["message"]["content"],
+            "content": content,
+            "reasoning_content": reasoning_content,  # Separate field for reasoning
             "llm_used": role.value,
             "duration_seconds": duration,
             "input_tokens": len(request.content) // TOKEN_ESTIMATION_DIVISOR,  # Rough estimate
             "success": True,
         }
+
+    def _get_backend_type_for_role(self, role: LLMRole) -> str:
+        """Get backend type for the specified LLM role."""
+        if role == LLMRole.FAST:
+            return getattr(self.llm_config, 'fast_backend', 'vllm')
+        elif role == LLMRole.ORCHESTRATOR:
+            return getattr(self.llm_config, 'orchestrator_backend', 'llamacpp')
+        else:
+            return 'openai'  # Default fallback
+
+    def _create_json_grammar(self, json_schema: Dict[str, Any]) -> str:
+        """Create a GBNF JSON grammar for llama.cpp from JSON schema."""
+        if json_schema.get("type") == "object":
+            properties = json_schema.get("properties", {})
+            required = json_schema.get("required", [])
+            defs = json_schema.get("$defs", {})
+
+            # Handle single-property objects (common case)
+            if len(properties) == 1:
+                prop_name = list(properties.keys())[0]
+                prop_schema = list(properties.values())[0]
+
+                # Handle $ref to enum definitions (Pydantic style)
+                if "$ref" in prop_schema:
+                    ref_path = prop_schema["$ref"]
+                    if ref_path.startswith("#/$defs/"):
+                        ref_name = ref_path.split("/")[-1]
+                        if ref_name in defs:
+                            ref_def = defs[ref_name]
+                            if ref_def.get("type") == "string" and "enum" in ref_def:
+                                enum_values = ref_def["enum"]
+                                enum_choices = " | ".join(f'"{value}"' for value in enum_values)
+                                return f'root ::= "{{" ws "\"{prop_name}\"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
+
+                # Handle direct string enums (like "yes"/"no")
+                elif prop_schema.get("type") == "string" and "enum" in prop_schema:
+                    enum_values = prop_schema["enum"]
+                    enum_choices = " | ".join(f'"{value}"' for value in enum_values)
+                    return f'root ::= "{{" ws "\"{prop_name}\"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
+
+                # Handle boolean fields
+                elif prop_schema.get("type") == "boolean":
+                    return f'root ::= "{{" ws "\"{prop_name}\"" ws ":" ws ("true" | "false") ws "}}" ws ::= [ \\t\\n\\r]*'
+
+        # Fallback to basic JSON object grammar
+        return '''root ::= "{" ws "}" | "{" ws object-item (ws "," ws object-item)* ws "}"
+ws ::= [ \\t\\n\\r]*
+object-item ::= "\\"" [a-zA-Z_][a-zA-Z0-9_]* "\\"" ws ":" ws value
+value ::= "true" | "false" | "\\"" [^"]* "\\""'''
 
     def is_llm_available(self, role: LLMRole) -> bool:
         """Check if a specific LLM is configured and available."""

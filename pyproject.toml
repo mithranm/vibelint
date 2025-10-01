@@ -55,35 +55,10 @@ dev = [
 vibelint = "vibelint.cli:main"
 
 [project.entry-points."vibelint.validators"]
-# Built-in validators - organized by type
-# Single-file validators (analyze individual files in isolation)
-"DOCSTRING-MISSING" = "vibelint.validators.single_file.docstring:MissingDocstringValidator"
-"DOCSTRING-PATH-REFERENCE" = "vibelint.validators.single_file.docstring:DocstringPathValidator"
-"EXPORTS-MISSING-ALL" = "vibelint.validators.single_file.exports:MissingAllValidator"
-"EXPORTS-MISSING-ALL-INIT" = "vibelint.validators.single_file.exports:InitAllValidator"
-"PRINT-STATEMENT" = "vibelint.validators.single_file.print_statements:PrintStatementValidator"
-"ABSOLUTE-IMPORTS" = "vibelint.validators.single_file.absolute_imports:AbsoluteImportValidator"
-"EMOJI-IN-STRING" = "vibelint.validators.single_file.emoji:EmojiUsageValidator"
-"LOGGER-NAME" = "vibelint.validators.single_file.logger_names:LoggerNameValidator"
-"TYPING-POOR-PRACTICE" = "vibelint.validators.single_file.typing_quality:TypingQualityValidator"
-"VIBELINT-SELF-VALIDATION" = "vibelint.validators.single_file.self_validation:VibelintSelfValidator"
-"FILE-TOO-LONG" = "vibelint.validators.single_file.line_count:LineCountValidator"
-"RELATIVE-IMPORTS" = "vibelint.validators.single_file.relative_imports:RelativeImportValidator"
-"DICT-ANTIPATTERN" = "vibelint.validators.single_file.dict_antipattern:DictAntipatternValidator"
-
-# Project-wide validators (require knowledge of entire project)
-"DEAD-CODE-FOUND" = "vibelint.validators.project_wide.dead_code:DeadCodeValidator"
-"API-CONSISTENCY" = "vibelint.validators.project_wide.api_consistency:APIConsistencyValidator"
-"CODE-SMELLS" = "vibelint.validators.project_wide.code_smells:CodeSmellValidator"
-"MODULE-COHESION" = "vibelint.validators.project_wide.module_cohesion:ModuleCohesionValidator"
-
-# Architecture validators (specialized project-wide analysis)
-"ARCHITECTURE-INCONSISTENT" = "vibelint.validators.architecture.basic_patterns:ArchitectureValidator"
-"ARCHITECTURE-LLM" = "vibelint.validators.architecture.llm_analysis:LLMAnalysisValidator"
-"SEMANTIC-SIMILARITY" = "vibelint.validators.architecture.semantic_similarity:SemanticSimilarityValidator"
-"FALLBACK-SILENT-FAILURE" = "vibelint.validators.architecture.fallback_patterns:FallbackAnalyzer"
-
-# Third-party validators can be added here by other packages:
+# Built-in validators are auto-discovered from the filesystem.
+# Only third-party validators need to be registered here as entry points.
+#
+# Third-party packages can add validators here:
 # Example:
 # "MY-CUSTOM-RULE" = "my_package.validators:MyCustomValidator"
 
@@ -166,15 +141,19 @@ vibelint = ["VIBECHECKER.txt"]
 
 # Local vibelint config for analyzing vibelint itself
 [tool.vibelint]
-include_globs = ["**/*"]
+include_globs = [
+    "**/*"
+]
 exclude_globs = [
     "**/__pycache__/**",
-    "**/.*",           # dotfiles/directories
+    "**/.*",           # dotfiles/directories (nested)
+    ".*",              # dotfiles at root level
     "build/**",
     "dist/**",
     "*cache*/**",      # any cache directories
     "*.vibelint*",     # vibelint artifacts
-    ".vibelint-*/**",  # vibelint directories
+    ".vibelint-*/**",  # old vibelint directories (deprecated)
+    ".vibes/**",       # vibelint analysis output
     "*.pyc", "*.pyo", "*.pyd",  # compiled python
     "*.log"            # log files
 ]
@@ -187,7 +166,7 @@ max_file_size_lines = 2000  # Files larger than this get flagged for splitting
 enable_llm_analysis = true
 enable_static_analysis = true
 enable_dependency_analysis = true
-reports_directory = ".vibelint-reports/justification_workflow"
+reports_directory = ".vibes/reports/justification_workflow"
 
 [tool.vibelint.workflows.cleanup]
 # Configuration for cleanup workflow

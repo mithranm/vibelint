@@ -26,7 +26,7 @@ from .registry import WorkflowRegistry, register_workflow, workflow_registry
 # Lazy imports for specific implementations to avoid circular dependencies
 def get_justification_engine():
     """Get JustificationEngine class."""
-    from .implementations.justification import JustificationEngine
+    from .implementations.justification_workflow import JustificationEngine
     return JustificationEngine
 
 __all__ = [

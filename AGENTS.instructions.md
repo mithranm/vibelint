@@ -1,5 +1,42 @@
 # Vibelint Development Instructions
 
+## File Organization & Project Structure Rules
+
+**CRITICAL**: These rules are enforced by the justification workflow.
+
+### Forbidden Directories
+- **NO `scripts/` directory**: Utility scripts belong at project root or deleted if not essential
+- **NO `utils/` directory in src/**: Utilities belong in properly named modules (e.g., `io/`, `fs/`)
+
+### One-Off Scripts Policy
+**CRITICAL**: No one-off scripts that outlive their single use.
+
+- **Temporary scripts**: Must be deleted immediately after use
+- **Recurring utility**: Must be integrated into the codebase as proper modules/commands
+- **Root-level `.py` files**: Only allowed if they serve ongoing project needs (e.g., setup.py)
+- **Exception**: Migration scripts may live temporarily but must be deleted post-migration
+
+**Rationale**: Scripts that linger create maintenance debt and confusion about their purpose/usage.
+
+### Root Directory Rules
+**Root should ONLY contain**:
+- Project metadata: `setup.py`, `pyproject.toml`, `MANIFEST.in`, `tox.ini`, `LICENSE`
+- Single documentation entry: `README.md`
+- Configuration: `.gitignore`, `.env.example`
+- Package entry points: `__init__.py`, `__main__.py`, `conftest.py`
+- AI/Agent instructions: `CLAUDE.md`, `AGENTS.instructions.md`, `*.instructions.md`
+- Standard tool outputs: `coverage.xml` (pytest-cov), `.coverage` (coverage.py)
+- Essential utility scripts (minimize these - prefer proper modules)
+
+### Source Organization
+- All Python source → `src/vibelint/`
+- Tests → `tests/`
+- Documentation → `docs/`
+- Generated artifacts → `.vibes/`, `.vibelint-reports/` (gitignored)
+- **Runtime resources** (ASCII art, templates, etc.) → `src/vibelint/` alongside code that uses them
+
+**Rationale**: Clean root = clear intent. Every file's location should be immediately justifiable. Runtime resources must stay in the package for `importlib.resources` access.
+
 ## Development Methodology
 
 **PRIMARY REFERENCE**: Follow `DEVELOPMENT_METHODOLOGY.md` for comprehensive requirements-driven development process.
@@ -26,6 +63,32 @@ After making changes:
 3. **Run standard linting**: black, isort, ruff, pyright
 
 4. **Run tests and assess quality** (see testing procedures below)
+
+### Justification Workflow Execution
+
+**IMPORTANT**: Justification analysis is resource-intensive (8-10 minutes for 120 files).
+
+- **With cache**: ~8-10 minutes (most files cached, 2-3 LLM calls)
+- **No cache**: ~30+ minutes (all files need summarization)
+
+**Best practices**:
+```bash
+# Background execution (recommended)
+nohup python -c "..." > /tmp/justification.log 2>&1 &
+
+# Monitor progress
+tail -f .vibes/logs/justification_*.log
+
+# High timeout for synchronous runs
+timeout 600  # 10 minutes minimum with cache
+```
+
+**CRITICAL - Human Review Required**:
+- Justification workflow output is **LLM-generated analysis** - not ground truth
+- **Always critically review** recommendations before implementing
+- LLMs can misunderstand project context, runtime requirements, or architectural decisions
+- Verify each suggestion aligns with actual project needs
+- Example: VIBECHECKER.txt was flagged for moving to docs/, but it's a runtime resource needed by CLI
 
 ## LLM Analysis Behavior
 

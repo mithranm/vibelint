@@ -157,19 +157,68 @@ def get_all_formatters() -> Dict[str, Type[Formatter]]:
 
 
 def _load_builtin_validators() -> None:
-    """Load built-in validators from entry points."""
-    import importlib.metadata
+    """
+    Load built-in validators via filesystem auto-discovery.
 
-    for entry_point in importlib.metadata.entry_points(group="vibelint.validators"):
-        try:
-            validator_class = entry_point.load()
-            if hasattr(validator_class, "rule_id"):
-                _VALIDATORS[validator_class.rule_id] = validator_class
-        except (ImportError, AttributeError, TypeError) as e:
-            logger.warning(
-                f"Failed to load validator '{entry_point.name}' from entry point {entry_point.value}: {e}"
-            )
-            pass
+    Scans vibelint.validators.* packages and auto-discovers BaseValidator subclasses.
+    Third-party validators can still use entry points.
+    """
+    import importlib
+    import importlib.util
+    import pkgutil
+
+    # Auto-discover built-in validators from filesystem
+    try:
+        import vibelint.validators
+        validators_path = Path(vibelint.validators.__file__).parent
+
+        # Scan all subdirectories: single_file, project_wide, architecture
+        for subdir in ["single_file", "project_wide", "architecture"]:
+            subdir_path = validators_path / subdir
+            if not subdir_path.is_dir():
+                continue
+
+            # Import all Python modules in this subdirectory
+            for module_file in subdir_path.glob("*.py"):
+                if module_file.name.startswith("_"):
+                    continue
+
+                module_name = f"vibelint.validators.{subdir}.{module_file.stem}"
+                try:
+                    module = importlib.import_module(module_name)
+
+                    # Find all BaseValidator subclasses in the module
+                    for attr_name in dir(module):
+                        attr = getattr(module, attr_name)
+                        if (
+                            isinstance(attr, type)
+                            and issubclass(attr, BaseValidator)
+                            and attr is not BaseValidator
+                            and hasattr(attr, "rule_id")
+                            and attr.rule_id  # Must have non-empty rule_id
+                        ):
+                            _VALIDATORS[attr.rule_id] = attr
+                            logger.debug(f"Auto-discovered validator: {attr.rule_id} from {module_name}")
+
+                except (ImportError, AttributeError) as e:
+                    logger.debug(f"Failed to load validator module {module_name}: {e}")
+
+    except Exception as e:
+        logger.warning(f"Failed to auto-discover built-in validators: {e}")
+
+    # Also load third-party validators from entry points
+    try:
+        import importlib.metadata
+        for entry_point in importlib.metadata.entry_points(group="vibelint.validators"):
+            try:
+                validator_class = entry_point.load()
+                if hasattr(validator_class, "rule_id") and validator_class.rule_id:
+                    _VALIDATORS[validator_class.rule_id] = validator_class
+                    logger.debug(f"Loaded third-party validator from entry point: {validator_class.rule_id}")
+            except (ImportError, AttributeError, TypeError) as e:
+                logger.debug(f"Failed to load validator from entry point {entry_point.name}: {e}")
+    except Exception as e:
+        logger.debug(f"Entry point discovery failed: {e}")
 
 
 def _load_builtin_formatters() -> None:

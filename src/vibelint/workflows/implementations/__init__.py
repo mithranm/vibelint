@@ -22,7 +22,7 @@ __all__ = [
 # Lazy imports to avoid circular dependencies
 def get_justification_engine():
     """Get JustificationEngine class."""
-    from .justification import JustificationEngine
+    from .justification_workflow import JustificationEngine
     return JustificationEngine
 
 def get_single_file_validation_workflow():

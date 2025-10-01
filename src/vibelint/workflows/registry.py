@@ -136,7 +136,7 @@ class WorkflowRegistry:
 
         # Import and register built-in workflows
         try:
-            from .implementations.justification.workflow import JustificationWorkflow
+            from .implementations.justification_workflow import JustificationWorkflow
             self.register(JustificationWorkflow)
             logger.debug("Registered built-in workflow: justification")
         except ImportError as e:
