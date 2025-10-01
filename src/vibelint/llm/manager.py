@@ -53,7 +53,7 @@ ORCHESTRATOR_TIMEOUT_SECONDS = 600
 FAST_TIMEOUT_SECONDS = 30
 TOKEN_ESTIMATION_DIVISOR = 4
 
-__all__ = ["LLMRole", "LLMManager", "LLMRequest", "create_llm_manager"]
+__all__ = ["LLMRole", "LLMManager", "LLMRequest", "LLMResponse", "create_llm_manager"]
 
 
 class LLMRole(Enum):
@@ -75,19 +75,32 @@ class LLMRequest:
     # If structured_output is None, expects unstructured natural language response
 
 
+@dataclass
+class LLMResponse:
+    """Typed response from LLM processing."""
+
+    content: str
+    success: bool
+    llm_used: str
+    duration_seconds: float
+    input_tokens: int
+    reasoning_content: str = ""
+    error: Optional[str] = None
+
+
 class LLMManager:
     """Simple manager for dual LLM setup."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional["LLMConfig"] = None):
         """Initialize with vibelint configuration.
 
         Args:
-            config: Optional legacy configuration dictionary - will be replaced with typed config
+            config: Optional typed LLMConfig - if None, loads from config files
         """
         from .llm_config import get_llm_config, LLMConfig
 
         # Load typed configuration
-        self.llm_config = get_llm_config()
+        self.llm_config = config if config is not None else get_llm_config()
 
         # Build configs for fast and orchestrator using typed config
         self.fast_config = self._build_fast_config(self.llm_config)
@@ -533,15 +546,13 @@ value ::= "true" | "false" | "\\"" [^"]* "\\""'''
             }
 
 
-def create_llm_manager(config: Dict[str, Any]) -> Optional[LLMManager]:
+def create_llm_manager(config: Optional["LLMConfig"] = None) -> Optional[LLMManager]:
     """Create LLM manager from vibelint configuration.
 
     Always returns an LLMManager instance, even if no LLMs are configured.
     This allows embedding-only analysis to work without LLM endpoints.
-    """
-    if "llm" not in config:
-        logger.info("No LLM configuration found - embedding-only analysis will be available")
-        # Create empty config for embedding-only mode
-        config = {"llm": {}}
 
+    Args:
+        config: Optional typed LLMConfig - if None, loads from config files
+    """
     return LLMManager(config)

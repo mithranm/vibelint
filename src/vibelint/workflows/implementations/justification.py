@@ -30,8 +30,9 @@ class JustificationEngine:
     category: str = "analysis"
     tags: set = {"code-quality", "llm-analysis", "architecture"}
 
-    def __init__(self, config: Optional[Dict] = None):
-        self.config = config or {}
+    def __init__(self, config: Optional["WorkflowConfig"] = None):
+        from vibelint.workflows.core.base import WorkflowConfig
+        self.config = config or WorkflowConfig()
         self.llm_manager = None
         self.cache_file = Path(".vibes/cache/file_summaries.json")
         self.timestamp = time.strftime("%Y%m%d_%H%M%S")

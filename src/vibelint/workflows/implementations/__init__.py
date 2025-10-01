@@ -13,19 +13,22 @@ vibelint/src/vibelint/workflow/implementations/__init__.py
 __all__ = [
     # Implementation modules
     "justification",
-    "coverage_analysis",
     "single_file_validation",
-    "redundancy_detection",
-    "justification_analysis",
+    "deadcode",
 ]
 
 # Lazy imports to avoid circular dependencies
 def get_justification_engine():
     """Get JustificationEngine class."""
-    from .justification_workflow import JustificationEngine
+    from .justification import JustificationEngine
     return JustificationEngine
 
 def get_single_file_validation_workflow():
     """Get SingleFileValidationWorkflow class."""
     from .single_file_validation import SingleFileValidationWorkflow
     return SingleFileValidationWorkflow
+
+def get_deadcode_workflow():
+    """Get DeadcodeWorkflow class."""
+    from .deadcode import DeadcodeWorkflow
+    return DeadcodeWorkflow

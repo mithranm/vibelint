@@ -136,11 +136,18 @@ class WorkflowRegistry:
 
         # Import and register built-in workflows
         try:
-            from .implementations.justification_workflow import JustificationWorkflow
+            from .implementations.justification import JustificationWorkflow
             self.register(JustificationWorkflow)
             logger.debug("Registered built-in workflow: justification")
         except ImportError as e:
             logger.warning(f"Failed to load built-in justification workflow: {e}")
+
+        try:
+            from .implementations.deadcode import DeadcodeWorkflow
+            self.register(DeadcodeWorkflow)
+            logger.debug("Registered built-in workflow: deadcode")
+        except ImportError as e:
+            logger.warning(f"Failed to load built-in deadcode workflow: {e}")
 
         self._builtin_loaded = True
 

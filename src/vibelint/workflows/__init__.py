@@ -17,16 +17,13 @@ vibelint/src/vibelint/workflow/__init__.py
 from .core.base import (BaseWorkflow, WorkflowConfig, WorkflowMetrics,
                         WorkflowPriority, WorkflowResult, WorkflowStatus)
 from .evaluation import WorkflowEvaluator
-# Import orchestration
-from .manager import WorkflowManager
-from .orchestrator import AnalysisOrchestrator
 # Import registry system
 from .registry import WorkflowRegistry, register_workflow, workflow_registry
 
 # Lazy imports for specific implementations to avoid circular dependencies
 def get_justification_engine():
     """Get JustificationEngine class."""
-    from .implementations.justification_workflow import JustificationEngine
+    from .implementations.justification import JustificationEngine
     return JustificationEngine
 
 __all__ = [
@@ -41,9 +38,7 @@ __all__ = [
     "WorkflowRegistry",
     "workflow_registry",
     "register_workflow",
-    # Orchestration
-    "WorkflowManager",
-    "AnalysisOrchestrator",
+    # Evaluation
     "WorkflowEvaluator",
     # Lazy import functions
     "get_justification_engine",
