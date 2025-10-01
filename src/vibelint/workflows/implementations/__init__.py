@@ -14,7 +14,6 @@ __all__ = [
     # Implementation modules
     "justification",
     "single_file_validation",
-    "deadcode",
 ]
 
 # Lazy imports to avoid circular dependencies
@@ -27,8 +26,3 @@ def get_single_file_validation_workflow():
     """Get SingleFileValidationWorkflow class."""
     from .single_file_validation import SingleFileValidationWorkflow
     return SingleFileValidationWorkflow
-
-def get_deadcode_workflow():
-    """Get DeadcodeWorkflow class."""
-    from .deadcode import DeadcodeWorkflow
-    return DeadcodeWorkflow
