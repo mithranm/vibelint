@@ -1,26 +1,29 @@
 """
-Runtime dead code detection via coverage analysis.
+LLM-powered runtime dead code detection.
 
-Coverage-based approach:
+Hybrid approach:
 1. Discover all entry points (CLI, tests, __main__.py)
-2. Run each with --help/--version/import-only to maximize coverage
-3. Any file with 0% coverage = dead code or unreachable edge case
-
-Deterministic analysis with optional LLM for arg generation.
+2. Extract CLI command signatures via AST
+3. Use LLM to generate realistic test arguments for each command
+4. Run coverage with actual execution (not just --help)
+5. Use LLM to analyze suspected dead files for false positives
+6. Report genuinely unused code
 
 vibelint/src/vibelint/workflows/implementations/deadcode.py
 """
 
 import ast
+import json
 import logging
 import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
+from vibelint.llm.manager import LLMRole
 from vibelint.workflows.core.base import (
     BaseWorkflow,
     WorkflowConfig,
@@ -41,12 +44,23 @@ __all__ = ["DeadcodeWorkflow"]
 
 
 @dataclass
-class EntryPoint:
-    """Discovered entry point."""
+class CLICommand:
+    """Extracted CLI command signature."""
 
-    path: Path
     name: str
-    type: str  # "main", "console_script", "click_cli", "test"
+    path: Path
+    function_name: str
+    parameters: List[Dict[str, Any]] = field(default_factory=list)
+    help_text: Optional[str] = None
+
+
+@dataclass
+class GeneratedArguments:
+    """LLM-generated test arguments for a command."""
+
+    command: str
+    args: List[str]
+    description: str
 
 
 @dataclass
@@ -58,6 +72,7 @@ class CoverageResult:
     dead_files: List[Path]
     entry_points_traced: int
     overall_coverage_pct: float
+    llm_analysis: Optional[str] = None
 
 
 # ============================================================================
@@ -65,34 +80,28 @@ class CoverageResult:
 # ============================================================================
 
 
-def discover_entry_points(project_root: Path) -> List[EntryPoint]:
+def discover_entry_points(project_root: Path) -> List[Path]:
     """Discover all entry points in project."""
     entry_points = []
 
     # 1. __main__.py modules
     for main_file in project_root.rglob("__main__.py"):
         if not any(p.startswith(".") for p in main_file.parts):
-            entry_points.append(
-                EntryPoint(path=main_file, name=main_file.parent.name, type="main")
-            )
+            entry_points.append(main_file)
 
-    # 2. Click CLI commands (simple AST check)
+    # 2. Click CLI files
     src_dir = project_root / "src"
     if src_dir.exists():
         for py_file in src_dir.rglob("*.py"):
             if _has_click_decorators(py_file):
-                entry_points.append(
-                    EntryPoint(path=py_file, name=py_file.stem, type="click_cli")
-                )
+                entry_points.append(py_file)
 
     # 3. Test files
     for test_dir in ["tests", "test"]:
         test_path = project_root / test_dir
         if test_path.exists():
             for test_file in test_path.rglob("test_*.py"):
-                entry_points.append(
-                    EntryPoint(path=test_file, name=test_file.stem, type="test")
-                )
+                entry_points.append(test_file)
 
     logger.info(f"Discovered {len(entry_points)} entry points")
     return entry_points
@@ -119,34 +128,223 @@ def _has_click_decorators(file_path: Path) -> bool:
 
 
 # ============================================================================
-# Coverage Tracing
+# CLI Command Extraction
 # ============================================================================
 
 
-def trace_entry_point_coverage(
-    entry_point: EntryPoint, project_root: Path
-) -> Set[str]:
-    """Trace coverage for a single entry point using multiple strategies."""
-    all_imports = set()
+def extract_cli_commands(cli_files: List[Path]) -> List[CLICommand]:
+    """Extract CLI command signatures from files."""
+    commands = []
 
-    strategies = [
-        (["--help"], 5),
-        (["--version"], 5),
-        ([], 10),  # import-only
-    ]
-
-    for args, timeout in strategies:
+    for file_path in cli_files:
         try:
-            imports = _run_coverage_trace(entry_point.path, args, timeout, project_root)
-            all_imports.update(imports)
+            tree = ast.parse(file_path.read_text())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    # Check for @click.command or @click.group decorators
+                    has_click_command = False
+                    for deco in node.decorator_list:
+                        if isinstance(deco, ast.Call):
+                            if (
+                                isinstance(deco.func, ast.Attribute)
+                                and isinstance(deco.func.value, ast.Name)
+                                and deco.func.value.id == "click"
+                                and deco.func.attr in ("command", "group")
+                            ):
+                                has_click_command = True
+
+                    if has_click_command:
+                        # Extract parameters from decorators
+                        params = []
+                        help_text = None
+
+                        for deco in node.decorator_list:
+                            if isinstance(deco, ast.Call) and isinstance(
+                                deco.func, ast.Attribute
+                            ):
+                                if (
+                                    isinstance(deco.func.value, ast.Name)
+                                    and deco.func.value.id == "click"
+                                ):
+                                    # Extract parameter info
+                                    if deco.func.attr in (
+                                        "option",
+                                        "argument",
+                                        "command",
+                                    ):
+                                        param_info = {}
+                                        if deco.args:
+                                            param_info["name"] = (
+                                                deco.args[0].value
+                                                if isinstance(
+                                                    deco.args[0], ast.Constant
+                                                )
+                                                else str(deco.args[0])
+                                            )
+
+                                        # Extract help text
+                                        for keyword in deco.keywords:
+                                            if keyword.arg == "help" and isinstance(
+                                                keyword.value, ast.Constant
+                                            ):
+                                                help_text = keyword.value.value
+
+                                        if param_info:
+                                            params.append(param_info)
+
+                        commands.append(
+                            CLICommand(
+                                name=node.name,
+                                path=file_path,
+                                function_name=node.name,
+                                parameters=params,
+                                help_text=help_text,
+                            )
+                        )
+
+        except Exception as e:
+            logger.debug(f"Failed to extract commands from {file_path}: {e}")
+
+    logger.info(f"Extracted {len(commands)} CLI commands")
+    return commands
+
+
+# ============================================================================
+# Project Context Helpers
+# ============================================================================
+
+
+def _get_file_tree(project_root: Path, max_depth: int = 3) -> str:
+    """Generate file tree for project context."""
+    src_dir = project_root / "src"
+    if not src_dir.exists():
+        return "No src/ directory found"
+
+    lines = ["src/"]
+
+    def walk_dir(directory: Path, prefix: str = "", depth: int = 0):
+        if depth >= max_depth:
+            return
+
+        try:
+            items = sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name))
+            for i, item in enumerate(items):
+                if item.name.startswith(".") or item.name == "__pycache__":
+                    continue
+
+                is_last = i == len(items) - 1
+                current_prefix = "└── " if is_last else "├── "
+                next_prefix = "    " if is_last else "│   "
+
+                lines.append(f"{prefix}{current_prefix}{item.name}")
+
+                if item.is_dir():
+                    walk_dir(item, prefix + next_prefix, depth + 1)
+
+        except PermissionError:
+            pass
+
+    walk_dir(src_dir)
+    return "\n".join(lines[:200])  # Limit to 200 lines
+
+
+# ============================================================================
+# LLM-Powered Argument Generation
+# ============================================================================
+
+
+def generate_test_arguments(
+    commands: List[CLICommand], llm_manager, project_root: Path
+) -> List[GeneratedArguments]:
+    """Use LLM to generate realistic test arguments for commands."""
+    if not llm_manager or not llm_manager.is_llm_available(LLMRole.FAST):
+        logger.warning("No LLM available - using minimal test coverage")
+        return []
+
+    # Get project file tree for context
+    file_tree = _get_file_tree(project_root)
+
+    generated_args = []
+
+    for cmd in commands:
+        prompt = f"""Generate 3 realistic test argument sets for this CLI command.
+
+PROJECT CONTEXT:
+{file_tree}
+
+COMMAND INFO:
+Command: {cmd.name}
+Help: {cmd.help_text or 'No help text'}
+Parameters: {json.dumps(cmd.parameters, indent=2)}
+
+Generate test arguments that make sense for this project's structure.
+For file paths, use actual files from the project tree above.
+
+Return JSON array with format:
+[
+  {{"args": ["--flag", "value"], "description": "Test basic usage"}},
+  {{"args": ["--other"], "description": "Test alternative path"}}
+]
+
+Focus on arguments that will exercise different code paths.
+"""
+
+        try:
+            response = llm_manager.process_request(
+                prompt=prompt,
+                max_tokens=500,
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+
+            if response.success and response.content:
+                arg_sets = json.loads(response.content)
+                for arg_set in arg_sets[:3]:  # Limit to 3 per command
+                    generated_args.append(
+                        GeneratedArguments(
+                            command=cmd.name,
+                            args=arg_set["args"],
+                            description=arg_set["description"],
+                        )
+                    )
+
+        except Exception as e:
+            logger.debug(f"Failed to generate args for {cmd.name}: {e}")
+
+    logger.info(f"Generated {len(generated_args)} argument sets")
+    return generated_args
+
+
+# ============================================================================
+# Coverage Tracing with Realistic Arguments
+# ============================================================================
+
+
+def trace_coverage_with_args(
+    entry_point: Path,
+    project_root: Path,
+    test_args: List[List[str]],
+) -> Set[str]:
+    """Trace coverage for entry point with realistic arguments."""
+    all_modules = set()
+
+    # Always try import-only first
+    modules = _run_coverage_trace(entry_point, [], 10, project_root)
+    all_modules.update(modules)
+
+    # Try each generated argument set
+    for args in test_args:
+        try:
+            modules = _run_coverage_trace(entry_point, args, 30, project_root)
+            all_modules.update(modules)
             logger.debug(
-                f"{entry_point.name} with {args or 'import-only'}: {len(imports)} modules"
+                f"{entry_point.name} with {args}: {len(modules)} modules covered"
             )
         except Exception as e:
-            logger.debug(f"Strategy {args} failed: {e}")
+            logger.debug(f"Args {args} failed: {e}")
             continue
 
-    return all_imports
+    return all_modules
 
 
 def _run_coverage_trace(
@@ -172,7 +370,6 @@ def _run_coverage_trace(
                 cmd, cwd=project_root, timeout=timeout, capture_output=True, check=False
             )
 
-            # Parse coverage data
             return _parse_coverage_modules(coverage_file, project_root)
 
         except subprocess.TimeoutExpired:
@@ -209,19 +406,78 @@ def _parse_coverage_modules(coverage_file: Path, project_root: Path) -> Set[str]
 
 
 # ============================================================================
+# LLM Analysis of Suspected Dead Files
+# ============================================================================
+
+
+def analyze_dead_files(
+    suspected_dead: List[Path], project_root: Path, llm_manager
+) -> Dict[Path, str]:
+    """Use LLM to analyze suspected dead files for false positives."""
+    if not llm_manager or not llm_manager.is_llm_available(LLMRole.FAST):
+        logger.warning("No LLM available - skipping dead file analysis")
+        return {f: "No LLM available for analysis" for f in suspected_dead}
+
+    analysis = {}
+
+    for file_path in suspected_dead:
+        try:
+            content = file_path.read_text()
+            rel_path = file_path.relative_to(project_root)
+
+            prompt = f"""Analyze if this Python file is genuinely unused or has legitimate reasons for zero coverage:
+
+File: {rel_path}
+
+```python
+{content[:2000]}  # First 2000 chars
+```
+
+Consider:
+1. Is this a base class/interface/protocol that's subclassed elsewhere?
+2. Is this a utility module imported dynamically?
+3. Is this a plugin/extension point?
+4. Is this genuinely dead code that should be deleted?
+
+Return JSON: {{"is_dead": true/false, "reason": "explanation"}}
+"""
+
+            response = llm_manager.process_request(
+                prompt=prompt,
+                max_tokens=200,
+                temperature=0.2,
+                response_format={"type": "json_object"},
+            )
+
+            if response.success and response.content:
+                result = json.loads(response.content)
+                analysis[file_path] = result.get(
+                    "reason", "No analysis available"
+                )
+            else:
+                analysis[file_path] = "LLM analysis failed"
+
+        except Exception as e:
+            logger.debug(f"Failed to analyze {file_path}: {e}")
+            analysis[file_path] = f"Analysis error: {e}"
+
+    return analysis
+
+
+# ============================================================================
 # Main Workflow
 # ============================================================================
 
 
 class DeadcodeWorkflow(BaseWorkflow):
-    """Coverage-based dead code detection."""
+    """LLM-powered dead code detection via runtime coverage."""
 
     workflow_id = "deadcode"
     name = "Dead Code Detection"
-    description = "Detect dead code via runtime coverage analysis"
+    description = "LLM-powered dead code detection via runtime coverage"
     category = "analysis"
-    version = "1.0.0"
-    tags = {"deadcode", "coverage", "runtime", "deterministic"}
+    version = "2.0.0"
+    tags = {"deadcode", "coverage", "runtime", "llm", "intelligent"}
 
     def __init__(self, config: Optional[WorkflowConfig] = None):
         super().__init__(config=config)
@@ -235,21 +491,22 @@ class DeadcodeWorkflow(BaseWorkflow):
         return {"project_root"}
 
     def get_produced_outputs(self) -> Set[str]:
-        return {"dead_files", "coverage_result"}
+        return {"dead_files", "coverage_result", "llm_analysis"}
 
     def supports_parallel_execution(self) -> bool:
-        return False  # Coverage tracing is sequential
+        return False
 
     def execute(self, project_root: Path, **kwargs) -> WorkflowResult:
-        """Execute dead code detection.
-
-        Returns:
-            WorkflowResult with findings containing dead file paths and metrics.
-        """
+        """Execute LLM-powered dead code detection."""
         start_time = time.time()
         metrics = WorkflowMetrics(start_time=start_time)
 
         try:
+            # Initialize LLM manager
+            from vibelint.llm.manager import LLMManager
+
+            self.llm_manager = LLMManager()
+
             # Phase 1: Discover entry points
             entry_points = discover_entry_points(project_root)
 
@@ -263,26 +520,57 @@ class DeadcodeWorkflow(BaseWorkflow):
                     error_message="No entry points discovered",
                 )
 
-            # Phase 2: Trace coverage from all entry points
+            # Phase 2: Extract CLI commands
+            cli_files = [f for f in entry_points if _has_click_decorators(f)]
+            commands = extract_cli_commands(cli_files)
+
+            # Phase 3: Generate realistic test arguments
+            generated_args = generate_test_arguments(
+                commands, self.llm_manager, project_root
+            )
+
+            # Group args by command
+            args_by_file = {}
+            for gen_arg in generated_args:
+                for cmd in commands:
+                    if cmd.name == gen_arg.command:
+                        if cmd.path not in args_by_file:
+                            args_by_file[cmd.path] = []
+                        args_by_file[cmd.path].append(gen_arg.args)
+
+            # Phase 4: Trace coverage with realistic arguments
             all_covered_modules: Set[str] = set()
 
             for ep in entry_points:
-                logger.info(f"Tracing {ep.type}: {ep.name}")
-                covered = trace_entry_point_coverage(ep, project_root)
+                logger.info(f"Tracing {ep.name}")
+                test_args = args_by_file.get(ep, [[]])  # Empty args if none generated
+                covered = trace_coverage_with_args(ep, project_root, test_args)
                 all_covered_modules.update(covered)
 
-            # Phase 3: Find all Python files in project
+            # Phase 5: Find all Python files
             all_py_files = _discover_all_python_files(project_root)
             logger.info(f"Total Python files: {len(all_py_files)}")
 
-            # Phase 4: Identify dead files (zero coverage)
+            # Phase 6: Identify suspected dead files
             covered_paths = {
                 _module_to_path(m, project_root) for m in all_covered_modules
             }
+            suspected_dead = [f for f in all_py_files if f not in covered_paths]
 
-            dead_files = [f for f in all_py_files if f not in covered_paths]
+            # Phase 7: LLM analysis of suspected dead files
+            llm_analysis = analyze_dead_files(
+                suspected_dead, project_root, self.llm_manager
+            )
 
-            # Phase 5: Build result
+            # Filter to genuinely dead files
+            dead_files = [
+                f
+                for f in suspected_dead
+                if "is_dead\": true" in llm_analysis.get(f, "")
+                or "No LLM available" in llm_analysis.get(f, "")
+            ]
+
+            # Phase 8: Build result
             coverage_pct = (
                 ((len(all_py_files) - len(dead_files)) / len(all_py_files)) * 100
                 if all_py_files
@@ -299,7 +587,9 @@ class DeadcodeWorkflow(BaseWorkflow):
                 {
                     "type": "dead_file",
                     "path": str(f.relative_to(project_root)),
-                    "message": "File has zero coverage from all entry points",
+                    "message": llm_analysis.get(
+                        f, "File has zero coverage and no legitimate reason"
+                    ),
                     "severity": "medium",
                 }
                 for f in dead_files
@@ -319,6 +609,10 @@ class DeadcodeWorkflow(BaseWorkflow):
                     "dead_files": [str(f) for f in dead_files],
                     "coverage_percentage": coverage_pct,
                     "entry_points_traced": len(entry_points),
+                    "llm_analysis": {
+                        str(k.relative_to(project_root)): v
+                        for k, v in llm_analysis.items()
+                    },
                 },
             )
 

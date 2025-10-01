@@ -187,9 +187,9 @@ class FixEngine:
 
             response = await self.llm_manager.process_request(request)
 
-            if response["success"] and response["content"]:
+            if response.success and response.content:
                 # Clean the response to ensure it's just text
-                content = str(response["content"]).strip()
+                content = str(response.content).strip()
                 # Remove any quotes or markdown that might have been added
                 content = content.replace('"""', "").replace("'''", "").replace("`", "")
                 return content[:200]  # Limit length

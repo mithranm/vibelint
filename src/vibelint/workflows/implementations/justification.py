@@ -95,13 +95,16 @@ class JustificationEngine:
             self.jsonl_log_file.touch()
 
             # Register callback with LLM manager to log all requests/responses
-            def log_callback(log_entry: Dict):
+            def log_callback(log_entry):
                 """Write log entry to JSONL file."""
                 if self.jsonl_log_file is None:
                     return
                 try:
+                    # Convert LogEntry dataclass to dict for JSON serialization
+                    from dataclasses import asdict
+                    log_dict = asdict(log_entry) if hasattr(log_entry, '__dataclass_fields__') else log_entry
                     with open(self.jsonl_log_file, "a") as f:
-                        f.write(json.dumps(log_entry) + "\n")
+                        f.write(json.dumps(log_dict) + "\n")
                 except Exception as e:
                     logger.debug(f"Failed to write JSONL log: {e}")
 
@@ -283,8 +286,8 @@ One sentence describing what this code does:"""
                 # LLM manager automatically cascades to orchestrator if fast fails
                 response = self.llm_manager.process_request_sync(request)
 
-                if response and "content" in response and response["content"]:
-                    chunk_summaries.append(response["content"].strip())
+                if response and response.success and response.content:
+                    chunk_summaries.append(response.content.strip())
                 else:
                     chunk_summaries.append(f"[Chunk {i+1} analysis failed]")
 
@@ -422,8 +425,8 @@ Provide specific findings for each category with file paths and consolidation re
             )
 
             response = self.llm_manager.process_request_sync(request)
-            if response and "content" in response:
-                return response["content"].strip()
+            if response and response.success and response.content:
+                return response.content.strip()
             else:
                 return f"Chunk {chunk_num} analysis failed"
 
@@ -550,8 +553,8 @@ Be specific and direct. List misplaced files clearly."""
             )
 
             response = self.llm_manager.process_request_sync(request)
-            if response and "content" in response:
-                return response["content"].strip()
+            if response and response.success and response.content:
+                return response.content.strip()
             else:
                 return "Structural analysis failed"
 
@@ -595,8 +598,8 @@ Project: {root.name}"""
             )
 
             response = self.llm_manager.process_request_sync(request)
-            if response and "content" in response:
-                return response["content"].strip()
+            if response and response.success and response.content:
+                return response.content.strip()
             else:
                 # Fallback to simple concatenation
                 return (

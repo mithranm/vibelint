@@ -103,7 +103,7 @@ class DynamicAnalyzer:
 
         try:
             response = self.llm.process_request(llm_request)
-            findings = self._parse_llm_findings(response["content"], request.file_path)
+            findings = self._parse_llm_findings(response.content, request.file_path)
             return findings, 1
 
         except Exception as e:
@@ -315,7 +315,7 @@ class CustomValidator(BaseValidator):
 
         try:
             response = self.llm.process_request(llm_request)
-            return response["content"]
+            return response.content
         except Exception as e:
             logger.error(f"Failed to generate validator code: {e}")
             return f"# Error generating validator: {e}"

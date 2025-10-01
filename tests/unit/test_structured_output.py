@@ -93,10 +93,10 @@ def test_structured_output_end_to_end(llm_manager):
     try:
         response = llm_manager.process_request_sync(request)
 
-        if response.get("success"):
+        if response.success:
             # Try to parse and validate the response
             import json
-            content = response.get("content", "{}")
+            content = response.content
             parsed = json.loads(content)
 
             # Should be valid according to our Pydantic model

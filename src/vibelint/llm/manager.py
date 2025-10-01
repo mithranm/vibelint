@@ -53,7 +53,18 @@ ORCHESTRATOR_TIMEOUT_SECONDS = 600
 FAST_TIMEOUT_SECONDS = 30
 TOKEN_ESTIMATION_DIVISOR = 4
 
-__all__ = ["LLMRole", "LLMManager", "LLMRequest", "LLMResponse", "create_llm_manager"]
+__all__ = [
+    "LLMRole",
+    "LLMManager",
+    "LLMRequest",
+    "LLMResponse",
+    "LLMBackendConfig",
+    "LogEntry",
+    "APIPayload",
+    "FeatureAvailability",
+    "LLMStatus",
+    "create_llm_manager",
+]
 
 
 class LLMRole(Enum):
@@ -88,6 +99,75 @@ class LLMResponse:
     error: Optional[str] = None
 
 
+@dataclass
+class LLMBackendConfig:
+    """Configuration for a single LLM backend."""
+
+    backend: str
+    api_url: str
+    model: str
+    api_key: Optional[str]
+    temperature: float
+    max_tokens: int
+    max_context_tokens: int
+
+
+@dataclass
+class LogEntry:
+    """Log entry for LLM request/response pairs."""
+
+    type: str
+    timestamp: str
+    llm_used: str
+    request_content_length: int
+    request_content_preview: str
+    request_max_tokens: Optional[int]
+    request_temperature: Optional[float]
+    response_success: bool
+    response_content_length: int
+    response_content_preview: str
+    response_duration_seconds: float
+    response_error: Optional[str]
+
+
+@dataclass
+class APIPayload:
+    """API payload for LLM requests."""
+
+    model: str
+    messages: list[Dict[str, str]]
+    temperature: float
+    max_tokens: int
+    stream: bool
+    response_format: Optional[Dict[str, Any]] = None
+    grammar: Optional[str] = None
+
+
+@dataclass
+class FeatureAvailability:
+    """Feature availability based on LLM configuration."""
+
+    architecture_analysis: bool
+    docstring_generation: bool
+    code_smell_detection: bool
+    coverage_assessment: bool
+    llm_validation: bool
+    semantic_similarity: bool
+    embedding_clustering: bool
+    duplicate_detection: bool
+
+
+@dataclass
+class LLMStatus:
+    """Status of LLM manager."""
+
+    fast_configured: bool
+    orchestrator_configured: bool
+    context_threshold: int
+    fallback_enabled: bool
+    available_features: FeatureAvailability
+
+
 class LLMManager:
     """Simple manager for dual LLM setup."""
 
@@ -120,60 +200,55 @@ class LLMManager:
     def set_log_callback(self, callback):
         """Set a callback function for logging LLM requests/responses.
 
-        Callback signature: callback(log_entry: Dict[str, Any]) -> None
+        Callback signature: callback(log_entry: LogEntry) -> None
         """
         self.log_callback = callback
 
-    def _log_request_response(self, request: "LLMRequest", response: Dict[str, Any], llm_used: str):
+    def _log_request_response(self, request: LLMRequest, response: LLMResponse, llm_used: str):
         """Log request/response pair if callback is registered."""
         if self.log_callback:
             try:
-                import time
-                log_entry = {
-                    "type": "llm_call",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "llm_used": llm_used,
-                    "request": {
-                        "content_length": len(request.content),
-                        "content_preview": request.content[:500] + "..." if len(request.content) > 500 else request.content,
-                        "max_tokens": request.max_tokens,
-                        "temperature": request.temperature
-                    },
-                    "response": {
-                        "success": response.get("success", False),
-                        "content_length": len(response.get("content", "")),
-                        "content_preview": response.get("content", "")[:500] + "..." if len(response.get("content", "")) > 500 else response.get("content", ""),
-                        "duration_seconds": response.get("duration_seconds", 0),
-                        "error": response.get("error")
-                    }
-                }
+                log_entry = LogEntry(
+                    type="llm_call",
+                    timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+                    llm_used=llm_used,
+                    request_content_length=len(request.content),
+                    request_content_preview=request.content[:500] + "..." if len(request.content) > 500 else request.content,
+                    request_max_tokens=request.max_tokens,
+                    request_temperature=request.temperature,
+                    response_success=response.success,
+                    response_content_length=len(response.content),
+                    response_content_preview=response.content[:500] + "..." if len(response.content) > 500 else response.content,
+                    response_duration_seconds=response.duration_seconds,
+                    response_error=response.error
+                )
                 self.log_callback(log_entry)
             except Exception as e:
                 logger.debug(f"Log callback failed: {e}")
 
-    def _build_fast_config(self, llm_config) -> Dict[str, Any]:
+    def _build_fast_config(self, llm_config) -> LLMBackendConfig:
         """Build configuration for fast LLM from typed config."""
-        return {
-            "backend": llm_config.fast_backend,
-            "api_url": llm_config.fast_api_url,
-            "model": llm_config.fast_model,
-            "api_key": llm_config.fast_api_key,
-            "temperature": llm_config.fast_temperature,
-            "max_tokens": llm_config.fast_max_tokens,
-            "max_context_tokens": llm_config.fast_max_context_tokens,
-        }
+        return LLMBackendConfig(
+            backend=llm_config.fast_backend,
+            api_url=llm_config.fast_api_url,
+            model=llm_config.fast_model,
+            api_key=llm_config.fast_api_key,
+            temperature=llm_config.fast_temperature,
+            max_tokens=llm_config.fast_max_tokens,
+            max_context_tokens=llm_config.fast_max_context_tokens,
+        )
 
-    def _build_orchestrator_config(self, llm_config) -> Dict[str, Any]:
+    def _build_orchestrator_config(self, llm_config) -> LLMBackendConfig:
         """Build configuration for orchestrator LLM from typed config."""
-        return {
-            "backend": llm_config.orchestrator_backend,
-            "api_url": llm_config.orchestrator_api_url,
-            "model": llm_config.orchestrator_model,
-            "api_key": llm_config.orchestrator_api_key,
-            "temperature": llm_config.orchestrator_temperature,
-            "max_tokens": llm_config.orchestrator_max_tokens,
-            "max_context_tokens": llm_config.orchestrator_max_context_tokens,
-        }
+        return LLMBackendConfig(
+            backend=llm_config.orchestrator_backend,
+            api_url=llm_config.orchestrator_api_url,
+            model=llm_config.orchestrator_model,
+            api_key=llm_config.orchestrator_api_key,
+            temperature=llm_config.orchestrator_temperature,
+            max_tokens=llm_config.orchestrator_max_tokens,
+            max_context_tokens=llm_config.orchestrator_max_context_tokens,
+        )
 
     def select_llm(self, request: LLMRequest) -> LLMRole:
         """Select appropriate LLM based on hard constraints.
@@ -193,8 +268,8 @@ class LLMManager:
         orchestrator_max_tokens = self.llm_config.orchestrator_max_tokens
         # Orchestrator typically has much larger context window
 
-        fast_available = bool(self.fast_config.get("api_url"))
-        orchestrator_available = bool(self.orchestrator_config.get("api_url"))
+        fast_available = bool(self.fast_config.api_url)
+        orchestrator_available = bool(self.orchestrator_config.api_url)
 
         # Estimate input tokens (conservative: 3 chars per token)
         estimated_input_tokens = content_size // 3
@@ -227,7 +302,7 @@ class LLMManager:
         else:
             raise ValueError("No LLMs configured - need either fast_api_url or orchestrator_api_url in config")
 
-    async def process_request(self, request: LLMRequest) -> Dict[str, Any]:
+    async def process_request(self, request: LLMRequest) -> LLMResponse:
         """Process request using intelligent routing with fallback."""
         # Check if at least one LLM is configured
         fast_available = bool(self.llm_config.fast_api_url)
@@ -250,7 +325,7 @@ class LLMManager:
             try:
                 logger.debug("Attempting fast LLM (selected by routing)")
                 result = await self._call_fast_llm(request)
-                if result.get("content") and result["content"].strip():
+                if result.content and result.content.strip():
                     self._log_request_response(request, result, "fast")
                     return result
                 else:
@@ -271,7 +346,7 @@ class LLMManager:
                     structured_output=request.structured_output
                 )
                 result = await self._call_orchestrator_llm(orchestrator_request)
-                if result.get("content") and result["content"].strip():
+                if result.content and result.content.strip():
                     self._log_request_response(request, result, "orchestrator")
                     return result
                 else:
@@ -294,7 +369,7 @@ class LLMManager:
                         structured_output=request.structured_output
                     )
                     result = await self._call_orchestrator_llm(orchestrator_request)
-                    if result.get("content") and result["content"].strip():
+                    if result.content and result.content.strip():
                         self._log_request_response(request, result, "orchestrator_fallback")
                         return result
                 except Exception as e:
@@ -303,44 +378,44 @@ class LLMManager:
                 try:
                     logger.info("Falling back to fast LLM")
                     result = await self._call_fast_llm(request)
-                    if result.get("content") and result["content"].strip():
+                    if result.content and result.content.strip():
                         self._log_request_response(request, result, "fast_fallback")
                         return result
                 except Exception as e:
                     logger.warning(f"Fast LLM fallback failed: {e}")
 
         # All attempts failed - return graceful failure
-        return {
-            "content": f"[LLM analysis unavailable: All configured LLMs failed or returned empty content]",
-            "llm_used": "none",
-            "duration_seconds": 0,
-            "input_tokens": 0,
-            "success": False,
-            "error": "All LLM attempts failed or returned empty content"
-        }
+        return LLMResponse(
+            content="[LLM analysis unavailable: All configured LLMs failed or returned empty content]",
+            llm_used="none",
+            duration_seconds=0,
+            input_tokens=0,
+            success=False,
+            error="All LLM attempts failed or returned empty content"
+        )
 
-    async def _call_fast_llm(self, request: LLMRequest) -> Dict[str, Any]:
+    async def _call_fast_llm(self, request: LLMRequest) -> LLMResponse:
         """Call the fast LLM."""
         return await self._make_api_call(self.fast_config, request, LLMRole.FAST)
 
-    async def _call_orchestrator_llm(self, request: LLMRequest) -> Dict[str, Any]:
+    async def _call_orchestrator_llm(self, request: LLMRequest) -> LLMResponse:
         """Call the orchestrator (large context) LLM."""
         return await self._make_api_call(self.orchestrator_config, request, LLMRole.ORCHESTRATOR)
 
     async def _make_api_call(
-        self, llm_config: Dict[str, Any], request: LLMRequest, role: LLMRole
-    ) -> Dict[str, Any]:
+        self, llm_config: LLMBackendConfig, request: LLMRequest, role: LLMRole
+    ) -> LLMResponse:
         """Make API call to specified LLM."""
         start_time = time.time()
 
-        if not llm_config.get("api_url"):
+        if not llm_config.api_url:
             raise ValueError(f"No API URL configured for {role.value} LLM")
 
-        url = f"{llm_config['api_url'].rstrip('/')}/v1/chat/completions"
+        url = f"{llm_config.api_url.rstrip('/')}/v1/chat/completions"
 
         headers = {}
-        if llm_config.get("api_key"):
-            headers["Authorization"] = f"Bearer {llm_config['api_key']}"
+        if llm_config.api_key:
+            headers["Authorization"] = f"Bearer {llm_config.api_key}"
 
         # Build messages with optional system prompt
         messages = []
@@ -348,13 +423,13 @@ class LLMManager:
             messages.append({"role": "system", "content": request.system_prompt})
         messages.append({"role": "user", "content": request.content})
 
-        payload = {
-            "model": llm_config["model"],
-            "messages": messages,
-            "temperature": request.temperature or llm_config["temperature"],
-            "max_tokens": request.max_tokens or llm_config["max_tokens"],
-            "stream": False,
-        }
+        payload = APIPayload(
+            model=llm_config.model,
+            messages=messages,
+            temperature=request.temperature or llm_config.temperature,
+            max_tokens=request.max_tokens or llm_config.max_tokens,
+            stream=False,
+        )
 
         # Add structured output if requested
         if request.structured_output:
@@ -363,30 +438,43 @@ class LLMManager:
             if backend_type == "vllm":
                 # vLLM now uses OpenAI-compatible response_format (updated API)
                 if "json_schema" in request.structured_output:
-                    payload["response_format"] = {
+                    payload.response_format = {
                         "type": "json_schema",
                         "json_schema": request.structured_output["json_schema"]
                     }
                 else:
-                    payload["response_format"] = {"type": "json_object"}
+                    payload.response_format = {"type": "json_object"}
             elif backend_type == "llamacpp":
                 # llama.cpp uses grammar constraints (simplified JSON grammar)
                 json_grammar = self._create_json_grammar(request.structured_output)
-                payload["grammar"] = json_grammar
+                payload.grammar = json_grammar
             else:
                 # OpenAI and other backends use response_format
                 if "json_schema" in request.structured_output:
-                    payload["response_format"] = {
+                    payload.response_format = {
                         "type": "json_schema",
                         "json_schema": request.structured_output["json_schema"]
                     }
                 else:
-                    payload["response_format"] = {"type": "json_object"}
+                    payload.response_format = {"type": "json_object"}
+
+        # Convert payload to dict for requests library
+        payload_dict = {
+            "model": payload.model,
+            "messages": payload.messages,
+            "temperature": payload.temperature,
+            "max_tokens": payload.max_tokens,
+            "stream": payload.stream,
+        }
+        if payload.response_format:
+            payload_dict["response_format"] = payload.response_format
+        if payload.grammar:
+            payload_dict["grammar"] = payload.grammar
 
         # Debug: Log the request details
         logger.info(f"LLM Request: {role.value} to {url}")
-        logger.info(f"Model: {payload['model']}, Max tokens: {payload['max_tokens']}")
-        logger.debug(f"Request payload: {payload}")
+        logger.info(f"Model: {payload.model}, Max tokens: {payload.max_tokens}")
+        logger.debug(f"Request payload: {payload_dict}")
 
         # Set timeout based on LLM role - orchestrator needs more time for large prompts
         timeout_seconds = (
@@ -394,7 +482,7 @@ class LLMManager:
         )
 
         logger.debug(f"Making HTTP request to {url} with timeout {timeout_seconds}s")
-        response = self.session.post(url, json=payload, headers=headers, timeout=timeout_seconds)
+        response = self.session.post(url, json=payload_dict, headers=headers, timeout=timeout_seconds)
         logger.debug(f"HTTP response status: {response.status_code}")
         logger.debug(f"HTTP response headers: {dict(response.headers)}")
 
@@ -426,14 +514,14 @@ class LLMManager:
             logger.error(f"LLM response content is empty. Message: {message}")
             raise ValueError("LLM response content is empty")
 
-        return {
-            "content": content,
-            "reasoning_content": reasoning_content,  # Separate field for reasoning
-            "llm_used": role.value,
-            "duration_seconds": duration,
-            "input_tokens": len(request.content) // TOKEN_ESTIMATION_DIVISOR,  # Rough estimate
-            "success": True,
-        }
+        return LLMResponse(
+            content=content,
+            reasoning_content=reasoning_content,
+            llm_used=role.value,
+            duration_seconds=duration,
+            input_tokens=len(request.content) // TOKEN_ESTIMATION_DIVISOR,
+            success=True,
+        )
 
     def _get_backend_type_for_role(self, role: LLMRole) -> str:
         """Get backend type for the specified LLM role."""
@@ -487,42 +575,40 @@ value ::= "true" | "false" | "\\"" [^"]* "\\""'''
     def is_llm_available(self, role: LLMRole) -> bool:
         """Check if a specific LLM is configured and available."""
         if role == LLMRole.FAST:
-            return bool(self.fast_config.get("api_url") and self.fast_config.get("model"))
+            return bool(self.fast_config.api_url and self.fast_config.model)
         else:
-            return bool(
-                self.orchestrator_config.get("api_url") and self.orchestrator_config.get("model")
-            )
+            return bool(self.orchestrator_config.api_url and self.orchestrator_config.model)
 
-    def get_available_features(self) -> Dict[str, bool]:
+    def get_available_features(self) -> FeatureAvailability:
         """Get which AI features are available based on LLM configuration."""
         fast_available = self.is_llm_available(LLMRole.FAST)
         orchestrator_available = self.is_llm_available(LLMRole.ORCHESTRATOR)
         any_llm_available = fast_available or orchestrator_available
 
-        return {
+        return FeatureAvailability(
             # LLM-powered features
-            "architecture_analysis": orchestrator_available,  # Requires orchestrator LLM
-            "docstring_generation": fast_available,  # Can use fast LLM
-            "code_smell_detection": fast_available,  # Can use fast LLM
-            "coverage_assessment": orchestrator_available,  # Requires orchestrator LLM
-            "llm_validation": any_llm_available,  # Any LLM works
+            architecture_analysis=orchestrator_available,  # Requires orchestrator LLM
+            docstring_generation=fast_available,  # Can use fast LLM
+            code_smell_detection=fast_available,  # Can use fast LLM
+            coverage_assessment=orchestrator_available,  # Requires orchestrator LLM
+            llm_validation=any_llm_available,  # Any LLM works
             # Embedding-only features (no LLM required)
-            "semantic_similarity": True,  # Always available (uses local embeddings)
-            "embedding_clustering": True,  # Always available (uses local embeddings)
-            "duplicate_detection": True,  # Always available (uses local embeddings)
-        }
+            semantic_similarity=True,  # Always available (uses local embeddings)
+            embedding_clustering=True,  # Always available (uses local embeddings)
+            duplicate_detection=True,  # Always available (uses local embeddings)
+        )
 
-    def get_status(self) -> Dict[str, bool | int | Dict[str, bool]]:
+    def get_status(self) -> LLMStatus:
         """Get status of both LLMs."""
-        return {
-            "fast_configured": self.is_llm_available(LLMRole.FAST),
-            "orchestrator_configured": self.is_llm_available(LLMRole.ORCHESTRATOR),
-            "context_threshold": self.context_threshold,
-            "fallback_enabled": False,  # Always disabled for predictable behavior
-            "available_features": self.get_available_features(),
-        }
+        return LLMStatus(
+            fast_configured=self.is_llm_available(LLMRole.FAST),
+            orchestrator_configured=self.is_llm_available(LLMRole.ORCHESTRATOR),
+            context_threshold=self.context_threshold,
+            fallback_enabled=False,  # Always disabled for predictable behavior
+            available_features=self.get_available_features(),
+        )
 
-    def process_request_sync(self, request: LLMRequest) -> Dict[str, Any]:
+    def process_request_sync(self, request: LLMRequest) -> LLMResponse:
         """Synchronous wrapper for process_request to support legacy code."""
         import asyncio
         try:
@@ -536,14 +622,14 @@ value ::= "true" | "false" | "\\"" [^"]* "\\""'''
                 asyncio.set_event_loop(None)
         except Exception as e:
             logger.error(f"Sync LLM request failed: {e}")
-            return {
-                "content": f"LLM sync call failed: {e}",
-                "llm_used": "error",
-                "duration_seconds": 0,
-                "input_tokens": 0,
-                "success": False,
-                "error": str(e)
-            }
+            return LLMResponse(
+                content=f"LLM sync call failed: {e}",
+                llm_used="error",
+                duration_seconds=0,
+                input_tokens=0,
+                success=False,
+                error=str(e)
+            )
 
 
 def create_llm_manager(config: Optional["LLMConfig"] = None) -> Optional[LLMManager]:
