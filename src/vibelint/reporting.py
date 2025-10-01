@@ -10,7 +10,7 @@ vibelint/src/vibelint/reporting.py
 
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -29,6 +29,14 @@ __all__ = [
     "BUILTIN_FORMATTERS",
     "FORMAT_CHOICES",
     "DEFAULT_FORMAT",
+    "ExecutiveSummary",
+    "PriorityAction",
+    "TreeViolation",
+    "Synthesis",
+    "AnalysisResults",
+    "FileAnalysisEntry",
+    "ContentAnalysis",
+    "TreeAnalysis",
 ]
 
 
@@ -39,6 +47,76 @@ class VerbosityLevel(Enum):
     TACTICAL = "tactical"  # Actionable items for development
     DETAILED = "detailed"  # Comprehensive analysis with context
     FORENSIC = "forensic"  # Complete diagnostic information
+
+
+@dataclass
+class ExecutiveSummary:
+    """High-level summary of analysis results."""
+
+    overall_health: str
+    critical_issues: int
+    improvement_opportunities: int
+    estimated_effort: str
+
+
+@dataclass
+class PriorityAction:
+    """Priority action item from analysis."""
+
+    title: str
+    priority: str
+    description: str
+    effort_hours: str
+    risk_if_ignored: str
+
+
+@dataclass
+class TreeViolation:
+    """Organizational/tree structure violation."""
+
+    violation_type: str
+    message: str
+
+
+@dataclass
+class Synthesis:
+    """Synthesis of all analysis results."""
+
+    executive_summary: ExecutiveSummary
+    priority_actions: List[PriorityAction]
+    quick_wins: List[str] = field(default_factory=list)
+
+
+@dataclass
+class TreeAnalysis:
+    """Tree/organizational analysis results."""
+
+    quick_violations: List[TreeViolation] = field(default_factory=list)
+
+
+@dataclass
+class FileAnalysisEntry:
+    """Single file analysis entry with findings."""
+
+    file_path: str
+    findings: List[Finding] = field(default_factory=list)
+
+
+@dataclass
+class ContentAnalysis:
+    """Content/structural analysis results."""
+
+    file_analyses: List[FileAnalysisEntry] = field(default_factory=list)
+
+
+@dataclass
+class AnalysisResults:
+    """Complete analysis results container."""
+
+    synthesis: Synthesis
+    tree_analysis: Optional[TreeAnalysis] = None
+    content_analysis: Optional[ContentAnalysis] = None
+    deep_analysis: Optional[Dict[str, Any]] = None  # Keep as dict for flexibility
 
 
 @dataclass
@@ -76,7 +154,7 @@ class ReportGenerator:
         self.config = config
 
     def generate_comprehensive_report(
-        self, analysis_results: Dict[str, Any], timestamp: Optional[str] = None
+        self, analysis_results: AnalysisResults, timestamp: Optional[str] = None
     ) -> Dict[str, Path]:
         """Generate comprehensive report with all artifacts."""
 
@@ -110,7 +188,7 @@ class ReportGenerator:
         return generated_files
 
     def _generate_main_report(
-        self, analysis_results: Dict[str, Any], report_dir: Path, timestamp: str
+        self, analysis_results: AnalysisResults, report_dir: Path, timestamp: str
     ) -> Path:
         """Generate main analysis report."""
 
@@ -126,11 +204,11 @@ class ReportGenerator:
 
         return report_path
 
-    def _format_main_report_markdown(self, analysis_results: Dict[str, Any], timestamp: str) -> str:
+    def _format_main_report_markdown(self, analysis_results: AnalysisResults, timestamp: str) -> str:
         """Format main report as markdown."""
 
-        executive = analysis_results.get("synthesis", {}).get("executive_summary", {})
-        priority_actions = analysis_results.get("synthesis", {}).get("priority_actions", [])
+        executive = analysis_results.synthesis.executive_summary
+        priority_actions = analysis_results.synthesis.priority_actions
 
         content = f"""# Vibelint Analysis Report
 
@@ -139,22 +217,22 @@ Verbosity Level: {self.config.verbosity_level.value}
 
 ## Executive Summary
 
-- **Overall Health**: {executive.get('overall_health', 'Unknown')}
-- **Critical Issues**: {executive.get('critical_issues', 0)}
-- **Improvement Opportunities**: {executive.get('improvement_opportunities', 0)}
-- **Estimated Effort**: {executive.get('estimated_effort', 'Unknown')}
+- **Overall Health**: {executive.overall_health}
+- **Critical Issues**: {executive.critical_issues}
+- **Improvement Opportunities**: {executive.improvement_opportunities}
+- **Estimated Effort**: {executive.estimated_effort}
 
 ## Priority Actions
 
 """
 
         for i, action in enumerate(priority_actions[:5], 1):
-            content += f"""### {i}. {action.get('title', 'Unknown Action')} ({action.get('priority', 'P?')})
+            content += f"""### {i}. {action.title} ({action.priority})
 
-{action.get('description', 'No description available')}
+{action.description}
 
-**Effort**: {action.get('effort_hours', '?')} hours
-**Risk if ignored**: {action.get('risk_if_ignored', 'Unknown')}
+**Effort**: {action.effort_hours} hours
+**Risk if ignored**: {action.risk_if_ignored}
 
 """
 
@@ -164,34 +242,35 @@ Verbosity Level: {self.config.verbosity_level.value}
 
         return content
 
-    def _add_findings_section(self, analysis_results: Dict[str, Any]) -> str:
+    def _add_findings_section(self, analysis_results: AnalysisResults) -> str:
         """Add findings section based on verbosity level."""
         content = "\n## Findings Summary\n\n"
 
         # Tree violations
-        tree_violations = analysis_results.get("tree_analysis", {}).get("quick_violations", [])
-        if tree_violations:
-            content += f"### Organizational Issues ({len(tree_violations)})\n\n"
-            for violation in tree_violations[: self.config.max_findings_per_category]:
-                content += f"- **{violation.get('violation_type', 'Unknown')}**: {violation.get('message', 'No message')}\n"
-            content += "\n"
+        if analysis_results.tree_analysis:
+            tree_violations = analysis_results.tree_analysis.quick_violations
+            if tree_violations:
+                content += f"### Organizational Issues ({len(tree_violations)})\n\n"
+                for violation in tree_violations[: self.config.max_findings_per_category]:
+                    content += f"- **{violation.violation_type}**: {violation.message}\n"
+                content += "\n"
 
         # Content findings
-        content_findings = []
-        for file_analysis in analysis_results.get("content_analysis", {}).get("file_analyses", []):
-            findings = file_analysis.get("analysis", {}).get("findings", [])
-            content_findings.extend(findings)
+        if analysis_results.content_analysis:
+            content_findings = []
+            for file_analysis in analysis_results.content_analysis.file_analyses:
+                content_findings.extend(file_analysis.findings)
 
-        if content_findings:
-            content += f"### Structural Issues ({len(content_findings)})\n\n"
-            for finding in content_findings[: self.config.max_findings_per_category]:
-                content += f"- **{finding.get('rule_id', 'Unknown')}**: {finding.get('message', 'No message')}\n"
-            content += "\n"
+            if content_findings:
+                content += f"### Structural Issues ({len(content_findings)})\n\n"
+                for finding in content_findings[: self.config.max_findings_per_category]:
+                    content += f"- **{finding.rule_id}**: {finding.message}\n"
+                content += "\n"
 
         return content
 
     def _generate_artifacts(
-        self, analysis_results: Dict[str, Any], report_dir: Path, timestamp: str
+        self, analysis_results: AnalysisResults, report_dir: Path, timestamp: str
     ) -> Dict[str, Path]:
         """Generate detailed artifacts for different analysis aspects."""
 
@@ -201,26 +280,43 @@ Verbosity Level: {self.config.verbosity_level.value}
         artifact_paths = {}
 
         # Generate JSON artifacts for each analysis level
-        if "tree_analysis" in analysis_results:
+        if analysis_results.tree_analysis:
             tree_path = artifacts_dir / "organizational_analysis.json"
+            # Convert dataclass to dict for JSON serialization
+            tree_data = {
+                "quick_violations": [
+                    {"violation_type": v.violation_type, "message": v.message}
+                    for v in analysis_results.tree_analysis.quick_violations
+                ]
+            }
             tree_path.write_text(
-                json.dumps(analysis_results["tree_analysis"], indent=2, default=str),
+                json.dumps(tree_data, indent=2, default=str),
                 encoding="utf-8",
             )
             artifact_paths["organizational"] = tree_path
 
-        if "content_analysis" in analysis_results:
+        if analysis_results.content_analysis:
             content_path = artifacts_dir / "structural_analysis.json"
+            # Convert dataclass to dict for JSON serialization
+            content_data = {
+                "file_analyses": [
+                    {
+                        "file_path": fa.file_path,
+                        "findings": [f.to_dict() for f in fa.findings],
+                    }
+                    for fa in analysis_results.content_analysis.file_analyses
+                ]
+            }
             content_path.write_text(
-                json.dumps(analysis_results["content_analysis"], indent=2, default=str),
+                json.dumps(content_data, indent=2, default=str),
                 encoding="utf-8",
             )
             artifact_paths["structural"] = content_path
 
-        if "deep_analysis" in analysis_results:
+        if analysis_results.deep_analysis:
             arch_path = artifacts_dir / "architectural_analysis.json"
             arch_path.write_text(
-                json.dumps(analysis_results["deep_analysis"], indent=2, default=str),
+                json.dumps(analysis_results.deep_analysis, indent=2, default=str),
                 encoding="utf-8",
             )
             artifact_paths["architectural"] = arch_path
@@ -228,11 +324,11 @@ Verbosity Level: {self.config.verbosity_level.value}
         return artifact_paths
 
     def _generate_quick_action_plan(
-        self, analysis_results: Dict[str, Any], report_dir: Path, timestamp: str
+        self, analysis_results: AnalysisResults, report_dir: Path, timestamp: str
     ) -> Path:
         """Generate quick action plan for immediate development focus."""
 
-        synthesis = analysis_results.get("synthesis", {})
+        synthesis = analysis_results.synthesis
 
         quick_plan = f"""# Quick Action Plan
 Generated: {timestamp}
@@ -242,22 +338,18 @@ Generated: {timestamp}
 """
 
         # Add quick wins
-        quick_wins = synthesis.get("quick_wins", [])
+        quick_wins = synthesis.quick_wins
         for i, win in enumerate(quick_wins[:5], 1):
             quick_plan += f"{i}. {win}\n"
 
         quick_plan += "\n## Priority Issues (requires planning)\n\n"
 
         # Add priority actions
-        priority_actions = synthesis.get("priority_actions", [])
+        priority_actions = synthesis.priority_actions
         for action in priority_actions[:3]:
-            title = action.get("title", "Unknown action")
-            priority = action.get("priority", "P?")
-            effort = action.get("effort_hours", "?")
-
-            quick_plan += f"### {title} ({priority})\n"
-            quick_plan += f"**Effort**: {effort} hours\n"
-            quick_plan += f"**Description**: {action.get('description', 'No description')}\n\n"
+            quick_plan += f"### {action.title} ({action.priority})\n"
+            quick_plan += f"**Effort**: {action.effort_hours} hours\n"
+            quick_plan += f"**Description**: {action.description}\n\n"
 
         quick_plan_path = report_dir / "QUICK_ACTION_PLAN.md"
         quick_plan_path.write_text(quick_plan, encoding="utf-8")
@@ -301,61 +393,67 @@ Generated: {timestamp}
 
         return index_path
 
-    def _filter_by_verbosity(self, analysis_results: Dict[str, Any]) -> Dict[str, Any]:
+    def _filter_by_verbosity(self, analysis_results: AnalysisResults) -> AnalysisResults:
         """Filter analysis results based on configured verbosity level."""
 
         if self.config.verbosity_level == VerbosityLevel.EXECUTIVE:
             # Only high-level summary and critical issues
-            return {
-                "synthesis": {
-                    "executive_summary": analysis_results.get("synthesis", {}).get(
-                        "executive_summary", {}
-                    ),
-                    "priority_actions": self._extract_critical_issues(analysis_results),
-                }
-            }
+            critical_actions = self._extract_critical_issues(analysis_results)
+            return AnalysisResults(
+                synthesis=Synthesis(
+                    executive_summary=analysis_results.synthesis.executive_summary,
+                    priority_actions=critical_actions,
+                    quick_wins=[],
+                )
+            )
 
         elif self.config.verbosity_level == VerbosityLevel.TACTICAL:
             # Actionable items and priority information
-            filtered = analysis_results.copy()
-
             # Limit findings per category
-            if "content_analysis" in filtered:
-                filtered["content_analysis"] = self._limit_content_findings(
-                    filtered["content_analysis"]
-                )
+            limited_content = None
+            if analysis_results.content_analysis:
+                limited_content = self._limit_content_findings(analysis_results.content_analysis)
 
-            return filtered
+            return AnalysisResults(
+                synthesis=analysis_results.synthesis,
+                tree_analysis=analysis_results.tree_analysis,
+                content_analysis=limited_content,
+                deep_analysis=analysis_results.deep_analysis,
+            )
 
         else:  # DETAILED or FORENSIC
             # Most or all information
             return analysis_results
 
-    def _extract_critical_issues(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _extract_critical_issues(self, analysis_results: AnalysisResults) -> List[PriorityAction]:
         """Extract only critical/blocking issues for executive summary."""
         critical_issues = []
 
         # Check synthesis for critical items
-        synthesis = analysis_results.get("synthesis", {})
-        for action in synthesis.get("priority_actions", []):
-            if action.get("priority") in ["P0", "P1"]:
+        for action in analysis_results.synthesis.priority_actions:
+            if action.priority in ["P0", "P1"]:
                 critical_issues.append(action)
 
         return critical_issues
 
-    def _limit_content_findings(self, content_analysis: Dict[str, Any]) -> Dict[str, Any]:
+    def _limit_content_findings(self, content_analysis: ContentAnalysis) -> ContentAnalysis:
         """Limit content findings for tactical verbosity."""
-        limited = content_analysis.copy()
+        limited_file_analyses = []
 
-        if "file_analyses" in limited:
-            for file_analysis in limited["file_analyses"]:
-                if "analysis" in file_analysis and "findings" in file_analysis["analysis"]:
-                    findings = file_analysis["analysis"]["findings"]
-                    # Keep only high-severity findings for tactical view
-                    high_severity = [f for f in findings if f.get("severity") in ["BLOCK", "WARN"]]
-                    file_analysis["analysis"]["findings"] = high_severity[:5]  # Limit to 5 per file
+        for file_analysis in content_analysis.file_analyses:
+            # Keep only high-severity findings for tactical view
+            high_severity = [
+                f
+                for f in file_analysis.findings
+                if f.severity in [Severity.BLOCK, Severity.WARN]
+            ]
+            limited_file_analyses.append(
+                FileAnalysisEntry(
+                    file_path=file_analysis.file_path, findings=high_severity[:5]  # Limit to 5
+                )
+            )
 
-        return limited
+        return ContentAnalysis(file_analyses=limited_file_analyses)
 
 
 # ===== FORMATTERS =====
@@ -377,9 +475,8 @@ class NaturalLanguageFormatter(BaseFormatter):
 
         # Get max display limit from config
         max_displayed = 50  # Default to 50 issues for readability (0 means no limit)
-        if config and hasattr(config, "get"):
-            max_displayed = config.get("max_displayed_issues", 50)
-        elif config and hasattr(config, "__getitem__"):
+        # Config can be a dict (external API data) - .get() is acceptable here
+        if config and isinstance(config, dict):
             max_displayed = config.get("max_displayed_issues", 50)
 
         # Group findings by severity
@@ -525,6 +622,7 @@ class SarifFormatter(BaseFormatter):
 
     def _severity_to_sarif_level(self, severity: Severity) -> str:
         """Convert vibelint severity to SARIF level."""
+        # Mapping dict - .get() is legitimate for safe enum->string conversion
         mapping = {
             Severity.BLOCK: "error",
             Severity.WARN: "warning",
