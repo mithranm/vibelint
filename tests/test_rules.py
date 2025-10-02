@@ -1,12 +1,11 @@
 """Tests for rules engine."""
 
 from pathlib import Path
-
-import pytest
+from typing import Iterator
 
 from vibelint.config import Config
 from vibelint.rules import RuleEngine
-from vibelint.validators import BaseValidator, Severity
+from vibelint.validators import BaseValidator, Finding, Severity
 
 
 class DummyValidator(BaseValidator):
@@ -15,9 +14,11 @@ class DummyValidator(BaseValidator):
     rule_id = "DUMMY-RULE"
     default_severity = Severity.WARN
 
-    def validate(self, file_path: Path, content: str, config=None):
+    def validate(
+        self, _file_path: Path, _content: str, _config: Config | None = None
+    ) -> Iterator[Finding]:
         """Dummy validation."""
-        return []
+        return iter([])
 
 
 def test_rule_engine_initialization(sample_config: Config):
