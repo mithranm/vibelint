@@ -90,6 +90,11 @@ class JustificationEngine(BaseWorkflow):
         logs_dir = Path(".vibes/logs")
         logs_dir.mkdir(parents=True, exist_ok=True)
 
+        # Auto-create .gitignore in .vibes/ so outputs don't get tracked
+        vibes_gitignore = Path(".vibes/.gitignore")
+        if not vibes_gitignore.exists():
+            vibes_gitignore.write_text("*\n")
+
         # Use the same timestamp as the report files for consistency
         # Master log file for human-readable process logging
         self.master_log_file = logs_dir / f"justification_{self.timestamp}.log"
