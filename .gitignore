@@ -18,7 +18,6 @@ debug.txt
 # Vibelint analysis output directory
 .vibes/
 
-.vibelint-cache/
 .claude/
 coverage.xml
 .coverage
