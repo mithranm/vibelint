@@ -38,8 +38,6 @@ vibelint/
 │       │   │   ├── __init__.py
 │       │   │   └── justification.py
 │       │   ├── __init__.py
-│       │   ├── cleanup.py
-│       │   ├── evaluation.py
 │       │   └── registry.py
 │       ├── VIBECHECKER.txt
 │       ├── __init__.py
@@ -185,6 +183,18 @@ PYTHONPATH=src vibelint diagnostics  # Shows configured models and available fea
 2. isort
 3. ruff check --fix
 4. pyright
+
+### Dead Code Detection
+Run `vulture` to find unused code:
+```bash
+vulture src/vibelint/ --min-confidence 80
+```
+
+**Tips**:
+- `--min-confidence 80`: Reduces false positives (default 60 is noisy)
+- Review findings carefully - vulture can't detect dynamic usage (getattr, importlib, etc.)
+- Mark intentional unused code with `# noqa: vulture` comments
+- Common false positives: `__all__` exports, plugin entry points, abstract methods
 
 ### Standard Testing Pipeline
 1. **Run existing tests**: `tox -e py311` (or appropriate Python version)
@@ -334,7 +344,8 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
     "ruff>=0.1.0",
-    "black>=23.0.0"
+    "black>=23.0.0",
+    "vulture>=2.0"
 ]
 
 [project.scripts]
@@ -11168,7 +11179,6 @@ vibelint/src/vibelint/workflow/__init__.py
 # Import core workflow system
 from .core.base import (BaseWorkflow, WorkflowConfig, WorkflowMetrics,
                         WorkflowPriority, WorkflowResult, WorkflowStatus)
-from .evaluation import WorkflowEvaluator
 # Import registry system
 from .registry import WorkflowRegistry, register_workflow, workflow_registry
 
@@ -11190,674 +11200,9 @@ __all__ = [
     "WorkflowRegistry",
     "workflow_registry",
     "register_workflow",
-    # Evaluation
-    "WorkflowEvaluator",
     # Lazy import functions
     "get_justification_engine",
 ]
-```
-
----
-### File: src/vibelint/workflows/cleanup.py
-
-```python
-"""
-Vibelint Project Cleanup Workflow
-
-Implements systematic project cleanup based on Workflow 7 principles.
-Human-in-the-loop orchestration for cleaning up messy repositories.
-"""
-
-import hashlib
-import subprocess
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List
-
-
-@dataclass
-class DuplicateFile:
-    """Represents a duplicate file found in the project."""
-
-    original: str
-    duplicate: str
-    size: int
-    hash: str
-
-
-@dataclass
-class TempFile:
-    """Represents a temporary file or directory."""
-
-    path: str
-    type: str  # "temp_file" or "temp_directory"
-    size: int
-    pattern: str
-
-
-@dataclass
-class UnusedFile:
-    """Represents a potentially unused Python module."""
-
-    path: str
-    type: str
-    size: int
-
-
-@dataclass
-class LargeFile:
-    """Represents an unusually large file."""
-
-    path: str
-    size: int
-    size_mb: float
-
-
-@dataclass
-class ConfigFile:
-    """Represents a configuration file."""
-
-    path: str
-    type: str
-    pattern: str
-    size: int
-
-
-@dataclass
-class DebugScript:
-    """Represents a debug/test script."""
-
-    path: str
-    type: str
-    pattern: str
-    size: int
-
-
-@dataclass
-class BackupFile:
-    """Represents a backup file."""
-
-    path: str
-    type: str
-    pattern: str
-    size: int
-
-
-@dataclass
-class UntrackedFile:
-    """Represents an untracked file that might be important."""
-
-    path: str
-    type: str
-    size: int
-
-
-@dataclass
-class CleanupRecommendation:
-    """Represents a cleanup recommendation."""
-
-    type: str
-    priority: str
-    description: str
-    impact: str
-    files: List[Any]
-
-
-@dataclass
-class ProjectAnalysis:
-    """Complete project analysis results."""
-
-    duplicate_files: List[DuplicateFile]
-    temp_files: List[TempFile]
-    unused_files: List[UnusedFile]
-    large_files: List[LargeFile]
-    empty_directories: List[str]
-    config_fragments: List[ConfigFile]
-    debug_scripts: List[DebugScript]
-    backup_files: List[BackupFile]
-    untracked_important: List[UntrackedFile]
-    mess_score: float
-    recommendations: List[CleanupRecommendation]
-
-
-@dataclass
-class CleanupAction:
-    """Represents a cleanup action that was executed or skipped."""
-
-    description: str
-    type: str = ""
-    path: str = ""
-
-
-@dataclass
-class CleanupError:
-    """Represents an error encountered during cleanup."""
-
-    error: str
-    path: str = ""
-    action_type: str = ""
-
-
-@dataclass
-class CleanupResults:
-    """Results from executing cleanup actions."""
-
-    executed: List[CleanupAction] = field(default_factory=list)
-    skipped: List[CleanupAction] = field(default_factory=list)
-    errors: List[CleanupError] = field(default_factory=list)
-    space_saved: int = 0
-
-
-@dataclass
-class WorkflowStatus:
-    """Status of the cleanup workflow."""
-
-    analysis: ProjectAnalysis
-    workflow: "ProjectCleanupWorkflow"
-    next_step: str
-
-
-class ProjectCleanupWorkflow:
-    """Systematic project cleanup with human decision points."""
-
-    def __init__(self, project_root: Path):
-        self.project_root = Path(project_root)
-        self.cleanup_log = []
-        self.temp_backup_dir = None
-
-    def analyze_project_mess(self) -> ProjectAnalysis:
-        """
-        Analyze the project to identify cleanup opportunities.
-        Human Decision Point: What types of mess to look for.
-        """
-        duplicate_files = self._find_duplicate_files()
-        temp_files = self._find_temp_files()
-        unused_files = self._find_unused_files()
-        large_files = self._find_large_files()
-        empty_directories = self._find_empty_directories()
-        config_fragments = self._find_config_fragments()
-        debug_scripts = self._find_debug_scripts()
-        backup_files = self._find_backup_files()
-        untracked_important = self._find_untracked_important_files()
-
-        # Calculate mess score
-        mess_score = self._calculate_mess_score(
-            duplicate_files,
-            temp_files,
-            unused_files,
-            empty_directories,
-            debug_scripts,
-            backup_files,
-            large_files,
-        )
-        recommendations = self._generate_cleanup_recommendations(
-            duplicate_files,
-            temp_files,
-            unused_files,
-            empty_directories,
-            debug_scripts,
-            backup_files,
-        )
-
-        return ProjectAnalysis(
-            duplicate_files=duplicate_files,
-            temp_files=temp_files,
-            unused_files=unused_files,
-            large_files=large_files,
-            empty_directories=empty_directories,
-            config_fragments=config_fragments,
-            debug_scripts=debug_scripts,
-            backup_files=backup_files,
-            untracked_important=untracked_important,
-            mess_score=mess_score,
-            recommendations=recommendations,
-        )
-
-    def _find_duplicate_files(self) -> List[DuplicateFile]:
-        """Find duplicate files by content hash."""
-        file_hashes = {}
-        duplicates = []
-
-        for file_path in self.project_root.rglob("*"):
-            if file_path.is_file() and not self._should_ignore_file(file_path):
-                try:
-                    with open(file_path, "rb") as f:
-                        file_hash = hashlib.md5(f.read()).hexdigest()
-
-                    if file_hash in file_hashes:
-                        duplicates.append(
-                            DuplicateFile(
-                                original=str(file_hashes[file_hash]),
-                                duplicate=str(file_path),
-                                size=file_path.stat().st_size,
-                                hash=file_hash,
-                            )
-                        )
-                    else:
-                        file_hashes[file_hash] = file_path
-
-                except (IOError, OSError):
-                    continue
-
-        return duplicates
-
-    def _find_temp_files(self) -> List[TempFile]:
-        """Find temporary and build artifacts."""
-        temp_patterns = [
-            "*.tmp",
-            "*.temp",
-            "*.bak",
-            "*.swp",
-            "*.swo",
-            "*~",
-            "#*#",
-            ".#*",
-            "*.orig",
-            "*.rej",
-            "__pycache__/",
-            "*.pyc",
-            "*.pyo",
-            "*.pyd",
-            ".pytest_cache/",
-            ".coverage",
-            "*.egg-info/",
-            "node_modules/",
-            ".npm/",
-            "yarn-error.log",
-            ".DS_Store",
-            "Thumbs.db",
-            "desktop.ini",
-            ".vscode/",
-            ".idea/",
-            "*.log",
-        ]
-
-        temp_files = []
-        for pattern in temp_patterns:
-            for file_path in self.project_root.rglob(pattern):
-                if file_path.exists():
-                    temp_files.append(
-                        TempFile(
-                            path=str(file_path),
-                            type="temp_file" if file_path.is_file() else "temp_directory",
-                            size=self._get_size(file_path),
-                            pattern=pattern,
-                        )
-                    )
-
-        return temp_files
-
-    def _find_unused_files(self) -> List[UnusedFile]:
-        """Find files that appear unused (not imported/referenced)."""
-        # Simple heuristic - look for Python files that aren't imported
-        python_files = list(self.project_root.rglob("*.py"))
-        all_content = ""
-
-        # Read all Python files to check for imports
-        for py_file in python_files:
-            try:
-                with open(py_file, "r", encoding="utf-8") as f:
-                    all_content += f.read() + "\n"
-            except (IOError, UnicodeDecodeError):
-                continue
-
-        unused_files = []
-        for py_file in python_files:
-            # Skip if it's a main script or test file
-            if py_file.name in ["__main__.py", "__init__.py"] or "test" in py_file.name.lower():
-                continue
-
-            module_name = py_file.stem
-            # Check if module is imported anywhere
-            if (
-                f"import {module_name}" not in all_content
-                and f"from {module_name}" not in all_content
-            ):
-                try:
-                    size = py_file.stat().st_size
-                except OSError:
-                    size = 0
-                unused_files.append(
-                    UnusedFile(
-                        path=str(py_file), type="potentially_unused_python_module", size=size
-                    )
-                )
-
-        return unused_files
-
-    def _find_large_files(self) -> List[LargeFile]:
-        """Find unusually large files that might need attention."""
-        large_files = []
-        size_threshold = 1024 * 1024  # 1MB
-
-        for file_path in self.project_root.rglob("*"):
-            if file_path.is_file() and file_path.stat().st_size > size_threshold:
-                large_files.append(
-                    LargeFile(
-                        path=str(file_path),
-                        size=file_path.stat().st_size,
-                        size_mb=file_path.stat().st_size / (1024 * 1024),
-                    )
-                )
-
-        return sorted(large_files, key=lambda x: x.size, reverse=True)
-
-    def _find_empty_directories(self) -> List[str]:
-        """Find empty directories that can be removed."""
-        empty_dirs = []
-
-        for dir_path in self.project_root.rglob("*"):
-            if dir_path.is_dir() and not any(dir_path.iterdir()):
-                empty_dirs.append(str(dir_path))
-
-        return empty_dirs
-
-    def _find_config_fragments(self) -> List[ConfigFile]:
-        """Find scattered configuration files that might be consolidated."""
-        config_patterns = [
-            "*.toml",
-            "*.yaml",
-            "*.yml",
-            "*.json",
-            "*.ini",
-            "*.cfg",
-            ".env*",
-            "Dockerfile*",
-            "requirements*.txt",
-            "setup.py",
-            "pyproject.toml",
-            "setup.cfg",
-            "tox.ini",
-            ".gitignore",
-        ]
-
-        config_files = []
-        for pattern in config_patterns:
-            for file_path in self.project_root.rglob(pattern):
-                if file_path.is_file():
-                    config_files.append(
-                        ConfigFile(
-                            path=str(file_path),
-                            type="config_file",
-                            pattern=pattern,
-                            size=file_path.stat().st_size,
-                        )
-                    )
-
-        return config_files
-
-    def _find_debug_scripts(self) -> List[DebugScript]:
-        """Find debug/test scripts that might be temporary."""
-        debug_patterns = [
-            "debug_*.py",
-            "test_*.py",
-            "*_debug.py",
-            "*_test.py",
-            "scratch*.py",
-            "temp*.py",
-            "fix_*.py",
-            "quick_*.py",
-        ]
-
-        debug_files = []
-        for pattern in debug_patterns:
-            for file_path in self.project_root.rglob(pattern):
-                if file_path.is_file():
-                    debug_files.append(
-                        DebugScript(
-                            path=str(file_path),
-                            type="debug_script",
-                            pattern=pattern,
-                            size=file_path.stat().st_size,
-                        )
-                    )
-
-        return debug_files
-
-    def _find_backup_files(self) -> List[BackupFile]:
-        """Find backup files that can be cleaned up."""
-        backup_patterns = [
-            "*.backup",
-            "*.bkp",
-            "*_backup.*",
-            "*.old",
-            "*_old.*",
-            "*.save",
-            "*_save.*",
-            "*.copy",
-        ]
-
-        backup_files = []
-        for pattern in backup_patterns:
-            for file_path in self.project_root.rglob(pattern):
-                if file_path.is_file():
-                    backup_files.append(
-                        BackupFile(
-                            path=str(file_path),
-                            type="backup_file",
-                            pattern=pattern,
-                            size=file_path.stat().st_size,
-                        )
-                    )
-
-        return backup_files
-
-    def _find_untracked_important_files(self) -> List[UntrackedFile]:
-        """Find untracked files that might be important."""
-        # Do not swallow subprocess errors – allow caller to handle if needed.
-        result = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        untracked_files = []
-        if result.returncode == 0:
-            for line in result.stdout.strip().split("\n"):
-                if line:
-                    file_path = self.project_root / line
-                    if file_path.is_file():
-                        try:
-                            size = file_path.stat().st_size
-                        except OSError:
-                            size = 0
-                        untracked_files.append(
-                            UntrackedFile(path=str(file_path), type="untracked_file", size=size)
-                        )
-
-        else:
-            # If git failed, raise to avoid silently returning a fallback result.
-            raise RuntimeError(
-                f"git ls-files failed with return code {result.returncode}: {result.stderr}"
-            )
-
-        return untracked_files
-
-    def _should_ignore_file(self, file_path: Path) -> bool:
-        """Check if file should be ignored in analysis."""
-        ignore_patterns = [
-            ".git/",
-            "__pycache__/",
-            ".pytest_cache/",
-            "node_modules/",
-            ".venv/",
-            "venv/",
-            ".env/",
-            "env/",
-        ]
-
-        path_str = str(file_path)
-        return any(pattern in path_str for pattern in ignore_patterns)
-
-    def _get_size(self, path: Path) -> int:
-        """Get size of file or directory."""
-        if path.is_file():
-            return path.stat().st_size
-        elif path.is_dir():
-            return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-        return 0
-
-    def _calculate_mess_score(
-        self,
-        duplicate_files: List[DuplicateFile],
-        temp_files: List[TempFile],
-        unused_files: List[UnusedFile],
-        empty_directories: List[str],
-        debug_scripts: List[DebugScript],
-        backup_files: List[BackupFile],
-        large_files: List[LargeFile],
-    ) -> float:
-        """Calculate overall mess score (0-100)."""
-        score = 0
-
-        # Weight different types of mess
-        score += len(duplicate_files) * 5
-        score += len(temp_files) * 2
-        score += len(unused_files) * 3
-        score += len(empty_directories) * 1
-        score += len(debug_scripts) * 2
-        score += len(backup_files) * 3
-
-        # Large files add to mess
-        total_large_size = sum(f.size for f in large_files)
-        score += total_large_size / (1024 * 1024 * 10)  # 10MB = 1 point
-
-        return min(score, 100)  # Cap at 100
-
-    def _generate_cleanup_recommendations(
-        self,
-        duplicate_files: List[DuplicateFile],
-        temp_files: List[TempFile],
-        unused_files: List[UnusedFile],
-        empty_directories: List[str],
-        debug_scripts: List[DebugScript],
-        backup_files: List[BackupFile],
-    ) -> List[CleanupRecommendation]:
-        """Generate prioritized cleanup recommendations."""
-        recommendations = []
-
-        if duplicate_files:
-            recommendations.append(
-                CleanupRecommendation(
-                    type="remove_duplicates",
-                    priority="high",
-                    description=f"Remove {len(duplicate_files)} duplicate files",
-                    impact="disk_space",
-                    files=duplicate_files,
-                )
-            )
-
-        if temp_files:
-            recommendations.append(
-                CleanupRecommendation(
-                    type="remove_temp_files",
-                    priority="high",
-                    description=f"Remove {len(temp_files)} temporary files",
-                    impact="cleanliness",
-                    files=temp_files,
-                )
-            )
-
-        if backup_files:
-            recommendations.append(
-                CleanupRecommendation(
-                    type="remove_backup_files",
-                    priority="medium",
-                    description=f"Remove {len(backup_files)} backup files",
-                    impact="cleanliness",
-                    files=backup_files,
-                )
-            )
-
-        if debug_scripts:
-            recommendations.append(
-                CleanupRecommendation(
-                    type="review_debug_scripts",
-                    priority="medium",
-                    description=f"Review {len(debug_scripts)} debug scripts",
-                    impact="organization",
-                    files=debug_scripts,
-                )
-            )
-
-        if empty_directories:
-            recommendations.append(
-                CleanupRecommendation(
-                    type="remove_empty_dirs",
-                    priority="low",
-                    description=f"Remove {len(empty_directories)} empty directories",
-                    impact="cleanliness",
-                    files=empty_directories,
-                )
-            )
-
-        return recommendations
-
-    def commit_cleanup_results(self, results: CleanupResults, cleanup_name: str):
-        """Commit cleanup results with detailed message."""
-        if not results.executed:
-            print("No cleanup actions were executed - nothing to commit")
-            return
-
-        # Stage all changes
-        subprocess.run(["git", "add", "-A"], cwd=self.project_root, check=True)
-
-        # Create comprehensive commit message
-        commit_msg = f"Cleanup: {cleanup_name}\n\n"
-        commit_msg += f"Space saved: {results.space_saved / (1024*1024):.1f} MB\n"
-        commit_msg += f"Actions executed: {len(results.executed)}\n"
-        commit_msg += f"Actions skipped: {len(results.skipped)}\n\n"
-
-        if results.executed:
-            commit_msg += "Executed cleanup actions:\n"
-            for action in results.executed:
-                commit_msg += f"- {action.description}\n"
-
-        if results.errors:
-            commit_msg += f"\nErrors encountered: {len(results.errors)}\n"
-            for error in results.errors:
-                commit_msg += f"- {error.error}\n"
-
-        commit_msg += "\nGenerated with vibelint cleanup workflow"
-
-        # Commit changes
-        subprocess.run(["git", "commit", "-m", commit_msg], cwd=self.project_root, check=True)
-
-        print(f"Committed cleanup results: {cleanup_name}")
-
-
-def run_cleanup_workflow(project_root: str, cleanup_name: str = "general") -> WorkflowStatus:
-    """
-    Main entry point for cleanup workflow.
-    Human Decision Points throughout the process.
-    """
-    workflow = ProjectCleanupWorkflow(Path(project_root))
-
-    print(f"Starting cleanup analysis for: {project_root}")
-
-    # Step 1: Analyze project mess
-    print("Analyzing project structure...")
-    analysis = workflow.analyze_project_mess()
-
-    print(f"Mess score: {analysis.mess_score:.1f}/100")
-    print(f"Found {len(analysis.recommendations)} cleanup recommendations")
-
-    # Step 2: Present recommendations to human
-    print("\nCleanup Recommendations:")
-    for i, rec in enumerate(analysis.recommendations, 1):
-        print(f"{i}. [{rec.priority.upper()}] {rec.description}")
-        print(f"   Impact: {rec.impact}")
-
-    # HUMAN DECISION POINT: Which recommendations to execute
-    print("\nHUMAN DECISION REQUIRED:")
-    print("Which cleanup actions would you like to execute?")
-    print("Available types:", [rec.type for rec in analysis.recommendations])
-
-    # For now, return analysis for human review
-    # In interactive mode, human would approve specific actions
-    return WorkflowStatus(analysis=analysis, workflow=workflow, next_step="human_approval_required")
 ```
 
 ---
@@ -12198,426 +11543,6 @@ class BaseWorkflow(ABC):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(id={self.workflow_id}, status={self._status.value})"
-```
-
----
-### File: src/vibelint/workflows/evaluation.py
-
-```python
-"""
-Workflow evaluation framework for measuring effectiveness and performance.
-
-Provides metrics collection, benchmarking, and continuous improvement
-capabilities for workflow analysis quality.
-
-vibelint/src/vibelint/workflow_evaluation.py
-"""
-
-import logging
-import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-from .core.base import BaseWorkflow, WorkflowResult, WorkflowStatus
-
-logger = logging.getLogger(__name__)
-
-__all__ = ["WorkflowEvaluator", "EvaluationResult", "PerformanceMetrics", "QualityMetrics"]
-
-
-@dataclass
-class PerformanceMetrics:
-    """Performance evaluation metrics."""
-
-    execution_time_seconds: float
-    memory_usage_mb: Optional[float] = None
-    cpu_usage_percent: Optional[float] = None
-    throughput_files_per_second: Optional[float] = None
-
-    def meets_performance_criteria(self, criteria: Dict[str, float]) -> bool:
-        """Check if performance meets specified criteria."""
-        if "max_execution_time" in criteria:
-            if self.execution_time_seconds > criteria["max_execution_time"]:
-                return False
-
-        if "max_memory_usage" in criteria and self.memory_usage_mb:
-            if self.memory_usage_mb > criteria["max_memory_usage"]:
-                return False
-
-        return True
-
-
-@dataclass
-class QualityMetrics:
-    """Quality evaluation metrics."""
-
-    confidence_score: float
-    accuracy_score: Optional[float] = None
-    precision: Optional[float] = None
-    recall: Optional[float] = None
-    coverage_percentage: Optional[float] = None
-    false_positive_rate: Optional[float] = None
-
-    def meets_quality_criteria(self, criteria: Dict[str, float]) -> bool:
-        """Check if quality meets specified criteria."""
-        if "min_confidence_score" in criteria:
-            if self.confidence_score < criteria["min_confidence_score"]:
-                return False
-
-        if "min_coverage_percentage" in criteria and self.coverage_percentage:
-            if self.coverage_percentage < criteria["min_coverage_percentage"]:
-                return False
-
-        return True
-
-
-@dataclass
-class EvaluationResult:
-    """Result of workflow evaluation."""
-
-    workflow_id: str
-    timestamp: str
-    overall_score: float  # 0.0 to 1.0
-
-    # Detailed metrics
-    performance: PerformanceMetrics
-    quality: QualityMetrics
-
-    # Compliance checks
-    meets_criteria: bool
-    criteria_violations: List[str] = field(default_factory=list)
-
-    # Recommendations
-    recommendations: List[str] = field(default_factory=list)
-    improvement_opportunities: List[str] = field(default_factory=list)
-
-    # Comparison data
-    baseline_comparison: Optional[Dict[str, float]] = None
-    trend_analysis: Optional[Dict[str, Any]] = None
-
-
-class WorkflowEvaluator:
-    """Evaluates workflow effectiveness and performance."""
-
-    def __init__(self):
-        self.evaluation_history: Dict[str, List[EvaluationResult]] = {}
-        self.baselines: Dict[str, Dict[str, float]] = {}
-
-    def evaluate_workflow_execution(
-        self, workflow: BaseWorkflow, result: WorkflowResult
-    ) -> EvaluationResult:
-        """Evaluate a completed workflow execution."""
-
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-
-        # Extract performance metrics
-        performance = PerformanceMetrics(
-            execution_time_seconds=result.metrics.execution_time_seconds or 0.0,
-            memory_usage_mb=result.metrics.memory_usage_mb,
-            cpu_usage_percent=result.metrics.cpu_usage_percent,
-            throughput_files_per_second=self._calculate_throughput(result.metrics),
-        )
-
-        # Extract quality metrics
-        quality = QualityMetrics(
-            confidence_score=result.metrics.confidence_score,
-            accuracy_score=result.metrics.accuracy_score,
-            coverage_percentage=result.metrics.coverage_percentage,
-        )
-
-        # Get evaluation criteria
-        criteria = workflow.get_evaluation_criteria()
-
-        # Check compliance
-        meets_criteria = True
-        violations = []
-
-        if not performance.meets_performance_criteria(criteria.get("performance", {})):
-            meets_criteria = False
-            violations.append("Performance criteria not met")
-
-        if not quality.meets_quality_criteria(criteria.get("quality", {})):
-            meets_criteria = False
-            violations.append("Quality criteria not met")
-
-        # Calculate overall score
-        overall_score = self._calculate_overall_score(performance, quality, result)
-
-        # Generate recommendations
-        recommendations = self._generate_recommendations(workflow, performance, quality, result)
-
-        # Create evaluation result
-        evaluation = EvaluationResult(
-            workflow_id=workflow.workflow_id,
-            timestamp=timestamp,
-            overall_score=overall_score,
-            performance=performance,
-            quality=quality,
-            meets_criteria=meets_criteria,
-            criteria_violations=violations,
-            recommendations=recommendations,
-        )
-
-        # Add baseline comparison if available
-        if workflow.workflow_id in self.baselines:
-            evaluation.baseline_comparison = self._compare_to_baseline(
-                workflow.workflow_id, performance, quality
-            )
-
-        # Store evaluation
-        if workflow.workflow_id not in self.evaluation_history:
-            self.evaluation_history[workflow.workflow_id] = []
-        self.evaluation_history[workflow.workflow_id].append(evaluation)
-
-        # Update baseline if this is a good execution
-        if overall_score > 0.8 and meets_criteria:
-            self._update_baseline(workflow.workflow_id, performance, quality)
-
-        return evaluation
-
-    def _calculate_throughput(self, metrics) -> Optional[float]:
-        """Calculate files processed per second."""
-        if metrics.execution_time_seconds and metrics.files_processed:
-            if metrics.execution_time_seconds > 0:
-                return metrics.files_processed / metrics.execution_time_seconds
-        return None
-
-    def _calculate_overall_score(
-        self, performance: PerformanceMetrics, quality: QualityMetrics, result: WorkflowResult
-    ) -> float:
-        """Calculate overall workflow score."""
-
-        # Base score from execution status
-        if result.status == WorkflowStatus.COMPLETED:
-            base_score = 0.6
-        elif result.status == WorkflowStatus.FAILED:
-            return 0.0
-        else:
-            base_score = 0.3
-
-        # Quality contribution (40% weight)
-        quality_score = quality.confidence_score * 0.4
-
-        # Performance contribution (20% weight)
-        # Penalize slow execution
-        performance_score = 0.2
-        if performance.execution_time_seconds > 0:
-            # Assume target is 30 seconds, linear penalty after that
-            if performance.execution_time_seconds <= 30:
-                performance_score = 0.2
-            else:
-                performance_score = max(0.0, 0.2 * (60 - performance.execution_time_seconds) / 30)
-
-        # Findings contribution (20% weight)
-        findings_score = 0.0
-        if result.metrics.findings_generated > 0:
-            # More findings generally better, up to a point
-            findings_score = min(0.2, result.metrics.findings_generated * 0.02)
-
-        return min(1.0, base_score + quality_score + performance_score + findings_score)
-
-    def _generate_recommendations(
-        self,
-        workflow: BaseWorkflow,
-        performance: PerformanceMetrics,
-        quality: QualityMetrics,
-        result: WorkflowResult,
-    ) -> List[str]:
-        """Generate improvement recommendations."""
-
-        recommendations = []
-
-        # Performance recommendations
-        if performance.execution_time_seconds > 60:
-            recommendations.append("Consider optimizing workflow execution time")
-
-        if performance.memory_usage_mb and performance.memory_usage_mb > 1000:
-            recommendations.append("Consider reducing memory usage")
-
-        # Quality recommendations
-        if quality.confidence_score < 0.7:
-            recommendations.append(
-                "Consider improving analysis confidence through better heuristics"
-            )
-
-        if result.metrics.errors_encountered > 0:
-            recommendations.append("Address error handling to improve reliability")
-
-        # Findings recommendations
-        if result.metrics.findings_generated == 0:
-            recommendations.append("Verify workflow is detecting issues appropriately")
-
-        if quality.coverage_percentage and quality.coverage_percentage < 80:
-            recommendations.append("Improve analysis coverage of target files")
-
-        return recommendations
-
-    def _compare_to_baseline(
-        self, workflow_id: str, performance: PerformanceMetrics, quality: QualityMetrics
-    ) -> Dict[str, float]:
-        """Compare current metrics to baseline."""
-
-        baseline = self.baselines[workflow_id]
-        comparison = {}
-
-        if "execution_time" in baseline:
-            comparison["execution_time_ratio"] = (
-                performance.execution_time_seconds / baseline["execution_time"]
-            )
-
-        if "confidence_score" in baseline:
-            comparison["confidence_improvement"] = (
-                quality.confidence_score - baseline["confidence_score"]
-            )
-
-        return comparison
-
-    def _update_baseline(
-        self, workflow_id: str, performance: PerformanceMetrics, quality: QualityMetrics
-    ):
-        """Update baseline metrics for workflow."""
-
-        if workflow_id not in self.baselines:
-            self.baselines[workflow_id] = {}
-
-        baseline = self.baselines[workflow_id]
-
-        # Update with exponential smoothing
-        alpha = 0.3  # Smoothing factor
-
-        if "execution_time" in baseline:
-            baseline["execution_time"] = (
-                alpha * performance.execution_time_seconds
-                + (1 - alpha) * baseline["execution_time"]
-            )
-        else:
-            baseline["execution_time"] = performance.execution_time_seconds
-
-        if "confidence_score" in baseline:
-            baseline["confidence_score"] = (
-                alpha * quality.confidence_score + (1 - alpha) * baseline["confidence_score"]
-            )
-        else:
-            baseline["confidence_score"] = quality.confidence_score
-
-        logger.debug(f"Updated baseline for workflow {workflow_id}")
-
-    def get_workflow_trends(self, workflow_id: str, days: int = 30) -> Optional[Dict[str, Any]]:
-        """Get trend analysis for workflow over specified period."""
-
-        if workflow_id not in self.evaluation_history:
-            return None
-
-        evaluations = self.evaluation_history[workflow_id]
-        if len(evaluations) < 2:
-            return None
-
-        # Simple trend analysis
-        recent_evaluations = evaluations[-min(days, len(evaluations)) :]
-
-        execution_times = [e.performance.execution_time_seconds for e in recent_evaluations]
-        confidence_scores = [e.quality.confidence_score for e in recent_evaluations]
-        overall_scores = [e.overall_score for e in recent_evaluations]
-
-        trends = {
-            "evaluation_count": len(recent_evaluations),
-            "avg_execution_time": sum(execution_times) / len(execution_times),
-            "avg_confidence_score": sum(confidence_scores) / len(confidence_scores),
-            "avg_overall_score": sum(overall_scores) / len(overall_scores),
-            "performance_trend": self._calculate_trend(execution_times),
-            "quality_trend": self._calculate_trend(confidence_scores),
-            "overall_trend": self._calculate_trend(overall_scores),
-        }
-
-        return trends
-
-    def _calculate_trend(self, values: List[float]) -> str:
-        """Calculate simple trend direction."""
-        if len(values) < 2:
-            return "insufficient_data"
-
-        first_half = values[: len(values) // 2]
-        second_half = values[len(values) // 2 :]
-
-        first_avg = sum(first_half) / len(first_half)
-        second_avg = sum(second_half) / len(second_half)
-
-        if second_avg > first_avg * 1.05:
-            return "improving"
-        elif second_avg < first_avg * 0.95:
-            return "degrading"
-        else:
-            return "stable"
-
-    def generate_evaluation_report(
-        self, workflow_ids: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        """Generate comprehensive evaluation report."""
-
-        if workflow_ids is None:
-            workflow_ids = list(self.evaluation_history.keys())
-
-        report = {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "workflows_evaluated": len(workflow_ids),
-            "workflow_summaries": {},
-        }
-
-        for workflow_id in workflow_ids:
-            if workflow_id in self.evaluation_history:
-                evaluations = self.evaluation_history[workflow_id]
-                latest = evaluations[-1] if evaluations else None
-
-                if latest:
-                    trends = self.get_workflow_trends(workflow_id)
-
-                    report["workflow_summaries"][workflow_id] = {
-                        "latest_score": latest.overall_score,
-                        "meets_criteria": latest.meets_criteria,
-                        "execution_count": len(evaluations),
-                        "recommendations": latest.recommendations,
-                        "trends": trends,
-                    }
-
-        return report
-
-    def export_evaluation_data(self, output_path: Path):
-        """Export evaluation data for analysis."""
-        import json
-
-        export_data = {
-            "evaluation_history": {},
-            "baselines": self.baselines,
-            "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-        # Convert evaluation history to serializable format
-        for workflow_id, evaluations in self.evaluation_history.items():
-            export_data["evaluation_history"][workflow_id] = []
-            for eval_result in evaluations:
-                eval_dict = {
-                    "workflow_id": eval_result.workflow_id,
-                    "timestamp": eval_result.timestamp,
-                    "overall_score": eval_result.overall_score,
-                    "meets_criteria": eval_result.meets_criteria,
-                    "performance": {
-                        "execution_time_seconds": eval_result.performance.execution_time_seconds,
-                        "memory_usage_mb": eval_result.performance.memory_usage_mb,
-                        "throughput_files_per_second": eval_result.performance.throughput_files_per_second,
-                    },
-                    "quality": {
-                        "confidence_score": eval_result.quality.confidence_score,
-                        "coverage_percentage": eval_result.quality.coverage_percentage,
-                    },
-                    "recommendations": eval_result.recommendations,
-                }
-                export_data["evaluation_history"][workflow_id].append(eval_dict)
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(export_data, f, indent=2)
-
-        logger.info(f"Evaluation data exported to {output_path}")
 ```
 
 ---
@@ -13422,13 +12347,10 @@ JustificationWorkflow = JustificationEngine
 """
 Workflow registry for managing available workflows.
 
-Provides centralized registration and discovery of workflows with
-metadata and dependency information.
+Simple registration system for BaseWorkflow subclasses.
+Workflows must properly inherit from BaseWorkflow and implement required methods.
 
-Responsibility: Workflow discovery and registration only.
-Workflow logic belongs in individual workflow implementation modules.
-
-vibelint/src/vibelint/workflow/registry.py
+vibelint/src/vibelint/workflows/registry.py
 """
 
 import logging
@@ -13446,13 +12368,14 @@ class WorkflowRegistry:
 
     def __init__(self):
         self._workflows: Dict[str, Type[BaseWorkflow]] = {}
-        self._metadata: Dict[str, Dict] = {}
-        self._builtin_loaded = False
-        self._plugins_loaded = False
+        self._loaded = False
 
     def register(self, workflow_class: Type[BaseWorkflow]) -> None:
-        """Register a workflow class."""
-        # Create temporary instance to get metadata
+        """Register a workflow class that inherits from BaseWorkflow."""
+        if not issubclass(workflow_class, BaseWorkflow):
+            raise TypeError(f"{workflow_class.__name__} must inherit from BaseWorkflow")
+
+        # Create temporary instance to get workflow_id
         temp_instance = workflow_class()
         workflow_id = temp_instance.workflow_id
 
@@ -13463,81 +12386,27 @@ class WorkflowRegistry:
             logger.warning(f"Overwriting existing workflow: {workflow_id}")
 
         self._workflows[workflow_id] = workflow_class
-
-        # Store metadata
-        self._metadata[workflow_id] = {
-            "name": temp_instance.name,
-            "description": temp_instance.description,
-            "category": temp_instance.category,
-            "version": temp_instance.version,
-            "tags": list(temp_instance.tags),
-            "required_inputs": list(temp_instance.get_required_inputs()),
-            "produced_outputs": list(temp_instance.get_produced_outputs()),
-            "dependencies": temp_instance.get_dependencies(),
-            "supports_parallel": temp_instance.supports_parallel_execution(),
-            "class_name": workflow_class.__name__,
-        }
-
         logger.debug(f"Registered workflow: {workflow_id}")
 
     def get_workflow(self, workflow_id: str) -> Optional[Type[BaseWorkflow]]:
         """Get workflow class by ID."""
-        self.ensure_loaded()
+        self._ensure_loaded()
         return self._workflows.get(workflow_id)
 
     def get_all_workflows(self) -> Dict[str, Type[BaseWorkflow]]:
         """Get all registered workflows."""
-        self.ensure_loaded()
+        self._ensure_loaded()
         return self._workflows.copy()
-
-    def get_workflows_by_category(self, category: str) -> Dict[str, Type[BaseWorkflow]]:
-        """Get workflows by category."""
-        filtered = {}
-        for workflow_id, metadata in self._metadata.items():
-            if metadata["category"] == category:
-                filtered[workflow_id] = self._workflows[workflow_id]
-        return filtered
-
-    def get_workflows_by_tag(self, tag: str) -> Dict[str, Type[BaseWorkflow]]:
-        """Get workflows by tag."""
-        filtered = {}
-        for workflow_id, metadata in self._metadata.items():
-            if tag in metadata["tags"]:
-                filtered[workflow_id] = self._workflows[workflow_id]
-        return filtered
-
-    def get_workflow_metadata(self, workflow_id: str) -> Optional[Dict]:
-        """Get workflow metadata."""
-        return self._metadata.get(workflow_id)
 
     def list_workflow_ids(self) -> List[str]:
         """List all workflow IDs."""
-        self.ensure_loaded()
+        self._ensure_loaded()
         return list(self._workflows.keys())
-
-    def validate_dependencies(self, workflow_ids: List[str]) -> Dict[str, List[str]]:
-        """Validate workflow dependencies."""
-        missing_deps = {}
-
-        for workflow_id in workflow_ids:
-            if workflow_id not in self._workflows:
-                missing_deps[workflow_id] = [f"Workflow '{workflow_id}' not found"]
-                continue
-
-            metadata = self._metadata[workflow_id]
-            for dep_id in metadata["dependencies"]:
-                if dep_id not in self._workflows:
-                    if workflow_id not in missing_deps:
-                        missing_deps[workflow_id] = []
-                    missing_deps[workflow_id].append(f"Missing dependency: '{dep_id}'")
-
-        return missing_deps
 
     def unregister(self, workflow_id: str) -> bool:
         """Unregister a workflow."""
         if workflow_id in self._workflows:
             del self._workflows[workflow_id]
-            del self._metadata[workflow_id]
             logger.debug(f"Unregistered workflow: {workflow_id}")
             return True
         return False
@@ -13545,56 +12414,51 @@ class WorkflowRegistry:
     def clear(self) -> None:
         """Clear all registered workflows."""
         self._workflows.clear()
-        self._metadata.clear()
-        self._builtin_loaded = False
-        self._plugins_loaded = False
+        self._loaded = False
         logger.debug("Cleared all workflows from registry")
 
-    def _load_builtin_workflows(self) -> None:
-        """Load built-in workflows directly."""
-        if self._builtin_loaded:
+    def _ensure_loaded(self) -> None:
+        """Ensure workflows are loaded."""
+        if self._loaded:
             return
 
-        # Import and register built-in workflows
-        try:
-            from .implementations.justification import JustificationWorkflow
-            self.register(JustificationWorkflow)
-            logger.debug("Registered built-in workflow: justification")
-        except ImportError as e:
-            logger.warning(f"Failed to load built-in justification workflow: {e}")
+        # Auto-discover workflows in implementations/ directory
+        import importlib
+        from pathlib import Path
 
         try:
-            from .implementations.deadcode import DeadcodeWorkflow
-            self.register(DeadcodeWorkflow)
-            logger.debug("Registered built-in workflow: deadcode")
-        except ImportError as e:
-            logger.warning(f"Failed to load built-in deadcode workflow: {e}")
+            implementations_path = Path(__file__).parent / "implementations"
+            if implementations_path.exists():
+                for py_file in implementations_path.glob("*.py"):
+                    if py_file.name.startswith("_"):
+                        continue
 
-        self._builtin_loaded = True
+                    module_name = f"vibelint.workflows.implementations.{py_file.stem}"
+                    try:
+                        module = importlib.import_module(module_name)
 
-    def _load_plugin_workflows(self) -> None:
-        """Load plugin workflows from entry points."""
-        if self._plugins_loaded:
-            return
+                        # Find all BaseWorkflow subclasses in the module
+                        for attr_name in dir(module):
+                            attr = getattr(module, attr_name)
+                            if (
+                                isinstance(attr, type)
+                                and issubclass(attr, BaseWorkflow)
+                                and attr is not BaseWorkflow
+                            ):
+                                try:
+                                    self.register(attr)
+                                except (TypeError, ValueError) as e:
+                                    logger.debug(
+                                        f"Skipping {attr_name} from {module_name}: {e}"
+                                    )
 
-        try:
-            import pkg_resources
-            for entry_point in pkg_resources.iter_entry_points("vibelint.workflows"):
-                try:
-                    workflow_class = entry_point.load()
-                    self.register(workflow_class)
-                    logger.debug(f"Registered plugin workflow: {entry_point.name}")
-                except Exception as e:
-                    logger.warning(f"Failed to load plugin workflow {entry_point.name}: {e}")
-        except ImportError:
-            logger.debug("pkg_resources not available, skipping plugin workflows")
+                    except ImportError as e:
+                        logger.debug(f"Could not import {module_name}: {e}")
 
-        self._plugins_loaded = True
+        except Exception as e:
+            logger.warning(f"Failed to auto-discover workflows: {e}")
 
-    def ensure_loaded(self) -> None:
-        """Ensure both built-in and plugin workflows are loaded."""
-        self._load_builtin_workflows()
-        self._load_plugin_workflows()
+        self._loaded = True
 
 
 # Global registry instance
@@ -13605,11 +12469,6 @@ def register_workflow(workflow_class: Type[BaseWorkflow]) -> Type[BaseWorkflow]:
     """Decorator for registering workflows."""
     workflow_registry.register(workflow_class)
     return workflow_class
-
-
-# Note: Built-in workflows are now registered via workflow_registry._load_builtin_workflows()
-# Plugin workflows are loaded via workflow_registry._load_plugin_workflows()
-# This ensures clean separation between built-in and external workflows
 ```
 
 ---

@@ -99,20 +99,16 @@ class ValidatorRegistry:
         """Load built-in validators from modules."""
         builtin_modules = [
             # Single-file validators
-            "vibelint.validators.single_file.docstring",
+            "vibelint.validators.single_file.dict_get_fallback",
             "vibelint.validators.single_file.emoji",
             "vibelint.validators.single_file.exports",
             "vibelint.validators.single_file.logger_names",
-            "vibelint.validators.single_file.print_statements",
             "vibelint.validators.single_file.typing_quality",
             "vibelint.validators.single_file.self_validation",
+            "vibelint.validators.single_file.strict_config",
             # Project-wide validators
-            "vibelint.validators.project_wide.dead_code",
+            "vibelint.validators.project_wide.api_consistency",
             "vibelint.validators.project_wide.namespace_collisions",
-            "vibelint.validators.project_wide.code_smells",
-            "vibelint.validators.project_wide.module_cohesion",
-            # Architecture validators
-            "vibelint.validators.architecture.basic_patterns",
         ]
 
         for module_name in builtin_modules:
