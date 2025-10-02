@@ -72,7 +72,9 @@ class DictGetFallbackValidator(BaseValidator):
         key = self._extract_key(node)
         fallback = self._extract_fallback(node)
 
-        message = "Using .get() with fallback hides missing keys - use direct access for typed structures"
+        message = (
+            "Using .get() with fallback hides missing keys - use direct access for typed structures"
+        )
 
         if key:
             message = f"dict.get('{key}', {fallback}) hides missing keys - use direct access dict['{key}'] for typed structures"
