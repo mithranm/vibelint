@@ -17,8 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import (TYPE_CHECKING, Any, Dict, Iterator, List, Optional,
-                    Protocol, Type)
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Protocol, Type
 
 if TYPE_CHECKING:
     from vibelint.config import Config

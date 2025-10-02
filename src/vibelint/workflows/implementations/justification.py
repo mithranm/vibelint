@@ -776,7 +776,7 @@ See: {self.xml_output}
                 custom_metrics={
                     "cache_hits": result.get("cache_hits", 0),
                     "cache_misses": result.get("cache_misses", 0),
-                }
+                },
             )
             metrics.finalize()
 
