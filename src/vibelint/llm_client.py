@@ -94,7 +94,8 @@ class LLMResponse:
     input_tokens: int
     reasoning_content: str = ""
     error: Optional[str] = None
-    raw_api_response: Optional[Dict[str, Any]] = None  # Full API response for logging
+    finish_reason: Optional[str] = None  # stop, length, error, etc.
+    raw_api_response: Optional[Dict[str, Any]] = None  # Full API response for debugging
 
 
 @dataclass
@@ -351,8 +352,15 @@ class LLMClient:
                 logger.debug("Attempting fast LLM (selected by routing)")
                 result = await self._call_fast_llm(request)
                 if result.content and result.content.strip():
-                    self._log_request_response(request, result, "fast")
-                    return result
+                    # Check if response was truncated due to max_tokens
+                    if result.finish_reason == "length":
+                        logger.info(
+                            "Fast LLM hit token limit (finish_reason=length), cascading to orchestrator"
+                        )
+                        primary_failed = True
+                    else:
+                        self._log_request_response(request, result, "fast")
+                        return result
                 else:
                     logger.warning("Fast LLM returned empty content")
                     primary_failed = True
@@ -527,8 +535,12 @@ class LLMClient:
             logger.error(f"Full response: {data}")
             raise ValueError("Invalid LLM response format")
 
-        message = data["choices"][0]["message"]
+        choice = data["choices"][0]
+        message = choice["message"]
+        finish_reason = choice.get("finish_reason", "stop")  # stop, length, tool_calls, etc.
+
         logger.debug(f"Message keys: {list(message.keys())}")
+        logger.debug(f"Finish reason: {finish_reason}")
 
         # Extract content and reasoning content separately (vLLM/llama.cpp format)
         content = message.get("content", "")
@@ -548,7 +560,8 @@ class LLMClient:
             duration_seconds=duration,
             input_tokens=len(request.content) // TOKEN_ESTIMATION_DIVISOR,
             success=True,
-            raw_api_response=data,  # Store full API response for logging
+            finish_reason=finish_reason,
+            raw_api_response=data,  # Store full API response for debugging
         )
 
     def _get_backend_type_for_role(self, role: LLMRole) -> str:
