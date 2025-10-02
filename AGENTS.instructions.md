@@ -114,17 +114,33 @@ PYTHONPATH=src vibelint diagnostics  # Shows configured models and available fea
 1. **isort** - Import sorting (run first)
 2. **black** - Code formatting (run second - overrides isort's multi-line imports)
 3. **ruff check --fix** - Fast Python linter
-   - `ruff check --select D` - Docstring checks (replaces docstring.py validator)
-   - `ruff check --select T201` - Print statement detection (replaces print_statements.py validator)
-   - `ruff check --select TID` - Import style enforcement (replaces relative_imports.py validator)
-   - `ruff check --select C901` - Complexity checks (replaces code_smells.py validator)
-4. **pyright** - Static type checking
-5. **vulture** - Dead code detection (replaces dead_code.py validator)
+   - `ruff check --select D` - Docstring checks
+   - `ruff check --select T201` - Print statement detection
+   - `ruff check --select TID` - Import style enforcement
+   - `ruff check --select C901` - Complexity checks
+   - `ruff check --select F401` - Unused imports
+   - `ruff check --select F841` - Unused variables
+4. **pyright** - Static type checking (comprehensive type analysis)
 
 **Why this order matters:**
 - isort may wrap long import lines across multiple lines
 - black prefers imports on a single line and will reformat them
 - Running black after isort ensures consistent formatting
+
+**Example workflow:**
+```bash
+# Format and lint modified files
+isort src/vibelint/file.py
+black src/vibelint/file.py
+ruff check --fix src/vibelint/file.py
+pyright src/vibelint/file.py
+
+# Full codebase check
+isort src/ tests/
+black src/ tests/
+ruff check src/ tests/
+pyright src/
+```
 
 ### Removed Validators (Use Standard Tools Instead)
 
@@ -135,7 +151,7 @@ We removed these validators because standard tools do the job better:
 | `docstring.py` | ruff D rules (pydocstyle) | `ruff check --select D` |
 | `print_statements.py` | ruff T201 | `ruff check --select T201` |
 | `relative_imports.py` | ruff TID rules | `ruff check --select TID` |
-| `dead_code.py` | vulture | `vulture src/ --min-confidence 80` |
+| `dead_code.py` | ruff F401/F841 | `ruff check --select F401,F841` |
 | `code_smells.py` | ruff C901 complexity | `ruff check --select C901` |
 | `module_cohesion.py` | Not actionable | N/A (deleted) |
 | `namespace_report.py` | Dead code | N/A (deleted) |
@@ -153,18 +169,6 @@ Vibelint keeps only validators that provide unique value not covered by standard
 - **namespace_collisions.py** - Namespace conflict detection
 - **strict_config.py** - Vibelint configuration validation
 - **self_validation.py** - Meta-validation for vibelint's own code
-
-### Dead Code Detection
-Run `vulture` to find unused code:
-```bash
-vulture src/vibelint/ --min-confidence 80
-```
-
-**Tips**:
-- `--min-confidence 80`: Reduces false positives (default 60 is noisy)
-- Review findings carefully - vulture can't detect dynamic usage (getattr, importlib, etc.)
-- Mark intentional unused code with `# noqa: vulture` comments
-- Common false positives: `__all__` exports, plugin entry points, abstract methods
 
 ### Standard Testing Pipeline
 1. **Run existing tests**: `tox -e py311` (or appropriate Python version)

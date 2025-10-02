@@ -11,7 +11,7 @@ vibelint/src/vibelint/validators/project_wide/__init__.py
 """
 
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Dict, Iterator, List
 
 from ...validators.types import BaseValidator, Finding
 
