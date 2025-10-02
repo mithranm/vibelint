@@ -10,8 +10,9 @@ vibelint/src/vibelint/plugin_runner.py
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import List
 
+from vibelint.config import Config
 from vibelint.discovery import discover_files, discover_files_from_paths
 from vibelint.validators import Finding, Severity, plugin_manager
 from vibelint.reporting import BUILTIN_FORMATTERS
@@ -25,12 +26,11 @@ __all__ = ["PluginValidationRunner", "run_plugin_validation"]
 class PluginValidationRunner:
     """Runs validation using the plugin system."""
 
-    def __init__(self, config_dict: Dict[str, Any], project_root: Path):
+    def __init__(self, config: Config, project_root: Path):
         """Initialize the plugin validation runner."""
         self.project_root = project_root
-        self.config_dict = config_dict
-        self.config = config_dict  # Add config property for formatters
-        self.rule_engine = RuleEngine(config_dict)
+        self.config = config
+        self.rule_engine = RuleEngine(config)
         self.findings: List[Finding] = []
 
         # Register built-in validators with plugin manager
@@ -48,10 +48,6 @@ class PluginValidationRunner:
         # Get enabled validators
         validators = self.rule_engine.get_enabled_validators()
 
-        # Create extended config with analysis context
-        analysis_config = dict(self.config)
-        analysis_config["_analysis_files"] = file_paths  # Pass the actual files being analyzed
-
         for file_path in file_paths:
             if not file_path.exists() or not file_path.is_file():
                 continue
@@ -68,7 +64,7 @@ class PluginValidationRunner:
             # Run all validators on this file
             for validator in validators:
                 try:
-                    for finding in validator.validate(file_path, content, analysis_config):
+                    for finding in validator.validate(file_path, content, self.config):
                         # Make path relative to project root
                         relative_path = file_path.relative_to(self.project_root)
                         finding.file_path = relative_path
@@ -81,7 +77,7 @@ class PluginValidationRunner:
 
         return self.findings
 
-    def get_summary(self) -> Dict[str, int]:
+    def get_summary(self) -> dict[str, int]:
         """Get summary counts by severity level."""
         summary = defaultdict(int)
         for finding in self.findings:
@@ -118,7 +114,7 @@ class PluginValidationRunner:
 
 
 def run_plugin_validation(
-    config_dict: Dict[str, Any],
+    config: Config,
     project_root: Path,
     include_globs_override: List[Path] | None = None,
 ) -> PluginValidationRunner:
@@ -126,7 +122,7 @@ def run_plugin_validation(
     Run validation using the plugin system.
 
     Args:
-        config_dict: Configuration dictionary from pyproject.toml
+        config: Configuration object from pyproject.toml
         project_root: Project root path
         include_globs_override: Optional list of paths to override include_globs.
                                If provided, only these paths are analyzed instead of
@@ -135,23 +131,18 @@ def run_plugin_validation(
     Returns:
         PluginValidationRunner with results
     """
-    from vibelint.config import Config
-
-    runner = PluginValidationRunner(config_dict, project_root)
-
-    # Create a fake config object for discovery
-    fake_config = Config(project_root, config_dict)
+    runner = PluginValidationRunner(config, project_root)
 
     # Choose discovery method based on whether include_globs are overridden
     if include_globs_override:
         # Use custom path discovery (include_globs override)
         files = discover_files_from_paths(
-            custom_paths=include_globs_override, config=fake_config, explicit_exclude_paths=set()
+            custom_paths=include_globs_override, config=config, explicit_exclude_paths=set()
         )
     else:
         # Use original discovery method with configured include_globs
         files = discover_files(
-            paths=[project_root], config=fake_config, explicit_exclude_paths=set()
+            paths=[project_root], config=config, explicit_exclude_paths=set()
         )
 
     # Run validation

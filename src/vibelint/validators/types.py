@@ -18,7 +18,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Protocol, Type
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Protocol, Type
+
+if TYPE_CHECKING:
+    from vibelint.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +87,11 @@ class Validator(Protocol):
     default_severity: Severity
 
     def __init__(
-        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
+        self, severity: Optional[Severity] = None, config: Optional["Config"] = None
     ) -> None: ...
 
     def validate(
-        self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None
+        self, file_path: Path, content: str, config: Optional["Config"] = None
     ) -> Iterator[Finding]:
         """Validate a file and yield findings."""
         ...
@@ -249,13 +252,13 @@ class BaseValidator:
     default_severity: Severity = Severity.WARN
 
     def __init__(
-        self, severity: Optional[Severity] = None, config: Optional[Dict[str, Any]] = None
+        self, severity: Optional[Severity] = None, config: Optional["Config"] = None
     ) -> None:
         self.severity = severity or self.default_severity
-        self.config = config or {}
+        self.config = config
 
     def validate(
-        self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None
+        self, file_path: Path, content: str, config: Optional["Config"] = None
     ) -> Iterator[Finding]:
         """Validate a file and yield findings."""
         raise NotImplementedError
@@ -292,8 +295,8 @@ class BaseFormatter(ABC):
     def format_results(
         self,
         findings: List[Finding],
-        summary: Dict[str, int],
-        config: Optional[Dict[str, Any]] = None,
+        summary: dict[str, int],
+        config: Optional["Config"] = None,
     ) -> str:
         """Format validation results for output."""
         pass

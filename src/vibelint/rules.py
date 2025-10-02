@@ -10,6 +10,7 @@ import logging
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from vibelint.config import Config
 from vibelint.validators import BaseValidator, Severity, plugin_manager
 
 logger = logging.getLogger(__name__)
@@ -29,15 +30,15 @@ __all__ = ["RuleEngine", "create_default_rule_config", "DefaultSeverity"]
 class RuleEngine:
     """Manages rule configuration and policy decisions."""
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: Config):
         """
         Initialize rule engine with configuration.
 
         Args:
-            config: Configuration dictionary from pyproject.toml
+            config: Configuration object from pyproject.toml
         """
         self.config = config
-        self._rule_overrides: Dict[str, Severity] = {}
+        self._rule_overrides: dict[str, Severity] = {}
         self._enabled_plugins: Set[str] = set()
         self._shared_models = {}  # Cache for expensive models like EmbeddingGemma
         self._load_rule_config()
@@ -46,17 +47,18 @@ class RuleEngine:
         """Load rule configuration from config."""
         # Load rule severity overrides
         rules_config = self.config.get("rules", {})
-        for rule_id, setting in rules_config.items():
-            if isinstance(setting, str):
-                try:
-                    self._rule_overrides[rule_id] = Severity(setting.upper())
-                except ValueError as e:
-                    logger.debug(f"Invalid severity setting for rule {rule_id}: {setting} - {e}")
-                    pass
-            elif isinstance(setting, bool):
-                # Boolean: True=default severity, False=OFF
-                if not setting:
-                    self._rule_overrides[rule_id] = Severity.OFF
+        if isinstance(rules_config, dict):
+            for rule_id, setting in rules_config.items():
+                if isinstance(setting, str):
+                    try:
+                        self._rule_overrides[rule_id] = Severity(setting.upper())
+                    except ValueError as e:
+                        logger.debug(f"Invalid severity setting for rule {rule_id}: {setting} - {e}")
+                        pass
+                elif isinstance(setting, bool):
+                    # Boolean: True=default severity, False=OFF
+                    if not setting:
+                        self._rule_overrides[rule_id] = Severity.OFF
 
         # Load disabled validators from ignore list
         ignore_codes = self.config.get("ignore", [])
@@ -67,11 +69,12 @@ class RuleEngine:
 
         # Load enabled plugins
         plugins_config = self.config.get("plugins", {})
-        enabled = plugins_config.get("enabled", ["vibelint.core"])
-        if isinstance(enabled, list):
-            self._enabled_plugins.update(enabled)
-        elif isinstance(enabled, str):
-            self._enabled_plugins.add(enabled)
+        if isinstance(plugins_config, dict):
+            enabled = plugins_config.get("enabled", ["vibelint.core"])
+            if isinstance(enabled, list):
+                self._enabled_plugins.update(enabled)
+            elif isinstance(enabled, str):
+                self._enabled_plugins.add(enabled)
 
     def is_rule_enabled(self, rule_id: str) -> bool:
         """Check if a rule is enabled (not set to OFF)."""

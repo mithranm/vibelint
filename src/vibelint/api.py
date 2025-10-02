@@ -11,8 +11,9 @@ import json
 import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union
 
+from vibelint.config import Config, load_config
 from vibelint.filesystem import walk_up_for_config
 from vibelint.validation_engine import PluginValidationRunner
 
@@ -50,10 +51,10 @@ class CheckResults:
 class VibelintResult:
     """Container for vibelint operation results."""
     success: bool
-    data: Dict[str, Any] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
+    data: dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary."""
         return asdict(self)
 
@@ -77,27 +78,10 @@ class VibelintAPI:
 
         # Find project root and load config
         self.project_root = walk_up_for_config(self.working_dir)
-        self.config_dict = self._load_config()
+        self.config = load_config(self.project_root or self.working_dir)
 
         # Set up logging to capture errors without outputting to console
         self.logger = logging.getLogger(__name__)
-
-    def _load_config(self) -> Dict[str, Any]:
-        """Load vibelint configuration or return defaults."""
-        if not self.project_root:
-            return {}
-
-        try:
-            import tomllib
-            config_file = self.project_root / "pyproject.toml"
-            if config_file.exists():
-                with open(config_file, "rb") as f:
-                    data = tomllib.load(f)
-                    return data.get("tool", {}).get("vibelint", {})
-        except Exception as e:
-            self.logger.warning(f"Failed to load config: {e}")
-
-        return {}
 
     def check(self, targets: Optional[List[str]] = None, exclude_ai: bool = False,
               rules: Optional[List[str]] = None) -> VibelintResult:
@@ -121,7 +105,7 @@ class VibelintAPI:
             file_paths = discover_files_from_paths(target_paths)
 
             # Create runner with config
-            runner = PluginValidationRunner(self.config_dict, self.project_root or self.working_dir)
+            runner = PluginValidationRunner(self.config, self.project_root or self.working_dir)
 
             # Run validation
             findings = runner.run_validation(file_paths)
