@@ -110,7 +110,9 @@ def check(
 
         fixed_count = 0
         for file_path in files:
-            file_findings = [f for f in findings if f.file_path == file_path]
+            # Resolve paths for comparison (findings may have relative paths)
+            file_path_resolved = file_path.resolve()
+            file_findings = [f for f in findings if f.file_path.resolve() == file_path_resolved]
             if not file_findings:
                 continue
 
