@@ -24,7 +24,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from vibelint.config import Config
-from vibelint.utils import get_relative_path
+from vibelint.filesystem import get_relative_path
 
 __all__ = ["discover_files", "discover_files_from_paths"]
 logger = logging.getLogger(__name__)

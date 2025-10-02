@@ -11,7 +11,8 @@ import ast
 from pathlib import Path
 from typing import Iterator
 
-from ...plugin_system import BaseValidator, Finding, Severity
+from ...ast_utils import parse_or_none
+from ...validators.types import BaseValidator, Finding, Severity
 
 __all__ = ["MissingDocstringValidator", "DocstringPathValidator"]
 
@@ -26,9 +27,8 @@ class MissingDocstringValidator(BaseValidator):
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Check for missing docstrings based on configuration."""
-        try:
-            tree = ast.parse(content)
-        except SyntaxError:
+        tree = parse_or_none(content, file_path)
+        if tree is None:
             return
 
         # Get docstring configuration

@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
 
-from ...plugin_system import BaseValidator, Finding, Severity
+from ...validators.types import BaseValidator, Finding, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,10 @@ class CodeSmellValidator(BaseValidator):
         self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None
     ) -> Iterator[Finding]:
         """Single-pass AST analysis for code smell detection."""
+
+        # Check file length first (doesn't require AST parsing)
+        yield from self._check_file_length(file_path, content, config)
+
         try:
             tree = ast.parse(content)
         except SyntaxError as e:
@@ -202,3 +206,68 @@ class CodeSmellValidator(BaseValidator):
     def _is_in_test_context(self, node: ast.AST) -> bool:
         """Check if node is in test context where magic numbers are more acceptable."""
         return False  # Simplified for now
+
+    def _check_file_length(
+        self, file_path: Path, content: str, config: Optional[Dict[str, Any]] = None
+    ) -> Iterator[Finding]:
+        """Check if file exceeds recommended line count limits (FILE-TOO-LONG smell)."""
+        # Default thresholds can be overridden in config
+        warning_threshold = 500
+        error_threshold = 1000
+        exclude_patterns = ["test_*.py", "*_test.py", "conftest.py", "__init__.py"]
+
+        if config:
+            warning_threshold = config.get("line_count_warning", warning_threshold)
+            error_threshold = config.get("line_count_error", error_threshold)
+            exclude_patterns = config.get("line_count_exclude", exclude_patterns)
+
+        # Skip excluded files
+        filename = file_path.name
+        for pattern in exclude_patterns:
+            if (
+                filename == pattern
+                or (pattern.startswith("*") and filename.endswith(pattern[1:]))
+                or (pattern.endswith("*") and filename.startswith(pattern[:-1]))
+            ):
+                return
+
+        # Count non-empty lines (excluding pure whitespace)
+        lines = content.splitlines()
+        non_empty_lines = [line for line in lines if line.strip()]
+        line_count = len(non_empty_lines)
+
+        # Check thresholds
+        if line_count >= error_threshold:
+            yield self.create_finding(
+                message=f"File is too long ({line_count} lines, threshold: {error_threshold})",
+                file_path=file_path,
+                line=1,
+                suggestion=self._get_file_split_suggestion(file_path, line_count, content),
+            )
+        elif line_count >= warning_threshold:
+            yield self.create_finding(
+                message=f"File is getting long ({line_count} lines, threshold: {warning_threshold})",
+                file_path=file_path,
+                line=1,
+                suggestion=self._get_file_split_suggestion(file_path, line_count, content),
+            )
+
+    def _get_file_split_suggestion(self, file_path: Path, line_count: int, content: str) -> str:
+        """Generate context-appropriate file splitting suggestions."""
+        try:
+            tree = ast.parse(content)
+            classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+            functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+
+            if len(classes) > 1:
+                return f"Split {len(classes)} classes into separate files"
+            elif len(functions) > 10:
+                return f"Group {len(functions)} functions into classes or separate modules"
+            elif "cli" in str(file_path).lower():
+                return "Break CLI into command modules (validation, analysis, etc.)"
+            elif "config" in str(file_path).lower():
+                return "Separate config loading, validation, and defaults"
+            else:
+                return "Extract classes or functions into separate modules"
+        except (SyntaxError, UnicodeDecodeError):
+            return f"Break this {line_count}-line file into smaller, focused modules"

@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Iterator, List, Optional
 
-from vibelint.plugin_system import BaseValidator, Finding, Severity
+from vibelint.validators import BaseValidator, Finding, Severity
 
 logger = logging.getLogger(__name__)
 

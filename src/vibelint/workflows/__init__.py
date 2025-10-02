@@ -16,7 +16,6 @@ vibelint/src/vibelint/workflow/__init__.py
 # Import core workflow system
 from .core.base import (BaseWorkflow, WorkflowConfig, WorkflowMetrics,
                         WorkflowPriority, WorkflowResult, WorkflowStatus)
-from .evaluation import WorkflowEvaluator
 # Import registry system
 from .registry import WorkflowRegistry, register_workflow, workflow_registry
 
@@ -38,8 +37,6 @@ __all__ = [
     "WorkflowRegistry",
     "workflow_registry",
     "register_workflow",
-    # Evaluation
-    "WorkflowEvaluator",
     # Lazy import functions
     "get_justification_engine",
 ]

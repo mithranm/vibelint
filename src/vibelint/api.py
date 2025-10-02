@@ -9,28 +9,53 @@ The CLI commands wrap these API functions and handle exit codes/formatting.
 
 import json
 import logging
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from vibelint.utils import walk_up_for_config
+from vibelint.filesystem import walk_up_for_config
 from vibelint.validation_engine import PluginValidationRunner
 
 
+@dataclass
+class FindingDict:
+    """Serializable representation of a Finding for API responses."""
+    rule: str
+    level: str
+    path: str
+    line: int
+    column: int
+    msg: str
+    context: str = ""
+    suggestion: str = ""
+
+
+@dataclass
+class FindingSummary:
+    """Summary of findings by severity level."""
+    INFO: int = 0
+    WARN: int = 0
+    BLOCK: int = 0
+
+
+@dataclass
+class CheckResults:
+    """Results from a check operation."""
+    findings: List[FindingDict]
+    summary: FindingSummary
+    total_files_checked: int
+
+
+@dataclass
 class VibelintResult:
     """Container for vibelint operation results."""
-
-    def __init__(self, success: bool, data: Optional[Dict[str, Any]] = None, errors: Optional[List[str]] = None):
-        self.success = success
-        self.data = data or {}
-        self.errors = errors or []
+    success: bool
+    data: Dict[str, Any] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to dictionary."""
-        return {
-            "success": self.success,
-            "data": self.data,
-            "errors": self.errors
-        }
+        return asdict(self)
 
     def to_json(self) -> str:
         """Convert result to JSON string."""
@@ -103,30 +128,36 @@ class VibelintAPI:
 
             # Convert findings to our format and create summary
             all_findings = []
-            summary = {"INFO": 0, "WARN": 0, "BLOCK": 0}
+            summary = FindingSummary()
 
             for finding in findings:
-                finding_dict = {
-                    "rule": finding.rule_id,
-                    "level": finding.severity.name,
-                    "path": str(finding.file_path),
-                    "line": finding.line_number,
-                    "column": finding.column_number,
-                    "msg": finding.message,
-                    "context": finding.context or "",
-                    "suggestion": finding.suggestion or ""
-                }
+                finding_dict = FindingDict(
+                    rule=finding.rule_id,
+                    level=finding.severity.name,
+                    path=str(finding.file_path),
+                    line=finding.line_number,
+                    column=finding.column_number,
+                    msg=finding.message,
+                    context=finding.context or "",
+                    suggestion=finding.suggestion or ""
+                )
                 all_findings.append(finding_dict)
 
                 # Update summary
                 level = finding.severity.name
-                summary[level] = summary.get(level, 0) + 1
+                if level == "INFO":
+                    summary.INFO += 1
+                elif level == "WARN":
+                    summary.WARN += 1
+                elif level == "BLOCK":
+                    summary.BLOCK += 1
 
-            return VibelintResult(True, {
-                "findings": all_findings,
-                "summary": summary,
-                "total_files_checked": len(file_paths)
-            })
+            check_results = CheckResults(
+                findings=all_findings,
+                summary=summary,
+                total_files_checked=len(file_paths)
+            )
+            return VibelintResult(True, asdict(check_results))
 
         except Exception as e:
             self.logger.error(f"Check operation failed: {e}")

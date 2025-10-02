@@ -15,7 +15,8 @@ import ast
 from pathlib import Path
 from typing import Iterator
 
-from ...plugin_system import BaseValidator, Finding, Severity
+from ...ast_utils import parse_or_none
+from ...validators.types import BaseValidator, Finding, Severity
 
 __all__ = ["TypingQualityValidator"]
 
@@ -30,14 +31,16 @@ class TypingQualityValidator(BaseValidator):
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Validate typing practices in a Python file."""
-        try:
-            tree = ast.parse(content)
-        except SyntaxError:
+        tree = parse_or_none(content, file_path)
+        if tree is None:
             return
 
         # Check for tuple type annotations that should be dataclasses
         visitor = _TypingVisitor()
         visitor.visit(tree)
+
+        # Check for dictionary anti-patterns (should be dataclasses)
+        yield from self._check_dict_antipatterns(tree, file_path)
 
         # Report tuple type aliases
         for line_num, name, tuple_info in visitor.tuple_type_aliases:
@@ -126,6 +129,79 @@ class TypingQualityValidator(BaseValidator):
                 patterns[f"{prefix}*"].append(line_num)
 
         return patterns
+
+    def _check_dict_antipatterns(self, tree: ast.AST, file_path: Path) -> Iterator[Finding]:
+        """Check for dictionaries that should be dataclasses (merged from dict_antipattern.py)."""
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                # Analyze dictionary literal
+                if not node.keys or len(node.keys) < 2:
+                    continue
+
+                # Extract string keys
+                string_keys = []
+                for key in node.keys:
+                    if key is None:  # **kwargs expansion
+                        break
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        string_keys.append(key.value)
+                    else:
+                        break  # Non-string keys, not a candidate
+
+                if len(string_keys) >= 3:
+                    yield self.create_finding(
+                        message=f"Dictionary with {len(string_keys)} fixed keys should use dataclass/NamedTuple",
+                        file_path=file_path,
+                        line=node.lineno,
+                        suggestion=self._suggest_dataclass_for_dict(string_keys),
+                    )
+                elif len(string_keys) == 2 and self._dict_keys_look_structured(string_keys):
+                    yield self.create_finding(
+                        message=f"Dictionary with structured keys '{', '.join(string_keys)}' might benefit from dataclass",
+                        file_path=file_path,
+                        line=node.lineno,
+                        severity=Severity.INFO,
+                        suggestion=self._suggest_dataclass_for_dict(string_keys),
+                    )
+
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "dict":
+                # Analyze dict() constructor call
+                keys = [kw.arg for kw in node.keywords if kw.arg]
+                if len(keys) >= 3:
+                    yield self.create_finding(
+                        message=f"dict() call with {len(keys)} fixed keys should use dataclass/NamedTuple",
+                        file_path=file_path,
+                        line=node.lineno,
+                        suggestion=self._suggest_dataclass_for_dict(keys),
+                    )
+
+    def _dict_keys_look_structured(self, keys: list) -> bool:
+        """Check if dict keys look like structured data rather than dynamic mapping."""
+        structured_indicators = 0
+        for key in keys:
+            if len(key) > 3:  # Not single letters
+                structured_indicators += 1
+            if '_' in key:  # Snake case
+                structured_indicators += 1
+            if key in ['id', 'name', 'type', 'value', 'data', 'config', 'status',
+                      'created', 'updated', 'url', 'path', 'file', 'directory']:
+                structured_indicators += 1
+        return structured_indicators >= len(keys)
+
+    def _suggest_dataclass_for_dict(self, keys: list) -> str:
+        """Generate a dataclass suggestion for dictionary keys."""
+        fields = []
+        for key in keys:
+            if key in ['id', 'count', 'size', 'length']:
+                fields.append(f"{key}: int")
+            elif key in ['name', 'path', 'url', 'type', 'status']:
+                fields.append(f"{key}: str")
+            elif key in ['active', 'enabled', 'valid', 'success']:
+                fields.append(f"{key}: bool")
+            else:
+                fields.append(f"{key}: Any  # TODO: specify type")
+
+        return f"Consider dataclass:\n@dataclass\nclass Data:\n    " + "\n    ".join(fields)
 
 
 class _TypingVisitor(ast.NodeVisitor):

@@ -111,6 +111,18 @@ PYTHONPATH=src vibelint diagnostics  # Shows configured models and available fea
 3. ruff check --fix
 4. pyright
 
+### Dead Code Detection
+Run `vulture` to find unused code:
+```bash
+vulture src/vibelint/ --min-confidence 80
+```
+
+**Tips**:
+- `--min-confidence 80`: Reduces false positives (default 60 is noisy)
+- Review findings carefully - vulture can't detect dynamic usage (getattr, importlib, etc.)
+- Mark intentional unused code with `# noqa: vulture` comments
+- Common false positives: `__all__` exports, plugin entry points, abstract methods
+
 ### Standard Testing Pipeline
 1. **Run existing tests**: `tox -e py311` (or appropriate Python version)
 2. **Check coverage**: Tests should maintain high pass rate and reasonable coverage

@@ -13,8 +13,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Iterator, List, Set
 
-from ...plugin_system import BaseValidator, Finding, Severity
-from ...utils import find_project_root
+from ...validators.types import BaseValidator, Finding, Severity
+from ...filesystem import find_project_root
 
 logger = logging.getLogger(__name__)
 
@@ -254,9 +254,8 @@ class ModuleCohesionValidator(BaseValidator):
                 continue
 
             # Check file justification based on type
-            if file_path.suffix == ".py":
-                yield from self._check_python_file_justification(file_path)
-            elif file_path.suffix in [".md", ".rst", ".txt"]:
+            # Note: Python file docstring checks are handled by DOCSTRING-MISSING validator
+            if file_path.suffix in [".md", ".rst", ".txt"]:
                 yield from self._check_documentation_justification(file_path)
             elif file_path.suffix in [".json", ".yaml", ".yml", ".toml", ".ini", ".cfg"]:
                 yield from self._check_config_file_justification(file_path)
@@ -273,44 +272,6 @@ class ModuleCohesionValidator(BaseValidator):
                     suggestion="Add comment/documentation explaining file purpose or remove if unnecessary",
                 )
 
-    def _check_python_file_justification(self, file_path: Path) -> Iterator[Finding]:
-        """Check that Python files have module docstrings."""
-        try:
-            content = file_path.read_text(encoding="utf-8")
-            tree = ast.parse(content)
-
-            # Check for module docstring
-            has_module_docstring = False
-            if (
-                tree.body
-                and isinstance(tree.body[0], ast.Expr)
-                and isinstance(tree.body[0].value, ast.Constant)
-            ):
-                if (
-                    isinstance(tree.body[0].value.value, str)
-                    and len(tree.body[0].value.value.strip()) > 10
-                ):
-                    has_module_docstring = True
-
-            if not has_module_docstring:
-                yield Finding(
-                    rule_id=self.rule_id,
-                    message=f"Python file lacks module docstring explaining its purpose: {file_path.name}",
-                    file_path=file_path,
-                    line=1,
-                    severity=Severity.WARN,
-                    suggestion='Add module docstring: """Brief description of module purpose."""',
-                )
-
-        except (UnicodeDecodeError, SyntaxError):
-            yield Finding(
-                rule_id=self.rule_id,
-                message=f"Python file has syntax errors or encoding issues: {file_path.name}",
-                file_path=file_path,
-                line=1,
-                severity=Severity.WARN,
-                suggestion="Fix syntax errors or encoding issues, or remove if unused",
-            )
 
     def _check_documentation_justification(self, file_path: Path) -> Iterator[Finding]:
         """Check that documentation files have meaningful content."""

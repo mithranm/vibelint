@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from ...plugin_system import BaseValidator, Finding, Severity
+from ...validators.types import BaseValidator, Finding, Severity
 
 logger = logging.getLogger(__name__)
 

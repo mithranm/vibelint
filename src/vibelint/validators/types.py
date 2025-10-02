@@ -1,10 +1,16 @@
 """
-Core types and validation system for vibelint.
+Core validation types for vibelint.
 
-Simplified from the original over-engineered plugin system to focus on
-essential functionality without unnecessary abstractions.
+Defines fundamental types used throughout the validation system:
+- Severity: Severity levels for findings (INFO, WARN, BLOCK)
+- Finding: Dataclass representing a validation finding
+- BaseValidator: Abstract base class for validators
+- BaseFormatter: Abstract base class for formatters
+- Validator/Formatter: Protocol types for duck typing
 
-vibelint/src/vibelint/plugin_system.py
+Also provides simple registration and discovery functions.
+
+vibelint/src/vibelint/validators/types.py
 """
 
 import logging

@@ -14,7 +14,7 @@ vibelint/src/vibelint/validators/project_wide/__init__.py
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
-from ...plugin_system import BaseValidator, Finding
+from ...validators.types import BaseValidator, Finding
 
 
 class ProjectWideValidator(BaseValidator):

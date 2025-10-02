@@ -11,7 +11,7 @@ from pathlib import Path
 
 from vibelint.config import Config
 from vibelint.discovery import discover_files
-from vibelint.utils import get_relative_path, is_binary
+from vibelint.filesystem import get_relative_path, is_binary
 
 __all__ = ["create_snapshot"]
 

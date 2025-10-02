@@ -1,25 +1,85 @@
 """
-Dead code detection validator.
+Dead code detection validator with project-wide call graph analysis.
 
 Identifies unused imports, unreferenced functions, duplicate implementations,
 and other forms of dead code that can be safely removed.
 
+Performance optimized: builds a single project-wide call graph and uses
+graph traversal to identify unreachable code.
+
 vibelint/src/vibelint/validators/dead_code.py
 """
 
+from __future__ import annotations
+
 import ast
 import re
+from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterator, List, Set
+from typing import Dict, Iterator, List, Set, Tuple
 
-from ...plugin_system import BaseValidator, Finding, Severity
-from ...utils import find_files_by_extension, find_project_root
+from ...validators.types import BaseValidator, Finding, Severity
+from ...filesystem import find_files_by_extension, find_project_root
 
 __all__ = ["DeadCodeValidator"]
 
 
+class CallGraph:
+    """Project-wide call graph for efficient dead code detection."""
+
+    def __init__(self):
+        self.definitions: Dict[str, Tuple[Path, int]] = {}  # name -> (file, line)
+        self.calls: Dict[str, Set[str]] = defaultdict(set)  # caller -> set of callees
+        self.exports: Dict[str, Set[str]] = {}  # file -> set of exported names
+        self.imports: Dict[str, Set[str]] = defaultdict(set)  # file -> set of imports
+        self.file_modules: Dict[Path, str] = {}  # file -> module name
+
+    def add_definition(self, name: str, file_path: Path, line: int):
+        """Record a function/class definition."""
+        self.definitions[name] = (file_path, line)
+
+    def add_call(self, caller: str, callee: str):
+        """Record a function call."""
+        self.calls[caller].add(callee)
+
+    def add_export(self, file_path: Path, name: str):
+        """Record an exported name from __all__."""
+        file_key = str(file_path)
+        if file_key not in self.exports:
+            self.exports[file_key] = set()
+        self.exports[file_key].add(name)
+
+    def add_import(self, file_path: Path, name: str):
+        """Record an imported name."""
+        self.imports[str(file_path)].add(name)
+
+    def is_exported(self, name: str, file_path: Path) -> bool:
+        """Check if name is exported from file."""
+        return name in self.exports.get(str(file_path), set())
+
+    def get_reachable_from_exports(self) -> Set[str]:
+        """Get all names reachable from exported functions."""
+        reachable = set()
+        queue = []
+
+        # Start with all exported names
+        for exports in self.exports.values():
+            queue.extend(exports)
+            reachable.update(exports)
+
+        # BFS traversal of call graph
+        while queue:
+            current = queue.pop(0)
+            for callee in self.calls.get(current, []):
+                if callee not in reachable:
+                    reachable.add(callee)
+                    queue.append(callee)
+
+        return reachable
+
+
 class DeadCodeValidator(BaseValidator):
-    """Detects various forms of dead code."""
+    """Detects various forms of dead code using project-wide call graph analysis."""
 
     rule_id = "DEAD-CODE-FOUND"
     name = "Dead Code Detector"
@@ -28,8 +88,9 @@ class DeadCodeValidator(BaseValidator):
 
     def __init__(self, severity=None, config=None):
         super().__init__(severity, config)
-        self._project_files_cache = None
-        self._all_exports_cache = None
+        self._call_graph: CallGraph | None = None
+        self._project_root: Path | None = None
+        self._analyzed_files: Set[Path] = set()
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
         """Analyze file for dead code patterns."""
@@ -38,42 +99,51 @@ class DeadCodeValidator(BaseValidator):
         except SyntaxError:
             return
 
-        # Build project context for dynamic analysis
-        project_root = find_project_root(file_path) or file_path.parent
+        # Build project context on first file
+        if self._project_root is None:
+            self._project_root = find_project_root(file_path) or file_path.parent
 
-        # Analyze the AST for various dead code patterns
-        yield from self._check_unused_imports_dynamic(file_path, tree, content, project_root)
-        yield from self._check_unreferenced_definitions_dynamic(file_path, tree, project_root)
+        # Build call graph if this is the first analysis
+        if self._call_graph is None:
+            self._call_graph = self._build_call_graph(self._project_root)
+
+        # Mark this file as analyzed
+        self._analyzed_files.add(file_path)
+
+        # Analyze the file using the call graph
+        yield from self._check_unused_imports(file_path, tree, content)
+        yield from self._check_unreferenced_definitions(file_path, tree)
         yield from self._check_duplicate_patterns(file_path, content)
         yield from self._check_legacy_patterns(file_path, content)
 
-    def _get_project_files(self, project_root: Path) -> List[Path]:
-        """Get all Python files in the project."""
-        if self._project_files_cache is None:
-            exclude_patterns = ["*/__pycache__/*", "*/.pytest_cache/*", "*/build/*", "*/dist/*"]
-            self._project_files_cache = find_files_by_extension(
-                project_root, extension=".py", exclude_globs=exclude_patterns
-            )
-        return self._project_files_cache
+    def _build_call_graph(self, project_root: Path) -> CallGraph:
+        """Build project-wide call graph for all Python files."""
+        graph = CallGraph()
+        exclude_patterns = ["*/__pycache__/*", "*/.pytest_cache/*", "*/build/*", "*/dist/*"]
+        project_files = find_files_by_extension(
+            project_root, extension=".py", exclude_globs=exclude_patterns
+        )
 
-    def _get_all_exports(self, project_root: Path) -> Dict[str, Set[str]]:
-        """Get all __all__ exports across the project."""
-        if self._all_exports_cache is None:
-            self._all_exports_cache = {}
-            for py_file in self._get_project_files(project_root):
-                try:
-                    content = py_file.read_text(encoding="utf-8")
-                    tree = ast.parse(content)
-                    exports = self._extract_all_exports(tree)
-                    if exports:
-                        self._all_exports_cache[str(py_file)] = exports
-                except (UnicodeDecodeError, SyntaxError):
-                    continue
-        return self._all_exports_cache
+        for py_file in project_files:
+            try:
+                content = py_file.read_text(encoding="utf-8")
+                tree = ast.parse(content)
 
-    def _extract_all_exports(self, tree: ast.AST) -> Set[str]:
-        """Extract names from __all__ assignments."""
-        exports = set()
+                # Extract module name
+                module_name = self._get_module_name(py_file, project_root)
+                graph.file_modules[py_file] = module_name
+
+                # Extract definitions, calls, and exports
+                self._extract_from_ast(py_file, tree, graph)
+
+            except (UnicodeDecodeError, SyntaxError):
+                continue
+
+        return graph
+
+    def _extract_from_ast(self, file_path: Path, tree: ast.AST, graph: CallGraph):
+        """Extract definitions, calls, and exports from an AST."""
+        # Extract __all__ exports
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:
@@ -81,36 +151,27 @@ class DeadCodeValidator(BaseValidator):
                         if isinstance(node.value, (ast.List, ast.Tuple)):
                             for elt in node.value.elts:
                                 if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                                    exports.add(elt.value)
-        return exports
+                                    graph.add_export(file_path, elt.value)
 
-    def _scan_string_references(self, content: str, name: str) -> bool:
-        """Check if name is referenced in strings (getattr, importlib, etc.)."""
-        patterns = [
-            rf"getattr\([^,]+,\s*['\"]({re.escape(name)})['\"]",
-            rf"hasattr\([^,]+,\s*['\"]({re.escape(name)})['\"]",
-            rf"importlib\.import_module\(['\"].*{re.escape(name)}.*['\"]",
-            rf"__import__\(['\"].*{re.escape(name)}.*['\"]",
-            rf"['\"]({re.escape(name)})['\"]",
-        ]
-        return any(re.search(pattern, content) for pattern in patterns)
+        # Extract function/class definitions and their internal calls
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                name = node.name
+                graph.add_definition(name, file_path, node.lineno)
 
-    def _is_used_in_tests(self, name: str, project_root: Path) -> bool:
-        """Check if name is used in test files."""
-        test_files = [f for f in self._get_project_files(project_root) if "test" in str(f).lower()]
-        for test_file in test_files:
-            try:
-                content = test_file.read_text(encoding="utf-8")
-                if name in content:
-                    return True
-            except UnicodeDecodeError:
-                continue
-        return False
+                # Extract calls within this function/class
+                for inner_node in ast.walk(node):
+                    if isinstance(inner_node, ast.Call):
+                        if isinstance(inner_node.func, ast.Name):
+                            graph.add_call(name, inner_node.func.id)
+                        elif isinstance(inner_node.func, ast.Attribute):
+                            # Record method calls
+                            graph.add_call(name, inner_node.func.attr)
 
-    def _check_unused_imports_dynamic(
-        self, file_path: Path, tree: ast.AST, content: str, project_root: Path
+    def _check_unused_imports(
+        self, file_path: Path, tree: ast.AST, content: str
     ) -> Iterator[Finding]:
-        """Check for imported names that are never used with dynamic analysis."""
+        """Check for imported names that are never used."""
         imported_names: Dict[str, int] = {}  # name -> line number
         used_names: Set[str] = set()
 
@@ -136,19 +197,15 @@ class DeadCodeValidator(BaseValidator):
                 if isinstance(node.value, ast.Name):
                     used_names.add(node.value.id)
 
-        # Get __all__ exports for this file
-        all_exports = self._extract_all_exports(tree)
-
-        # Find unused imports with dynamic checks
+        # Find unused imports
         for name, line_num in imported_names.items():
             if name not in used_names:
-                # Dynamic analysis checks
-                is_exported = name in all_exports
-                is_string_referenced = self._scan_string_references(content, name)
-                is_test_used = self._is_used_in_tests(name, project_root)
+                # Check if exported
+                if self._call_graph.is_exported(name, file_path):
+                    continue
 
-                # Skip if used dynamically
-                if is_exported or is_string_referenced or is_test_used:
+                # Check for dynamic string references
+                if self._scan_string_references(content, name):
                     continue
 
                 yield self.create_finding(
@@ -158,10 +215,8 @@ class DeadCodeValidator(BaseValidator):
                     suggestion=f"Remove unused import: {name}",
                 )
 
-    def _check_unreferenced_definitions_dynamic(
-        self, file_path: Path, tree: ast.AST, project_root: Path
-    ) -> Iterator[Finding]:
-        """Check for functions/classes that are defined but never referenced with dynamic analysis."""
+    def _check_unreferenced_definitions(self, file_path: Path, tree: ast.AST) -> Iterator[Finding]:
+        """Check for functions/classes that are defined but never referenced."""
         # Skip this check for __init__.py files and test files
         if file_path.name == "__init__.py" or "test" in file_path.name.lower():
             return
@@ -176,63 +231,60 @@ class DeadCodeValidator(BaseValidator):
                 if not node.name.startswith("_") and node.name != "main":
                     defined_names[node.name] = node.lineno
 
-        # Collect all references
+        # Collect all references within this file
         for node in ast.walk(tree):
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
                 referenced_names.add(node.id)
             elif isinstance(node, ast.Attribute):
                 referenced_names.add(node.attr)
 
-        # Get __all__ exports for this file
-        all_exports = self._extract_all_exports(tree)
+        # Get reachable names from call graph
+        reachable_names = self._call_graph.get_reachable_from_exports()
 
-        # Check cross-file usage
-        def _is_used_in_other_files(name: str) -> bool:
-            module_name = self._get_module_name(file_path, project_root)
-            if not module_name:
-                return False
-
-            for py_file in self._get_project_files(project_root):
-                if py_file == file_path:
-                    continue
-                try:
-                    content = py_file.read_text(encoding="utf-8")
-                    # Check for direct imports
-                    if f"from {module_name} import" in content and name in content:
-                        return True
-                    # Check for module imports
-                    if f"import {module_name}" in content and f"{module_name}.{name}" in content:
-                        return True
-                except UnicodeDecodeError:
-                    continue
-            return False
-
-        # Find unreferenced definitions with dynamic checks
+        # Find unreferenced definitions
         for name, line_num in defined_names.items():
-            if name not in referenced_names:
-                # Dynamic analysis checks
-                is_exported = name in all_exports
-                is_string_referenced = self._scan_string_references(
-                    file_path.read_text(encoding="utf-8"), name
-                )
-                is_test_used = self._is_used_in_tests(name, project_root)
-                is_cross_file_used = _is_used_in_other_files(name)
+            # Skip if used locally
+            if name in referenced_names:
+                continue
 
-                # Skip if used dynamically
-                if is_exported or is_string_referenced or is_test_used or is_cross_file_used:
-                    continue
+            # Skip if exported
+            if self._call_graph.is_exported(name, file_path):
+                continue
 
-                yield self.create_finding(
-                    message=f"Function/class '{name}' is defined but never referenced",
-                    file_path=file_path,
-                    line=line_num,
-                    suggestion="Consider removing unused definition or adding to __all__",
-                )
+            # Skip if reachable from any exported function
+            if name in reachable_names:
+                continue
+
+            # Check for dynamic string references
+            content = file_path.read_text(encoding="utf-8")
+            if self._scan_string_references(content, name):
+                continue
+
+            yield self.create_finding(
+                message=f"Function/class '{name}' is defined but never referenced",
+                file_path=file_path,
+                line=line_num,
+                suggestion="Consider removing unused definition or adding to __all__",
+            )
+
+    def _scan_string_references(self, content: str, name: str) -> bool:
+        """Check if name is referenced in strings (getattr, importlib, etc.)."""
+        patterns = [
+            rf"getattr\([^,]+,\s*['\"]({re.escape(name)})['\"]",
+            rf"hasattr\([^,]+,\s*['\"]({re.escape(name)})['\"]",
+            rf"importlib\.import_module\(['\"].*{re.escape(name)}.*['\"]",
+            rf"__import__\(['\"].*{re.escape(name)}.*['\"]",
+        ]
+        return any(re.search(pattern, content) for pattern in patterns)
 
     def _get_module_name(self, file_path: Path, project_root: Path) -> str:
         """Convert file path to Python module name."""
         try:
             rel_path = file_path.relative_to(project_root)
+            # Handle src layout
+            if rel_path.parts[0] == "src" and len(rel_path.parts) > 1:
+                rel_path = Path(*rel_path.parts[1:])
+
             if rel_path.name == "__init__.py":
                 module_parts = rel_path.parent.parts
             else:
@@ -284,13 +336,11 @@ class DeadCodeValidator(BaseValidator):
         for line_num, line in enumerate(lines, 1):
             stripped = line.strip()
 
-            # Legacy pattern detection removed - no legacy patterns exist to detect
-
-            # Check for manual console instantiation (except in utils.py which creates the shared instance)
-            if "= Console()" in stripped and not file_path.name == "utils.py":
+            # Check for manual console instantiation (except in ui.py which creates the shared instance)
+            if "= Console()" in stripped and file_path.name not in ["utils.py", "ui.py"]:
                 yield self.create_finding(
                     message="Manual Console instantiation - use shared utils instead",
                     file_path=file_path,
                     line=line_num,
-                    suggestion="Replace with: from .utils import console",
+                    suggestion="Replace with: from vibelint.ui import console",
                 )

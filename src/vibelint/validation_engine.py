@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from vibelint.discovery import discover_files, discover_files_from_paths
-from vibelint.plugin_system import Finding, Severity, plugin_manager
+from vibelint.validators import Finding, Severity, plugin_manager
 from vibelint.reporting import BUILTIN_FORMATTERS
 from vibelint.rules import RuleEngine
 

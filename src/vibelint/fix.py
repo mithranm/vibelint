@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from vibelint.config import Config
-from vibelint.plugin_system import Finding
+from vibelint.validators import Finding
 
 __all__ = ["FixEngine", "can_fix_finding", "apply_fixes", "regenerate_all_docstrings"]
 
@@ -28,7 +28,7 @@ class FixEngine:
         self.config = config
 
         # Initialize LLM manager for dual LLM support
-        from vibelint.llm import create_llm_manager
+        from vibelint.llm_client import create_llm_manager
 
         config_dict = config.settings if isinstance(config.settings, dict) else {}
         self.llm_manager = create_llm_manager(config_dict)

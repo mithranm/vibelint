@@ -53,7 +53,7 @@ class JustificationEngine:
     def _init_llm(self):
         """Initialize LLM manager and get token limits from config."""
         try:
-            from vibelint.llm.manager import LLMManager, LLMRequest
+            from vibelint.llm_client import LLMManager, LLMRequest
 
             self.llm_manager = LLMManager()
             self.LLMRequest = LLMRequest
@@ -237,7 +237,7 @@ class JustificationEngine:
 
     def _summarize_file(self, file_path: Path) -> str:
         """Summarize file purpose using fast LLM with proper chunking."""
-        from vibelint.utils import is_binary
+        from vibelint.filesystem import is_binary
 
         if not self.llm_manager:
             return "[LLM not available]"

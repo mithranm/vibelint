@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
-from ...utils import get_relative_path
+from ...filesystem import get_relative_path
 from ..config import Config
 from .namespace_collisions import NamespaceCollision, NamespaceNode
 

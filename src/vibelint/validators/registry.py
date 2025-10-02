@@ -14,7 +14,7 @@ import importlib.metadata
 import logging
 from typing import Dict, List, Optional, Type
 
-from ..plugin_system import BaseValidator
+from .types import BaseValidator
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,6 @@ class ValidatorRegistry:
             "vibelint.validators.single_file.print_statements",
             "vibelint.validators.single_file.typing_quality",
             "vibelint.validators.single_file.self_validation",
-            "vibelint.validators.single_file.line_count",
             # Project-wide validators
             "vibelint.validators.project_wide.dead_code",
             "vibelint.validators.project_wide.namespace_collisions",

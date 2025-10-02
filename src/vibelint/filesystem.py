@@ -1,15 +1,15 @@
 """
-Utility functions for vibelint.
+Filesystem and path utility functions for vibelint.
 
-vibelint/src/vibelint/utils.py
+vibelint/src/vibelint/fs.py
 """
 
+from __future__ import annotations
+
+import fnmatch
 import logging
 import os
-import shutil
 from pathlib import Path
-
-from rich.console import Console
 
 logger = logging.getLogger(__name__)
 
@@ -17,18 +17,16 @@ __all__ = [
     "ensure_directory",
     "find_files_by_extension",
     "find_package_root",
+    "find_project_root",
     "get_import_path",
     "get_module_name",
     "get_relative_path",
+    "is_binary",
     "is_python_file",
     "read_file_safe",
-    "write_file_safe",
-    "walk_up_for_project_root",
     "walk_up_for_config",
-    "is_binary",
-    "console",
-    "scale_ascii_art_by_height",
-    "scale_to_terminal_by_height",
+    "walk_up_for_project_root",
+    "write_file_safe",
 ]
 
 
@@ -42,14 +40,13 @@ def walk_up_for_project_root(start_path: Path) -> Path | None:
     3. dev.pyproject.toml file (development/parent project config)
 
     Args:
-    start_path: Path to start walking up from
+        start_path: Path to start walking up from
 
     Returns:
-    Path to project root, or None if not found
+        Path to project root, or None if not found
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     current_path = start_path.resolve()
     while True:
         # Check for git repo (strongest indicator of project root)
@@ -77,10 +74,12 @@ def walk_up_for_config(start_path: Path) -> Path | None:
     3. .git directory (fallback to git repo root)
 
     Args:
-    start_path: Path to start walking up from
+        start_path: Path to start walking up from
 
     Returns:
-    Path containing viable configuration, or None if not found
+        Path containing viable configuration, or None if not found
+
+    vibelint/src/vibelint/fs.py
     """
     current_path = start_path.resolve()
     if current_path.is_file():
@@ -113,14 +112,15 @@ def _has_vibelint_config(toml_path: Path) -> bool:
     """Check if a TOML file contains vibelint configuration."""
     try:
         import sys
+
         if sys.version_info >= (3, 11):
             import tomllib
         else:
             import tomli as tomllib
 
-        with open(toml_path, 'rb') as f:
+        with open(toml_path, "rb") as f:
             data = tomllib.load(f)
-            return 'tool' in data and 'vibelint' in data.get('tool', {})
+            return "tool" in data and "vibelint" in data.get("tool", {})
     except Exception:
         return False
 
@@ -128,24 +128,24 @@ def _has_vibelint_config(toml_path: Path) -> bool:
 # Backward compatibility alias
 find_project_root = walk_up_for_project_root
 
+
 def find_package_root(start_path: Path) -> Path | None:
     """
     Find the root directory of a Python package containing the given path.
 
     A package root is identified by containing either:
     1. A pyproject.toml file
-    2. A  file
-    3. An  file at the top level with no parent
+    2. A setup.py file
+    3. An __init__.py file at the top level with no parent
 
     Args:
-    start_path: Path to start the search from
+        start_path: Path to start the search from
 
     Returns:
-    Path to package root, or None if not found
+        Path to package root, or None if not found
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     current_path = start_path.resolve()
     if current_path.is_file():
         current_path = current_path.parent
@@ -183,14 +183,13 @@ def is_python_file(path: Path) -> bool:
     Check if a path represents a Python file.
 
     Args:
-    path: Path to check
+        path: Path to check
 
     Returns:
-    True if the path is a Python file, False otherwise
+        True if the path is a Python file, False otherwise
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     return path.is_file() and path.suffix == ".py"
 
 
@@ -198,11 +197,9 @@ def get_relative_path(path: Path, base: Path) -> Path:
     """
     Safely compute a relative path, falling back to the original path.
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     try:
-
         return path.resolve().relative_to(base.resolve())
     except ValueError as e:
         logger.debug(f"Path {path} is not relative to {base}: {e}")
@@ -214,15 +211,14 @@ def get_import_path(file_path: Path, package_root: Path | None = None) -> str:
     Get the import path for a Python file.
 
     Args:
-    file_path: Path to the Python file
-    package_root: Optional path to the package root
+        file_path: Path to the Python file
+        package_root: Optional path to the package root
 
     Returns:
-    Import path (e.g., "vibelint.utils")
+        Import path (e.g., "vibelint.utils")
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     if package_root is None:
         package_root = find_package_root(file_path)
 
@@ -245,14 +241,13 @@ def get_module_name(file_path: Path) -> str:
     Extract module name from a Python file path.
 
     Args:
-    file_path: Path to a Python file
+        file_path: Path to a Python file
 
     Returns:
-    Module name
+        Module name
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     return file_path.stem
 
 
@@ -266,19 +261,16 @@ def find_files_by_extension(
     Find all files with a specific extension in a directory and its subdirectories.
 
     Args:
-    root_path: Root path to search in
-    extension: File extension to look for (including the dot)
-    exclude_globs: Glob patterns to exclude
-    include_vcs_hooks: Whether to include version control directories
+        root_path: Root path to search in
+        extension: File extension to look for (including the dot)
+        exclude_globs: Glob patterns to exclude
+        include_vcs_hooks: Whether to include version control directories
 
     Returns:
-    List of paths to files with the specified extension
+        List of paths to files with the specified extension
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
-    import fnmatch
-
     if exclude_globs is None:
         exclude_globs = []
 
@@ -304,14 +296,13 @@ def ensure_directory(path: Path) -> Path:
     Ensure a directory exists, creating it if necessary.
 
     Args:
-    path: Path to directory
+        path: Path to directory
 
     Returns:
-    Path to the directory
+        Path to the directory
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -321,15 +312,14 @@ def read_file_safe(file_path: Path, encoding: str = "utf-8") -> str | None:
     Safely read a file, returning None if any errors occur.
 
     Args:
-    file_path: Path to file
-    encoding: File encoding
+        file_path: Path to file
+        encoding: File encoding
 
     Returns:
-    File contents or None if error
+        File contents or None if error
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     try:
         return file_path.read_text(encoding=encoding)
     except (OSError, UnicodeDecodeError) as e:
@@ -342,16 +332,15 @@ def write_file_safe(file_path: Path, content: str, encoding: str = "utf-8") -> b
     Safely write content to a file, returning success status.
 
     Args:
-    file_path: Path to file
-    content: Content to write
-    encoding: File encoding
+        file_path: Path to file
+        content: Content to write
+        encoding: File encoding
 
     Returns:
-    True if successful, False otherwise
+        True if successful, False otherwise
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     try:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding=encoding)
@@ -367,15 +356,14 @@ def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
     or a high proportion of non-text bytes in the first chunk.
 
     Args:
-    file_path: The path to the file.
-    chunk_size: The number of bytes to read from the beginning.
+        file_path: The path to the file.
+        chunk_size: The number of bytes to read from the beginning.
 
     Returns:
-    True if the file seems binary, False otherwise.
+        True if the file seems binary, False otherwise.
 
-    vibelint/src/vibelint/utils.py
+    vibelint/src/vibelint/fs.py
     """
-
     try:
         with open(file_path, "rb") as f:
             chunk = f.read(chunk_size)
@@ -393,79 +381,7 @@ def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
 
         return False
     except OSError:
-
         return True
     except (TypeError, AttributeError) as e:
         logger.debug(f"Error checking if {file_path} is binary: {e}")
         return True
-
-
-# === Console Utilities ===
-
-# Global console instance used throughout vibelint
-console = Console()
-
-
-# === ASCII Art Utilities ===
-
-
-def _get_terminal_size():
-    """
-    Returns the terminal size as a tuple (width, height) of characters.
-    Falls back to (80, 24) if the dimensions cannot be determined.
-    """
-    try:
-        size = shutil.get_terminal_size(fallback=(80, 24))
-        return size.columns, size.lines
-    except OSError as e:
-        # Terminal size unavailable in non-interactive environments
-        logging.debug("Failed to get terminal size: %s", e)
-        return 80, 24
-
-
-def scale_ascii_art_by_height(ascii_art: str, target_height: int) -> str:
-    """
-    Scales the ASCII art to have a specified target height (in characters)
-    while preserving the original aspect ratio. The target width is
-    automatically computed based on the scaling factor.
-    """
-    # Split into lines and remove any fully blank lines.
-    lines = [line for line in ascii_art.splitlines() if line.strip()]
-    if not lines:
-        return ""
-
-    orig_height = len(lines)
-    orig_width = max(len(line) for line in lines)
-
-    # Pad all lines to the same length (for a rectangular grid)
-    normalized_lines = [line.ljust(orig_width) for line in lines]
-
-    # Compute the vertical scale factor and derive the target width.
-    scale_factor = target_height / orig_height
-    target_width = max(1, int(orig_width * scale_factor))
-
-    # Calculate step sizes for sampling
-    row_step = orig_height / target_height
-    col_step = orig_width / target_width if target_width > 0 else 1
-
-    result_lines = []
-    for r in range(target_height):
-        orig_r = min(int(r * row_step), orig_height - 1)
-        new_line = []
-        for c in range(target_width):
-            orig_c = min(int(c * col_step), orig_width - 1)
-            new_line.append(normalized_lines[orig_r][orig_c])
-        result_lines.append("".join(new_line))
-
-    return "\n".join(result_lines)
-
-
-def scale_to_terminal_by_height(ascii_art: str) -> str:
-    """
-    Scales the provided ASCII art to fit based on the terminal's available height.
-    The width is computed automatically to maintain the art's original aspect ratio.
-    """
-    _, term_height = _get_terminal_size()
-    # Optionally, leave a margin (here, using 90% of available height)
-    target_height = max(1, int(term_height * 0.9))
-    return scale_ascii_art_by_height(ascii_art, target_height)

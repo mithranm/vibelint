@@ -10,7 +10,7 @@ vibelint/src/vibelint/validators/single_file/__init__.py
 from pathlib import Path
 from typing import Iterator, List
 
-from ...plugin_system import BaseValidator, Finding
+from ...validators.types import BaseValidator, Finding
 
 
 class SingleFileValidator(BaseValidator):

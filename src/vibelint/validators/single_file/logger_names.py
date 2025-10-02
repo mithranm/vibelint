@@ -11,7 +11,7 @@ import ast
 from pathlib import Path
 from typing import Iterator
 
-from ...plugin_system import BaseValidator, Finding, Severity
+from ...validators.types import BaseValidator, Finding, Severity
 
 __all__ = ["LoggerNameValidator"]
 

@@ -14,10 +14,6 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
-# Load environment variables from .env files in order of preference:
-# 1. Current working directory (.env)
-# 2. User's home directory (~/.vibelint.env)
-# 3. Project root directory (.env)
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -177,7 +173,7 @@ class LLMManager:
         Args:
             config: Optional typed LLMConfig - if None, loads from config files
         """
-        from .llm_config import get_llm_config, LLMConfig
+        from vibelint.config import get_llm_config, LLMConfig
 
         # Load typed configuration
         self.llm_config = config if config is not None else get_llm_config()

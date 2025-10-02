@@ -10,7 +10,7 @@ import logging
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from vibelint.plugin_system import BaseValidator, Severity, plugin_manager
+from vibelint.validators import BaseValidator, Severity, plugin_manager
 
 logger = logging.getLogger(__name__)
 

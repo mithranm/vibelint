@@ -48,7 +48,8 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
     "ruff>=0.1.0",
-    "black>=23.0.0"
+    "black>=23.0.0",
+    "vulture>=2.0"
 ]
 
 [project.scripts]
@@ -155,7 +156,10 @@ exclude_globs = [
     ".vibelint-*/**",  # old vibelint directories (deprecated)
     ".vibes/**",       # vibelint analysis output
     "*.pyc", "*.pyo", "*.pyd",  # compiled python
-    "*.log"            # log files
+    "*.log",            # log files
+    "*.xml",            # xml files
+    "*.json",           # json files
+    "docs/**",
 ]
 # LLM config will be inherited from parent project
 

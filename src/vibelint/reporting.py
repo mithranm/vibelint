@@ -10,12 +10,12 @@ vibelint/src/vibelint/reporting.py
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from vibelint.plugin_system import BaseFormatter, Finding, Severity
+from vibelint.validators import BaseFormatter, Finding, Severity
 
 __all__ = [
     "ReportGenerator",
@@ -282,12 +282,9 @@ Verbosity Level: {self.config.verbosity_level.value}
         # Generate JSON artifacts for each analysis level
         if analysis_results.tree_analysis:
             tree_path = artifacts_dir / "organizational_analysis.json"
-            # Convert dataclass to dict for JSON serialization
+            # Convert dataclass to dict for JSON serialization using asdict()
             tree_data = {
-                "quick_violations": [
-                    {"violation_type": v.violation_type, "message": v.message}
-                    for v in analysis_results.tree_analysis.quick_violations
-                ]
+                "quick_violations": [asdict(v) for v in analysis_results.tree_analysis.quick_violations]
             }
             tree_path.write_text(
                 json.dumps(tree_data, indent=2, default=str),
@@ -297,12 +294,12 @@ Verbosity Level: {self.config.verbosity_level.value}
 
         if analysis_results.content_analysis:
             content_path = artifacts_dir / "structural_analysis.json"
-            # Convert dataclass to dict for JSON serialization
+            # Convert dataclass to dict for JSON serialization using asdict()
             content_data = {
                 "file_analyses": [
                     {
                         "file_path": fa.file_path,
-                        "findings": [f.to_dict() for f in fa.findings],
+                        "findings": [asdict(f) for f in fa.findings],
                     }
                     for fa in analysis_results.content_analysis.file_analyses
                 ]
