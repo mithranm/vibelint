@@ -64,7 +64,12 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 @click.option("--fix", is_flag=True, help="Automatically fix issues where possible")
 @click.pass_context
 def check(
-    ctx: click.Context, targets: tuple[Path, ...], format: str, exclude_ai: bool, rules: str | None, fix: bool
+    ctx: click.Context,
+    targets: tuple[Path, ...],
+    format: str,
+    exclude_ai: bool,
+    rules: str | None,
+    fix: bool,
 ) -> None:
     """Run vibelint validation."""
     vibelint_ctx: VibelintContext = ctx.obj
@@ -83,8 +88,8 @@ def check(
         ctx.exit(1)
 
     # Import validation engine
-    from vibelint.validation_engine import PluginValidationRunner
     from vibelint.discovery import discover_files_from_paths
+    from vibelint.validation_engine import PluginValidationRunner
 
     # Determine target files
     if targets:
@@ -127,7 +132,9 @@ def check(
                     if validator_class:
                         # Instantiate the validator
                         validator_instance = validator_class()
-                        if hasattr(validator_instance, "can_fix") and validator_instance.can_fix(finding):
+                        if hasattr(validator_instance, "can_fix") and validator_instance.can_fix(
+                            finding
+                        ):
                             content = validator_instance.apply_fix(content, finding)
 
                 # Write back if changed
@@ -172,7 +179,7 @@ def check(
 @click.pass_context
 def snapshot(ctx: click.Context, targets: tuple[Path, ...], output: Path) -> None:
     """Create a markdown snapshot of the codebase structure and contents."""
-    from vibelint.config import load_config, Config
+    from vibelint.config import Config, load_config
     from vibelint.snapshot import create_snapshot
 
     vibelint_ctx: VibelintContext = ctx.obj
@@ -184,11 +191,11 @@ def snapshot(ctx: click.Context, targets: tuple[Path, ...], output: Path) -> Non
     except Exception as e:
         console.print(f"[yellow]⚠️ Could not load config: {e}[/yellow]")
         console.print("[yellow]Using default configuration[/yellow]")
-        config = Config(project_root=project_root)
+        config = Config(project_root=project_root, config_dict={})
 
     # Default targets to project root if none provided
     if not targets:
-        targets = [project_root]
+        targets = (project_root,)
 
     target_list = list(targets)
 
@@ -218,7 +225,12 @@ def _register_workflow_commands() -> None:
         @cli.command(workflow_id, help=description)
         @click.argument("target", required=False, type=click.Path(exists=True, path_type=Path))
         @click.pass_context
-        def workflow_cmd(ctx: click.Context, target: Path | None, workflow_id=workflow_id, workflow_class=workflow_class):
+        def workflow_cmd(
+            ctx: click.Context,
+            target: Path | None,
+            workflow_id=workflow_id,
+            workflow_class=workflow_class,
+        ):
             """Run a vibelint workflow."""
             vibelint_ctx: VibelintContext = ctx.obj
             project_root = target or vibelint_ctx.project_root or Path.cwd()
@@ -234,7 +246,7 @@ def _register_workflow_commands() -> None:
 
                 # Display results
                 if result.status.value == "completed":
-                    console.print(f"[green]✅ Workflow completed successfully[/green]")
+                    console.print("[green]✅ Workflow completed successfully[/green]")
                     if result.artifacts.get("report"):
                         console.print("\n" + result.artifacts["report"])
                 else:

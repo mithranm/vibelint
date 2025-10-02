@@ -154,7 +154,7 @@ class BaseWorkflow(ABC):
         self._validate_configuration()
 
     @abstractmethod
-    async def execute(self, project_root: Path, context: Dict[str, Any]) -> WorkflowResult:
+    def execute(self, project_root: Path, context: Dict[str, Any]) -> WorkflowResult:
         """Execute the workflow with given context.
 
         Args:

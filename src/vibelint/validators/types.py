@@ -17,7 +17,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Protocol, Type
+from typing import (TYPE_CHECKING, Any, Dict, Iterator, List, Optional,
+                    Protocol, Type)
 
 if TYPE_CHECKING:
     from vibelint.config import Config
@@ -171,7 +172,6 @@ def _load_builtin_validators() -> None:
     Third-party validators can still use entry points.
     """
     import importlib
-    import importlib.util
 
     # Auto-discover built-in validators from filesystem
     try:

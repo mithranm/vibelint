@@ -15,10 +15,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from vibelint.workflows.core.base import BaseWorkflow, WorkflowConfig
+
 logger = logging.getLogger(__name__)
 
 
-class JustificationEngine:
+class JustificationEngine(BaseWorkflow):
     """Clean justification engine focused on the essential workflow."""
 
     # Workflow metadata for registry
@@ -29,11 +31,10 @@ class JustificationEngine:
     category: str = "analysis"
     tags: set = {"code-quality", "llm-analysis", "architecture"}
 
-    def __init__(self, config: Optional["WorkflowConfig"] = None):
-        from vibelint.workflows.core.base import WorkflowConfig
-
+    def __init__(self, config: Optional[WorkflowConfig] = None):
+        super().__init__(config)
         self.config = config or WorkflowConfig()
-        self.llm_manager = None
+        self.llm_client = None
         self.cache_file = Path(".vibes/cache/file_summaries.json")
         self.timestamp = time.strftime("%Y%m%d_%H%M%S")
         self.xml_output = Path(f".vibes/reports/project_analysis_{self.timestamp}.xml")
@@ -51,21 +52,21 @@ class JustificationEngine:
         self.summary_cache = self._load_cache()
 
     def _init_llm(self):
-        """Initialize LLM manager and get token limits from config."""
+        """Initialize LLM client and get token limits from config."""
         try:
-            from vibelint.llm_client import LLMManager, LLMRequest
+            from vibelint.llm_client import LLMClient, LLMRequest
 
-            self.llm_manager = LLMManager()
+            self.llm_client = LLMClient()
             self.LLMRequest = LLMRequest
 
             # Get token limits from LLM config for proper chunking
-            self.fast_max_tokens = self.llm_manager.llm_config.fast_max_tokens
-            self.fast_max_context_tokens = self.llm_manager.llm_config.fast_max_context_tokens or (
+            self.fast_max_tokens = self.llm_client.llm_config.fast_max_tokens
+            self.fast_max_context_tokens = self.llm_client.llm_config.fast_max_context_tokens or (
                 self.fast_max_tokens * 4
             )
-            self.orchestrator_max_tokens = self.llm_manager.llm_config.orchestrator_max_tokens
+            self.orchestrator_max_tokens = self.llm_client.llm_config.orchestrator_max_tokens
             self.orchestrator_max_context_tokens = (
-                self.llm_manager.llm_config.orchestrator_max_context_tokens or 131072
+                self.llm_client.llm_config.orchestrator_max_context_tokens or 131072
             )
 
             logger.info(
@@ -89,7 +90,7 @@ class JustificationEngine:
         self.master_log_file = logs_dir / f"justification_{self.timestamp}.log"
 
         # JSONL log file for LLM prompt-response pairs
-        if self.llm_manager:
+        if self.llm_client:
             self.jsonl_log_file = logs_dir / f"justification_{self.timestamp}.jsonl"
             # Create the file immediately so it always exists
             self.jsonl_log_file.touch()
@@ -113,7 +114,7 @@ class JustificationEngine:
                 except Exception as e:
                     logger.debug(f"Failed to write JSONL log: {e}")
 
-            self.llm_manager.set_log_callback(log_callback)
+            self.llm_client.set_log_callback(log_callback)
             self._log(f"JSONL logging enabled: {self.jsonl_log_file}")
 
         self._log(f"Master log file: {self.master_log_file}")
@@ -244,7 +245,7 @@ class JustificationEngine:
         """Summarize file purpose using fast LLM with proper chunking."""
         from vibelint.filesystem import is_binary
 
-        if not self.llm_manager:
+        if not self.llm_client:
             return "[LLM not available]"
 
         # Check if file is binary
@@ -289,7 +290,7 @@ One sentence describing what this code does:"""
                 )
 
                 # LLM manager automatically cascades to orchestrator if fast fails
-                response = self.llm_manager.process_request_sync(request)
+                response = self.llm_client.process_request_sync(request)
 
                 if response and response.success and response.content:
                     chunk_summaries.append(response.content.strip())
@@ -360,7 +361,7 @@ One sentence describing what this code does:"""
         self, chunk_xml: str, chunk_num: int, total_chunks: int, root: Path
     ) -> str:
         """Analyze a single XML chunk with orchestrator LLM."""
-        if not self.llm_manager:
+        if not self.llm_client:
             return "LLM not available for chunk analysis"
 
         chunk_context = (
@@ -429,7 +430,7 @@ Provide specific findings for each category with file paths and consolidation re
                 content=prompt, max_tokens=self.orchestrator_max_tokens, temperature=0.2
             )
 
-            response = self.llm_manager.process_request_sync(request)
+            response = self.llm_client.process_request_sync(request)
             if response and response.success and response.content:
                 return response.content.strip()
             else:
@@ -480,7 +481,7 @@ Provide specific findings for each category with file paths and consolidation re
 
     def _analyze_structure(self, files: List[Path], project_root: Path) -> str:
         """Phase 1: Analyze project structure based on file paths alone."""
-        if not self.llm_manager:
+        if not self.llm_client:
             return "LLM not available for structural analysis"
 
         tree = self._build_tree_structure(files, project_root)
@@ -557,7 +558,7 @@ Be specific and direct. List misplaced files clearly."""
                 content=prompt, max_tokens=self.orchestrator_max_tokens, temperature=0.2
             )
 
-            response = self.llm_manager.process_request_sync(request)
+            response = self.llm_client.process_request_sync(request)
             if response and response.success and response.content:
                 return response.content.strip()
             else:
@@ -571,7 +572,7 @@ Be specific and direct. List misplaced files clearly."""
         self, structural_analysis: str, chunk_analyses: List[str], root: Path
     ) -> str:
         """Synthesize structural + semantic analyses into final report."""
-        if not self.llm_manager:
+        if not self.llm_client:
             return f"## Structural Analysis\n\n{structural_analysis}\n\n" + "\n\n---\n\n".join(
                 chunk_analyses
             )
@@ -604,7 +605,7 @@ Project: {root.name}"""
                 content=prompt, max_tokens=self.orchestrator_max_tokens, temperature=0.2
             )
 
-            response = self.llm_manager.process_request_sync(request)
+            response = self.llm_client.process_request_sync(request)
             if response and response.success and response.content:
                 return response.content.strip()
             else:
@@ -757,6 +758,51 @@ See: {self.xml_output}
                 "report": f"Analysis failed: {e}",
             }
 
+    # BaseWorkflow abstract method implementations
+    def execute(self, project_root: Path, context: dict) -> "WorkflowResult":
+        """Execute justification analysis workflow."""
+        from vibelint.workflows.core.base import WorkflowResult, WorkflowStatus, WorkflowMetrics
 
-# Alias for registry compatibility
-JustificationWorkflow = JustificationEngine
+        start_time = time.time()
+
+        try:
+            result = self.run_justification(project_root)
+            end_time = time.time()
+
+            metrics = WorkflowMetrics(
+                start_time=start_time,
+                end_time=end_time,
+                files_processed=result.get("files_analyzed", 0),
+                custom_metrics={
+                    "cache_hits": result.get("cache_hits", 0),
+                    "cache_misses": result.get("cache_misses", 0),
+                }
+            )
+            metrics.finalize()
+
+            return WorkflowResult(
+                workflow_id=self.workflow_id,
+                status=WorkflowStatus.COMPLETED if result.get("success") else WorkflowStatus.FAILED,
+                metrics=metrics,
+                artifacts={"report": result.get("report", "")},
+                error_message=result.get("error"),
+            )
+        except Exception as e:
+            end_time = time.time()
+            metrics = WorkflowMetrics(start_time=start_time, end_time=end_time)
+            metrics.finalize()
+
+            return WorkflowResult(
+                workflow_id=self.workflow_id,
+                status=WorkflowStatus.FAILED,
+                metrics=metrics,
+                error_message=str(e),
+            )
+
+    def get_required_inputs(self) -> set:
+        """No required inputs."""
+        return set()
+
+    def get_produced_outputs(self) -> set:
+        """Produces justification analysis outputs."""
+        return {"justification_report", "xml_structure"}
