@@ -94,6 +94,7 @@ class LLMResponse:
     input_tokens: int
     reasoning_content: str = ""
     error: Optional[str] = None
+    raw_api_response: Optional[Dict[str, Any]] = None  # Full API response for logging
 
 
 @dataclass
@@ -547,6 +548,7 @@ class LLMClient:
             duration_seconds=duration,
             input_tokens=len(request.content) // TOKEN_ESTIMATION_DIVISOR,
             success=True,
+            raw_api_response=data,  # Store full API response for logging
         )
 
     def _get_backend_type_for_role(self, role: LLMRole) -> str:
