@@ -73,7 +73,7 @@ class SelfValidationHook:
 
         # Check for emoji violations (project rule: no emoji)
         emoji_violations = self._check_emoji_violations(content)
-        for line_num, line_content in emoji_violations:
+        for line_num, _ in emoji_violations:
             yield Finding(
                 file_path=file_path,
                 line=line_num,

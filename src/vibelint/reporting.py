@@ -128,7 +128,7 @@ class ReportConfig:
     verbosity_level: VerbosityLevel = VerbosityLevel.TACTICAL
 
     # Format settings
-    formats: List[str] = None  # ["markdown", "json", "html"]
+    formats: Optional[List[str]] = None  # ["markdown", "json", "html"]
     include_artifacts: bool = True
     create_index: bool = True
 

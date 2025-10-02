@@ -13,10 +13,13 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import requests
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from vibelint.config import LLMConfig
 
 
 def _load_env_files():
@@ -270,7 +273,7 @@ class LLMClient:
             self.llm_config.fast_max_context_tokens or 1000
         )  # Default if not specified
 
-        orchestrator_max_tokens = self.llm_config.orchestrator_max_tokens
+        _ = self.llm_config.orchestrator_max_tokens  # For future use
         # Orchestrator typically has much larger context window
 
         fast_available = bool(self.fast_config.api_url)
@@ -569,7 +572,7 @@ class LLMClient:
         """Create a GBNF JSON grammar for llama.cpp from JSON schema."""
         if json_schema.get("type") == "object":
             properties = json_schema.get("properties", {})
-            required = json_schema.get("required", [])
+            _ = json_schema.get("required", [])  # For future use
             defs = json_schema.get("$defs", {})
 
             # Handle single-property objects (common case)

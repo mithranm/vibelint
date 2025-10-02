@@ -7,7 +7,7 @@ for ETL/JSON parsing, but not for internal typed structures which should fail fa
 import ast
 import logging
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional
 
 from vibelint.validators import BaseValidator, Finding, Severity
 
@@ -91,7 +91,7 @@ class DictGetFallbackValidator(BaseValidator):
             suggestion=suggestion,
         )
 
-    def _extract_key(self, node: ast.Call) -> str:
+    def _extract_key(self, node: ast.Call) -> Optional[str]:
         """Extract the key from .get() call."""
         if not node.args:
             return None
@@ -115,7 +115,7 @@ class DictGetFallbackValidator(BaseValidator):
 
         return "None"
 
-    def _suggest_direct_access(self, key: str, fallback: str) -> str:
+    def _suggest_direct_access(self, key: Optional[str], fallback: str) -> str:
         """Suggest direct access replacement."""
         if not key:
             return "Consider: Use direct key access if dictionary is typed/validated"

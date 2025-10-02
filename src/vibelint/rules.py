@@ -111,10 +111,12 @@ class RuleEngine:
         # Handle special cases that need shared resources
         if validator_class.rule_id == "SEMANTIC-SIMILARITY":
             shared_model = self._get_or_create_embedding_model()
-            # Pass the model through config
-            config_with_model = dict(self.config)
-            config_with_model["_shared_model"] = shared_model
-            return validator_class(severity=severity, config=config_with_model)
+            # Pass the model through config settings
+            config_dict = (
+                dict(self.config.settings) if isinstance(self.config.settings, dict) else {}
+            )
+            config_dict["_shared_model"] = shared_model
+            return validator_class(severity=severity, config=config_dict)
 
         return validator_class(severity=severity, config=self.config)
 
@@ -155,7 +157,13 @@ class RuleEngine:
                 from sentence_transformers import SentenceTransformer
 
                 # Check configuration
-                embedding_config = self.config.get("embedding_analysis", {})
+                settings_dict = (
+                    self.config.settings if isinstance(self.config.settings, dict) else {}
+                )
+                embedding_config_raw = settings_dict.get("embedding_analysis", {})
+                embedding_config = (
+                    embedding_config_raw if isinstance(embedding_config_raw, dict) else {}
+                )
                 model_name = embedding_config.get("model", "google/embeddinggemma-300m")
 
                 # Check if embedding analysis is enabled

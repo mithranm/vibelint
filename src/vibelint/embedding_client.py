@@ -160,6 +160,7 @@ class EmbeddingClient:
         """
         if self._can_use_code_api:
             try:
+                assert self.code_api_key is not None, "code_api_key must be set"
                 return self._call_remote_api(
                     self.code_api_url, self.code_api_key, self.code_model, code_texts
                 )
@@ -181,6 +182,7 @@ class EmbeddingClient:
         """
         if self._can_use_natural_api:
             try:
+                assert self.natural_api_key is not None, "natural_api_key must be set"
                 return self._call_remote_api(
                     self.natural_api_url, self.natural_api_key, self.natural_model, natural_texts
                 )
@@ -253,6 +255,10 @@ class EmbeddingClient:
         """
         if threshold is None:
             threshold = self.similarity_threshold
+
+        # Ensure threshold is a float
+        if not isinstance(threshold, (int, float)):
+            threshold = 0.85
 
         embeddings = self.get_embeddings(texts, content_type)
         similar_pairs = []

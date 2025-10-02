@@ -202,8 +202,11 @@ class StrictConfigRule(ValidationRule):
 
     def _extract_string_value(self, node: ast.AST) -> str:
         """Extract string value from AST node."""
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            return node.value
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, str):
+                return node.value
+            else:
+                return repr(node.value)
         elif isinstance(node, ast.Str):  # Python < 3.8 compatibility
             return node.s
         else:
