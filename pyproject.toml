@@ -116,6 +116,10 @@ select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
     "F",      # pyflakes
+    "D",      # pydocstyle - docstring checks (replaces docstring.py validator)
+    "T201",   # Print statement detection (replaces print_statements.py validator)
+    "TID",    # Import style enforcement (replaces relative_imports.py validator)
+    "C901",   # Complexity checks (replaces code_smells.py validator)
 ]
 ignore = [
     "E501",   # Line too long (handled by black)
@@ -132,6 +136,16 @@ ignore = [
     "B006",   # Allow mutable defaults for now
     "B007",   # Allow unused loop variables
     "UP007",  # Allow Union syntax for now
+    # Docstring rules (D) - relax some for existing code
+    "D100",   # Missing docstring in public module
+    "D101",   # Missing docstring in public class
+    "D102",   # Missing docstring in public method
+    "D103",   # Missing docstring in public function
+    "D104",   # Missing docstring in public package
+    "D105",   # Missing docstring in magic method
+    "D107",   # Missing docstring in __init__
+    "D203",   # 1 blank line required before class docstring (conflicts with D211)
+    "D213",   # Multi-line docstring summary should start at second line (conflicts with D212)
 ]
 
 [tool.ruff.lint.per-file-ignores]

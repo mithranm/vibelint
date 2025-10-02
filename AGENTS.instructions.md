@@ -106,10 +106,46 @@ PYTHONPATH=src vibelint diagnostics  # Shows configured models and available fea
 ## Testing Procedures
 
 ### Linting and Formatting Pipeline
-1. black
-2. isort
-3. ruff check --fix
-4. pyright
+
+**Standard tools (use these instead of custom validators):**
+
+1. **black** - Code formatting
+2. **isort** - Import sorting
+3. **ruff check --fix** - Fast Python linter
+   - `ruff check --select D` - Docstring checks (replaces docstring.py validator)
+   - `ruff check --select T201` - Print statement detection (replaces print_statements.py validator)
+   - `ruff check --select TID` - Import style enforcement (replaces relative_imports.py validator)
+   - `ruff check --select C901` - Complexity checks (replaces code_smells.py validator)
+4. **pyright** - Static type checking
+5. **vulture** - Dead code detection (replaces dead_code.py validator)
+
+### Removed Validators (Use Standard Tools Instead)
+
+We removed these validators because standard tools do the job better:
+
+| Removed Validator | Replacement | Command |
+|------------------|-------------|---------|
+| `docstring.py` | ruff D rules (pydocstyle) | `ruff check --select D` |
+| `print_statements.py` | ruff T201 | `ruff check --select T201` |
+| `relative_imports.py` | ruff TID rules | `ruff check --select TID` |
+| `dead_code.py` | vulture | `vulture src/ --min-confidence 80` |
+| `code_smells.py` | ruff C901 complexity | `ruff check --select C901` |
+| `module_cohesion.py` | Not actionable | N/A (deleted) |
+| `namespace_report.py` | Dead code | N/A (deleted) |
+
+### Remaining Custom Validators
+
+Vibelint keeps only validators that provide unique value not covered by standard tools:
+
+- **dict_get_fallback.py** - Enforces `dict.get(key, default)` with explicit defaults
+- **emoji.py** - Detects emoji usage in code (project-specific preference)
+- **exports.py** - Enforces `__all__` declarations in modules
+- **logger_names.py** - Validates `logging.getLogger(__name__)` conventions
+- **typing_quality.py** - Detects design smells (tuple→dataclass refactoring opportunities)
+- **api_consistency.py** - Cross-module API consistency analysis
+- **namespace_collisions.py** - Namespace conflict detection
+- **strict_config.py** - Vibelint configuration validation
+- **self_validation.py** - Meta-validation for vibelint's own code
 
 ### Dead Code Detection
 Run `vulture` to find unused code:
