@@ -603,6 +603,8 @@ Create a unified report that:
 3. Provides prioritized, actionable recommendations
 4. Groups related issues together
 
+**CRITICAL**: Do NOT include time estimates, timelines, or effort predictions (e.g., "1 week", "4-6 weeks", "15-30 minutes"). Focus on WHAT should be done and WHY, not HOW LONG it will take. The developer will determine timing based on their context.
+
 Project: {root.name}"""
 
         try:
