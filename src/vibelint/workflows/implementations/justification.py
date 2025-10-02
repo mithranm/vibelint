@@ -7,13 +7,18 @@ Core workflow:
 4. Orchestrator LLM analyzes for misplaced/useless/redundant files
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from vibelint.workflows.core.base import WorkflowResult
 
 from vibelint.workflows.core.base import BaseWorkflow, WorkflowConfig
 
@@ -336,7 +341,7 @@ One sentence describing what this code does:"""
         project_footer = "</project>"
         header_size = len(project_header) + len(project_footer)
 
-        for dir_name, files in sorted(dir_groups.items()):
+        for _, files in sorted(dir_groups.items()):
             dir_content = "\n".join(files)
             dir_size = len(dir_content)
 
@@ -761,7 +766,7 @@ See: {self.xml_output}
     # BaseWorkflow abstract method implementations
     def execute(self, project_root: Path, context: dict) -> "WorkflowResult":
         """Execute justification analysis workflow."""
-        from vibelint.workflows.core.base import WorkflowResult, WorkflowStatus, WorkflowMetrics
+        from vibelint.workflows.core.base import WorkflowMetrics, WorkflowResult, WorkflowStatus
 
         start_time = time.time()
 

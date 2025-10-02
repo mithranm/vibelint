@@ -10,9 +10,9 @@ vibelint/src/vibelint/workflow/implementations/__init__.py
 
 # Import available implementations - avoid circular imports by importing lazily
 __all__ = [
-    # Implementation modules
-    "justification",
-    "single_file_validation",
+    # Helper functions for lazy imports
+    "get_justification_engine",
+    "get_single_file_validation_workflow",
 ]
 
 
