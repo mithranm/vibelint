@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from vibelint.filesystem import walk_up_for_config
+from vibelint.filesystem import find_package_root, walk_up_for_config
 
 logger = logging.getLogger(__name__)
 

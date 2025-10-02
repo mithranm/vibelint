@@ -114,7 +114,7 @@ class VibelintAPI:
             from vibelint.discovery import discover_files_from_paths
 
             target_paths = [Path(t) for t in targets]
-            file_paths = discover_files_from_paths(target_paths)
+            file_paths = discover_files_from_paths(target_paths, self.config)
 
             # Create runner with config
             runner = PluginValidationRunner(self.config, self.project_root or self.working_dir)
@@ -131,8 +131,8 @@ class VibelintAPI:
                     rule=finding.rule_id,
                     level=finding.severity.name,
                     path=str(finding.file_path),
-                    line=finding.line_number,
-                    column=finding.column_number,
+                    line=finding.line,
+                    column=finding.column,
                     msg=finding.message,
                     context=finding.context or "",
                     suggestion=finding.suggestion or "",
@@ -176,7 +176,7 @@ class VibelintAPI:
                 return VibelintResult(False, errors=[f"Path is not a file: {path}"])
 
             # Create runner with config
-            runner = PluginValidationRunner(self.config_dict, self.project_root or self.working_dir)
+            runner = PluginValidationRunner(self.config, self.project_root or self.working_dir)
 
             # Run validation on single file
             findings = runner.run_validation([path])
@@ -190,8 +190,8 @@ class VibelintAPI:
                     "rule": finding.rule_id,
                     "level": finding.severity.name,
                     "path": str(finding.file_path),
-                    "line": finding.line_number,
-                    "column": finding.column_number,
+                    "line": finding.line,
+                    "column": finding.column,
                     "msg": finding.message,
                     "context": finding.context or "",
                     "suggestion": finding.suggestion or "",

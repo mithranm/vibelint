@@ -159,7 +159,6 @@ class TypingQualityValidator(BaseValidator):
                         message=f"Dictionary with structured keys '{', '.join(string_keys)}' might benefit from dataclass",
                         file_path=file_path,
                         line=node.lineno,
-                        severity=Severity.INFO,
                         suggestion=self._suggest_dataclass_for_dict(string_keys),
                     )
 

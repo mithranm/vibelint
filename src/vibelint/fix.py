@@ -212,7 +212,8 @@ class FixEngine:
         """Add path references to existing docstrings based on configuration."""
         # Get docstring configuration
         config_dict = self.config.settings if isinstance(self.config.settings, dict) else {}
-        docstring_config = config_dict.get("docstring", {})
+        docstring_config_raw = config_dict.get("docstring", {})
+        docstring_config = docstring_config_raw if isinstance(docstring_config_raw, dict) else {}
         require_path_references = docstring_config.get("require_path_references", False)
 
         # Skip fix if path references are not required
@@ -385,7 +386,10 @@ async def regenerate_all_docstrings(config: Config, file_paths: List[Path]) -> i
     engine = FixEngine(config)
     processed_count = 0
 
-    if not engine.llm_config.get("api_base_url"):
+    config_dict = config.settings if isinstance(config.settings, dict) else {}
+    llm_config_raw = config_dict.get("llm", {})
+    llm_config = llm_config_raw if isinstance(llm_config_raw, dict) else {}
+    if not llm_config.get("api_base_url"):
         logger.error("No LLM API configured. Cannot regenerate docstrings.")
         return 0
 
@@ -420,7 +424,10 @@ async def preview_docstring_changes(config: Config, file_paths: List[Path]) -> D
         "errors": [],
     }
 
-    if not engine.llm_config.get("api_base_url"):
+    config_dict = config.settings if isinstance(config.settings, dict) else {}
+    llm_config_raw = config_dict.get("llm", {})
+    llm_config = llm_config_raw if isinstance(llm_config_raw, dict) else {}
+    if not llm_config.get("api_base_url"):
         preview_results["errors"].append("No LLM API configured. Cannot preview docstring changes.")
         return preview_results
 
