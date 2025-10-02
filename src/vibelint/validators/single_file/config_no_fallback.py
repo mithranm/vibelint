@@ -206,17 +206,22 @@ class ConfigNoFallbackRule(ValidationRule):
         if isinstance(node, ast.Constant):
             if isinstance(node.value, str):
                 return node.value
+            elif node.value is ...:
+                return "..."
             else:
-                return repr(node.value)
+                return str(repr(node.value))
         elif isinstance(node, ast.Str):  # Python < 3.8 compatibility
-            return node.s
+            return str(node.s)
         else:
             return ast.unparse(node) if hasattr(ast, "unparse") else "<complex>"
 
     def _extract_node_value(self, node: ast.AST) -> str:
         """Extract a readable representation of the node value."""
         if isinstance(node, ast.Constant):
-            return repr(node.value)
+            if node.value is ...:
+                return "..."
+            else:
+                return str(repr(node.value))
         elif isinstance(node, ast.Str):
             return repr(node.s)
         elif isinstance(node, ast.Num):
