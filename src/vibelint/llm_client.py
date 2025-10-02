@@ -49,7 +49,7 @@ TOKEN_ESTIMATION_DIVISOR = 4
 
 __all__ = [
     "LLMRole",
-    "LLMManager",
+    "LLMClient",
     "LLMRequest",
     "LLMResponse",
     "LLMBackendConfig",
@@ -162,7 +162,7 @@ class LLMStatus:
     available_features: FeatureAvailability
 
 
-class LLMManager:
+class LLMClient:
     """Simple manager for dual LLM setup."""
 
     def __init__(self, config: Optional["LLMConfig"] = None):
@@ -656,14 +656,14 @@ value ::= "true" | "false" | "\\"" [^"]* "\\""'''
             )
 
 
-def create_llm_manager(config: Optional["LLMConfig"] = None) -> Optional[LLMManager]:
+def create_llm_manager(config: Optional["LLMConfig"] = None) -> Optional[LLMClient]:
     """Create LLM manager from vibelint configuration.
 
-    Always returns an LLMManager instance, even if no LLMs are configured.
+    Always returns an LLMClient instance, even if no LLMs are configured.
     This allows embedding-only analysis to work without LLM endpoints.
 
     Args:
         config: Optional typed LLMConfig - if None, loads from config files
 
     """
-    return LLMManager(config)
+    return LLMClient(config)

@@ -12,7 +12,7 @@ from vibelint.config import (
     load_config,
 )
 from vibelint.llm_client import (
-    LLMManager,
+    LLMClient,
     LLMRequest,
     LLMResponse,
     LLMRole,
@@ -30,7 +30,7 @@ __all__ = [
     "get_llm_config",
     "get_embedding_config",
     # LLM Client
-    "LLMManager",
+    "LLMClient",
     "LLMRequest",
     "LLMResponse",
     "LLMRole",
