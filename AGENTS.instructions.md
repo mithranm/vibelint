@@ -109,8 +109,10 @@ PYTHONPATH=src vibelint diagnostics  # Shows configured models and available fea
 
 **Standard tools (use these instead of custom validators):**
 
-1. **black** - Code formatting
-2. **isort** - Import sorting
+**IMPORTANT - Run formatters in this exact order to avoid conflicts:**
+
+1. **isort** - Import sorting (run first)
+2. **black** - Code formatting (run second - overrides isort's multi-line imports)
 3. **ruff check --fix** - Fast Python linter
    - `ruff check --select D` - Docstring checks (replaces docstring.py validator)
    - `ruff check --select T201` - Print statement detection (replaces print_statements.py validator)
@@ -118,6 +120,11 @@ PYTHONPATH=src vibelint diagnostics  # Shows configured models and available fea
    - `ruff check --select C901` - Complexity checks (replaces code_smells.py validator)
 4. **pyright** - Static type checking
 5. **vulture** - Dead code detection (replaces dead_code.py validator)
+
+**Why this order matters:**
+- isort may wrap long import lines across multiple lines
+- black prefers imports on a single line and will reformat them
+- Running black after isort ensures consistent formatting
 
 ### Removed Validators (Use Standard Tools Instead)
 
