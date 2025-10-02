@@ -215,6 +215,7 @@ exclude_globs = [
     "*.xml",            # xml files
     "*.json",           # json files
     "docs/**",
+    "VIBECHECKER.txt"
 ]
 # LLM config will be inherited from parent project
 

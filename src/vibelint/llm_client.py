@@ -551,12 +551,16 @@ class LLMClient:
         if role == LLMRole.FAST:
             backend = getattr(self.llm_config, "fast_backend", None)
             if not backend:
-                raise ValueError("fast_backend not configured in pyproject.toml [tool.vibelint.llm]")
+                raise ValueError(
+                    "fast_backend not configured in pyproject.toml [tool.vibelint.llm]"
+                )
             return backend
         elif role == LLMRole.ORCHESTRATOR:
             backend = getattr(self.llm_config, "orchestrator_backend", None)
             if not backend:
-                raise ValueError("orchestrator_backend not configured in pyproject.toml [tool.vibelint.llm]")
+                raise ValueError(
+                    "orchestrator_backend not configured in pyproject.toml [tool.vibelint.llm]"
+                )
             return backend
         else:
             raise ValueError(f"Unknown LLM role: {role}")

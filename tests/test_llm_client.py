@@ -41,9 +41,7 @@ class TestLLMRequest:
 
     def test_keyword_arguments(self):
         """Test LLMRequest accepts keyword arguments."""
-        request = LLMRequest(
-            content="Test", max_tokens=50, temperature=0.1
-        )
+        request = LLMRequest(content="Test", max_tokens=50, temperature=0.1)
         assert request.content == "Test"
         assert request.max_tokens == 50
         assert request.temperature == 0.1
