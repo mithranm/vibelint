@@ -104,7 +104,7 @@ class ValidatorRegistry:
             "vibelint.validators.single_file.logger_names",
             "vibelint.validators.single_file.typing_quality",
             "vibelint.validators.single_file.self_validation",
-            "vibelint.validators.single_file.strict_config",
+            "vibelint.validators.single_file.config_no_fallback",
             # Project-wide validators
             "vibelint.validators.project_wide.api_consistency",
             "vibelint.validators.project_wide.namespace_collisions",

@@ -1,7 +1,8 @@
-"""Strict Configuration Validator
+"""Config No-Fallback Validator
 
-Enforces strict configuration management by detecting and flagging fallback patterns.
-All configuration should go through the CM (Configuration Management) system without fallbacks.
+Detects and prevents configuration fallbacks (.get() with defaults).
+Enforces fail-fast config access - all config values must be explicitly set.
+Also detects hardcoded endpoints that should be in configuration.
 """
 
 import ast
@@ -35,13 +36,13 @@ class ValidationRule:
         self.severity = severity
 
 
-class StrictConfigRule(ValidationRule):
-    """Detects configuration fallbacks and enforces strict config management."""
+class ConfigNoFallbackRule(ValidationRule):
+    """Detects configuration fallbacks and enforces fail-fast config access."""
 
     def __init__(self):
         super().__init__(
-            name="strict-config",
-            description="Enforce strict configuration management - no fallbacks",
+            name="config-no-fallback",
+            description="Prevent config.get() fallbacks - require explicit values",
             category="configuration",
             severity="error",
         )
@@ -230,7 +231,7 @@ class ConfigFallbackDetector:
     """Standalone utility for detecting configuration fallbacks."""
 
     def __init__(self):
-        self.rule = StrictConfigRule()
+        self.rule = ConfigNoFallbackRule()
 
     def scan_directory(self, directory: Path) -> Dict[str, List[ValidationResult]]:
         """Scan a directory for configuration fallbacks."""
@@ -290,7 +291,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     if len(sys.argv) != 2:
-        print("Usage: python strict_config.py <directory>")
+        print("Usage: python config_no_fallback.py <directory>")
         sys.exit(1)
 
     directory = Path(sys.argv[1])
