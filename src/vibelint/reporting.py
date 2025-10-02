@@ -1,5 +1,4 @@
-"""
-Comprehensive reporting system for vibelint analysis results.
+"""Comprehensive reporting system for vibelint analysis results.
 
 Provides structured report generation with granular verbosity levels,
 artifact management, hyperlinked reports, and multiple output formatters
@@ -157,7 +156,6 @@ class ReportGenerator:
         self, analysis_results: AnalysisResults, timestamp: Optional[str] = None
     ) -> Dict[str, Path]:
         """Generate comprehensive report with all artifacts."""
-
         if timestamp is None:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
 
@@ -191,7 +189,6 @@ class ReportGenerator:
         self, analysis_results: AnalysisResults, report_dir: Path, timestamp: str
     ) -> Path:
         """Generate main analysis report."""
-
         # Filter content based on verbosity level
         filtered_results = self._filter_by_verbosity(analysis_results)
 
@@ -204,9 +201,10 @@ class ReportGenerator:
 
         return report_path
 
-    def _format_main_report_markdown(self, analysis_results: AnalysisResults, timestamp: str) -> str:
+    def _format_main_report_markdown(
+        self, analysis_results: AnalysisResults, timestamp: str
+    ) -> str:
         """Format main report as markdown."""
-
         executive = analysis_results.synthesis.executive_summary
         priority_actions = analysis_results.synthesis.priority_actions
 
@@ -273,7 +271,6 @@ Verbosity Level: {self.config.verbosity_level.value}
         self, analysis_results: AnalysisResults, report_dir: Path, timestamp: str
     ) -> Dict[str, Path]:
         """Generate detailed artifacts for different analysis aspects."""
-
         artifacts_dir = report_dir / "artifacts"
         artifacts_dir.mkdir(exist_ok=True)
 
@@ -284,7 +281,9 @@ Verbosity Level: {self.config.verbosity_level.value}
             tree_path = artifacts_dir / "organizational_analysis.json"
             # Convert dataclass to dict for JSON serialization using asdict()
             tree_data = {
-                "quick_violations": [asdict(v) for v in analysis_results.tree_analysis.quick_violations]
+                "quick_violations": [
+                    asdict(v) for v in analysis_results.tree_analysis.quick_violations
+                ]
             }
             tree_path.write_text(
                 json.dumps(tree_data, indent=2, default=str),
@@ -324,7 +323,6 @@ Verbosity Level: {self.config.verbosity_level.value}
         self, analysis_results: AnalysisResults, report_dir: Path, timestamp: str
     ) -> Path:
         """Generate quick action plan for immediate development focus."""
-
         synthesis = analysis_results.synthesis
 
         quick_plan = f"""# Quick Action Plan
@@ -357,7 +355,6 @@ Generated: {timestamp}
         self, report_dir: Path, generated_files: Dict[str, Path], timestamp: str
     ) -> Path:
         """Generate navigation index for the report."""
-
         index_content = f"""# Vibelint Analysis Report Index
 Generated: {timestamp}
 
@@ -392,7 +389,6 @@ Generated: {timestamp}
 
     def _filter_by_verbosity(self, analysis_results: AnalysisResults) -> AnalysisResults:
         """Filter analysis results based on configured verbosity level."""
-
         if self.config.verbosity_level == VerbosityLevel.EXECUTIVE:
             # Only high-level summary and critical issues
             critical_actions = self._extract_critical_issues(analysis_results)
@@ -440,9 +436,7 @@ Generated: {timestamp}
         for file_analysis in content_analysis.file_analyses:
             # Keep only high-severity findings for tactical view
             high_severity = [
-                f
-                for f in file_analysis.findings
-                if f.severity in [Severity.BLOCK, Severity.WARN]
+                f for f in file_analysis.findings if f.severity in [Severity.BLOCK, Severity.WARN]
             ]
             limited_file_analyses.append(
                 FileAnalysisEntry(

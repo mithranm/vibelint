@@ -1,5 +1,4 @@
-"""
-Strict Configuration Validator
+"""Strict Configuration Validator
 
 Enforces strict configuration management by detecting and flagging fallback patterns.
 All configuration should go through the CM (Configuration Management) system without fallbacks.

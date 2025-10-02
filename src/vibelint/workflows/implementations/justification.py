@@ -1,5 +1,4 @@
-"""
-Clean, focused justification engine.
+"""Clean, focused justification engine.
 
 Core workflow:
 1. Discover files and build filesystem tree
@@ -32,6 +31,7 @@ class JustificationEngine:
 
     def __init__(self, config: Optional["WorkflowConfig"] = None):
         from vibelint.workflows.core.base import WorkflowConfig
+
         self.config = config or WorkflowConfig()
         self.llm_manager = None
         self.cache_file = Path(".vibes/cache/file_summaries.json")
@@ -102,7 +102,12 @@ class JustificationEngine:
                 try:
                     # Convert LogEntry dataclass to dict for JSON serialization
                     from dataclasses import asdict
-                    log_dict = asdict(log_entry) if hasattr(log_entry, '__dataclass_fields__') else log_entry
+
+                    log_dict = (
+                        asdict(log_entry)
+                        if hasattr(log_entry, "__dataclass_fields__")
+                        else log_entry
+                    )
                     with open(self.jsonl_log_file, "a") as f:
                         f.write(json.dumps(log_dict) + "\n")
                 except Exception as e:
@@ -567,13 +572,15 @@ Be specific and direct. List misplaced files clearly."""
     ) -> str:
         """Synthesize structural + semantic analyses into final report."""
         if not self.llm_manager:
-            return (
-                f"## Structural Analysis\n\n{structural_analysis}\n\n"
-                + "\n\n---\n\n".join(chunk_analyses)
+            return f"## Structural Analysis\n\n{structural_analysis}\n\n" + "\n\n---\n\n".join(
+                chunk_analyses
             )
 
         combined_semantic = "\n\n---\n\n".join(
-            [f"**Semantic Analysis Part {i+1}:**\n{analysis}" for i, analysis in enumerate(chunk_analyses)]
+            [
+                f"**Semantic Analysis Part {i+1}:**\n{analysis}"
+                for i, analysis in enumerate(chunk_analyses)
+            ]
         )
 
         prompt = f"""Synthesize this multi-phase project analysis into a comprehensive report:

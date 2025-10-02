@@ -1,5 +1,4 @@
-"""
-CLI for vibelint - all commands in one module.
+"""CLI for vibelint - all commands in one module.
 
 Provides core commands: check, snapshot.
 
@@ -57,11 +56,15 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 
 @cli.command("check")
 @click.argument("targets", nargs=-1, type=click.Path(exists=True, path_type=Path))
-@click.option("--format", "-f", type=click.Choice(["human", "json"]), default="human", help="Output format")
+@click.option(
+    "--format", "-f", type=click.Choice(["human", "json"]), default="human", help="Output format"
+)
 @click.option("--exclude-ai", is_flag=True, help="Skip AI validators (faster)")
 @click.option("--rules", help="Comma-separated rules to run")
 @click.pass_context
-def check(ctx: click.Context, targets: tuple[Path, ...], format: str, exclude_ai: bool, rules: str | None) -> None:
+def check(
+    ctx: click.Context, targets: tuple[Path, ...], format: str, exclude_ai: bool, rules: str | None
+) -> None:
     """Run vibelint validation."""
     vibelint_ctx: VibelintContext = ctx.obj
     project_root = vibelint_ctx.project_root
@@ -116,7 +119,13 @@ def check(ctx: click.Context, targets: tuple[Path, ...], format: str, exclude_ai
 
 @cli.command("snapshot")
 @click.argument("targets", nargs=-1, type=click.Path(exists=True, path_type=Path))
-@click.option("--output", "-o", type=click.Path(path_type=Path), default="codebase_snapshot.md", help="Output markdown file path")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default="codebase_snapshot.md",
+    help="Output markdown file path",
+)
 @click.pass_context
 def snapshot(ctx: click.Context, targets: tuple[Path, ...], output: Path) -> None:
     """Create a markdown snapshot of the codebase structure and contents."""
@@ -142,11 +151,7 @@ def snapshot(ctx: click.Context, targets: tuple[Path, ...], output: Path) -> Non
 
     try:
         console.print(f"[blue]📸 Creating snapshot of {len(target_list)} target(s)...[/blue]")
-        create_snapshot(
-            output_path=output,
-            target_paths=target_list,
-            config=config
-        )
+        create_snapshot(output_path=output, target_paths=target_list, config=config)
         console.print(f"[green]✅ Snapshot saved to {output}[/green]")
     except Exception as e:
         console.print(f"[red]❌ Snapshot failed: {e}[/red]")
@@ -154,10 +159,10 @@ def snapshot(ctx: click.Context, targets: tuple[Path, ...], output: Path) -> Non
         ctx.exit(1)
 
 
-
 def main() -> None:
     """Entry point for vibelint CLI."""
     import sys
+
     try:
         cli(obj=VibelintContext(), prog_name="vibelint")
     except SystemExit as e:

@@ -1,5 +1,4 @@
-"""
-API consistency validator for vibelint.
+"""API consistency validator for vibelint.
 
 Detects inconsistent API usage patterns, missing required parameters,
 and architectural violations that lead to runtime failures.

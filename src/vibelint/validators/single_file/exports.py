@@ -1,5 +1,4 @@
-"""
-__all__ exports validator using BaseValidator plugin system.
+"""__all__ exports validator using BaseValidator plugin system.
 
 Checks for presence and correct format of __all__ definitions in Python modules.
 

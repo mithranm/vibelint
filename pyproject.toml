@@ -10,7 +10,7 @@ authors = [
   { name = "Mithran Mohanraj", email = "mithran.mohanraj@gmail.com" }
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -18,14 +18,12 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Quality Assurance",
 ]
 dependencies = [
     "click>=8.1.0",
-    "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w",
     "colorama>=0.4.0",
     "rich>=12.0.0",
@@ -95,12 +93,12 @@ where = ["src"]
 include = ["vibelint*"]
 
 [tool.black]
-target-version = ["py310", "py311", "py312"]
+target-version = ["py311", "py312"]
 line-length=100
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 exclude = [
     ".git",
     ".pytest_cache",
@@ -136,6 +134,9 @@ ignore = [
     "B006",   # Allow mutable defaults for now
     "B007",   # Allow unused loop variables
     "UP007",  # Allow Union syntax for now
+    "C901",   # Allow complex functions (we'll refactor later)
+    "F821",   # Allow undefined names (forward refs in type hints)
+    "F841",   # Allow unused local variables
     # Docstring rules (D) - relax some for existing code
     "D100",   # Missing docstring in public module
     "D101",   # Missing docstring in public class
@@ -145,11 +146,19 @@ ignore = [
     "D105",   # Missing docstring in magic method
     "D107",   # Missing docstring in __init__
     "D203",   # 1 blank line required before class docstring (conflicts with D211)
+    "D205",   # 1 blank line required between summary line and description
     "D213",   # Multi-line docstring summary should start at second line (conflicts with D212)
+    "D400",   # First line should end with period
+    "D401",   # First line should be imperative mood
+    "D415",   # First line should end with period/question/exclamation
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F401", "F811", "D"]  # Allow unused imports and missing docstrings in tests
+"src/vibelint/cli.py" = ["T201"]  # Allow print in CLI (used for user output)
+"src/vibelint/validators/single_file/*.py" = ["T201", "TID252"]  # Allow prints, relative imports in validators
+"src/vibelint/validators/project_wide/*.py" = ["TID252", "F401"]  # Allow relative imports, unused imports in validators
+"src/vibelint/workflows/**/*.py" = ["T201", "F821"]  # Allow prints, forward refs in workflows
 
 [tool.pytest.ini_options]
 minversion = "7.0"

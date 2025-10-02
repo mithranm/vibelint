@@ -1,5 +1,4 @@
-"""
-Single-file validators for vibelint.
+"""Single-file validators for vibelint.
 
 These validators analyze individual Python files in isolation.
 They should not require knowledge of other files in the project.
@@ -17,8 +16,7 @@ class SingleFileValidator(BaseValidator):
     """Base class for validators that analyze individual files."""
 
     def validate_file(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
-        """
-        Validate a single file in isolation.
+        """Validate a single file in isolation.
 
         Args:
             file_path: Path to the file being validated
@@ -27,6 +25,7 @@ class SingleFileValidator(BaseValidator):
 
         Yields:
             Finding objects for any issues found
+
         """
         # Default implementation delegates to validate method
         yield from self.validate(file_path, content, config)

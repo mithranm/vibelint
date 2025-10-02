@@ -1,5 +1,4 @@
-"""
-Embedding Client for Specialized Code and Natural Language Embeddings.
+"""Embedding Client for Specialized Code and Natural Language Embeddings.
 
 This module provides a unified interface for accessing both local and remote
 embedding models, with specialized endpoints for code analysis and natural
@@ -29,17 +28,16 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingClient:
-    """
-    Unified embedding client supporting both specialized remote endpoints
+    """Unified embedding client supporting both specialized remote endpoints
     and local fallback models.
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """
-        Initialize the embedding client with configuration.
+        """Initialize the embedding client with configuration.
 
         Args:
             config: Configuration dictionary with embedding settings
+
         """
         self.config = config or {}
         self._load_configuration()
@@ -100,8 +98,7 @@ class EmbeddingClient:
     def _call_remote_api(
         self, api_url: str, api_key: str, model: str, texts: List[str]
     ) -> List[List[float]]:
-        """
-        Call remote embedding API.
+        """Call remote embedding API.
 
         Args:
             api_url: API endpoint URL
@@ -111,6 +108,7 @@ class EmbeddingClient:
 
         Returns:
             List of embedding vectors
+
         """
         headers = {"Content-Type": "application/json"}
         if api_key:
@@ -135,14 +133,14 @@ class EmbeddingClient:
             raise
 
     def _get_local_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """
-        Get embeddings using local model.
+        """Get embeddings using local model.
 
         Args:
             texts: List of texts to embed
 
         Returns:
             List of embedding vectors
+
         """
         if not self._local_model:
             raise RuntimeError("Local embedding model not available")
@@ -151,14 +149,14 @@ class EmbeddingClient:
         return embeddings.tolist()
 
     def get_code_embeddings(self, code_texts: List[str]) -> List[List[float]]:
-        """
-        Get embeddings optimized for code analysis.
+        """Get embeddings optimized for code analysis.
 
         Args:
             code_texts: List of code snippets to embed
 
         Returns:
             List of embedding vectors optimized for code similarity
+
         """
         if self._can_use_code_api:
             try:
@@ -172,14 +170,14 @@ class EmbeddingClient:
         return self._get_local_embeddings(code_texts)
 
     def get_natural_embeddings(self, natural_texts: List[str]) -> List[List[float]]:
-        """
-        Get embeddings optimized for natural language analysis.
+        """Get embeddings optimized for natural language analysis.
 
         Args:
             natural_texts: List of natural language texts to embed
 
         Returns:
             List of embedding vectors optimized for natural language understanding
+
         """
         if self._can_use_natural_api:
             try:
@@ -193,8 +191,7 @@ class EmbeddingClient:
         return self._get_local_embeddings(natural_texts)
 
     def get_embeddings(self, texts: List[str], content_type: str = "mixed") -> List[List[float]]:
-        """
-        Get embeddings with automatic routing based on content type.
+        """Get embeddings with automatic routing based on content type.
 
         Args:
             texts: List of texts to embed
@@ -202,6 +199,7 @@ class EmbeddingClient:
 
         Returns:
             List of embedding vectors
+
         """
         if content_type == "code":
             return self.get_code_embeddings(texts)
@@ -212,8 +210,7 @@ class EmbeddingClient:
             return self.get_natural_embeddings(texts)
 
     def compute_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-        """
-        Compute cosine similarity between two embeddings.
+        """Compute cosine similarity between two embeddings.
 
         Args:
             embedding1: First embedding vector
@@ -221,6 +218,7 @@ class EmbeddingClient:
 
         Returns:
             Cosine similarity score (0-1)
+
         """
         import numpy as np
 
@@ -242,8 +240,7 @@ class EmbeddingClient:
     def find_similar_pairs(
         self, texts: List[str], content_type: str = "mixed", threshold: Optional[float] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Find pairs of texts that exceed similarity threshold.
+        """Find pairs of texts that exceed similarity threshold.
 
         Args:
             texts: List of texts to analyze
@@ -252,6 +249,7 @@ class EmbeddingClient:
 
         Returns:
             List of similar pairs with metadata
+
         """
         if threshold is None:
             threshold = self.similarity_threshold

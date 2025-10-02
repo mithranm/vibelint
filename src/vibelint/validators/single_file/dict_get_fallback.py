@@ -1,5 +1,4 @@
-"""
-Validator for detecting .get() with fallback values on typed dictionaries.
+"""Validator for detecting .get() with fallback values on typed dictionaries.
 
 In strictly-typed code, .get() with defaults hides missing keys. This is appropriate
 for ETL/JSON parsing, but not for internal typed structures which should fail fast.
@@ -27,8 +26,7 @@ class DictGetFallbackValidator(BaseValidator):
         self.severity = severity or Severity.WARN
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
-        """
-        Validate Python file for .get() antipatterns.
+        """Validate Python file for .get() antipatterns.
 
         Args:
             file_path: Path to the Python file
@@ -37,6 +35,7 @@ class DictGetFallbackValidator(BaseValidator):
 
         Yields:
             Finding objects for .get() antipatterns found
+
         """
         try:
             tree = ast.parse(content, filename=str(file_path))
@@ -73,7 +72,7 @@ class DictGetFallbackValidator(BaseValidator):
         key = self._extract_key(node)
         fallback = self._extract_fallback(node)
 
-        message = f"Using .get() with fallback hides missing keys - use direct access for typed structures"
+        message = "Using .get() with fallback hides missing keys - use direct access for typed structures"
 
         if key:
             message = f"dict.get('{key}', {fallback}) hides missing keys - use direct access dict['{key}'] for typed structures"
@@ -87,7 +86,7 @@ class DictGetFallbackValidator(BaseValidator):
             line=node.lineno,
             column=node.col_offset,
             severity=self.severity,
-            suggestion=suggestion
+            suggestion=suggestion,
         )
 
     def _extract_key(self, node: ast.Call) -> str:

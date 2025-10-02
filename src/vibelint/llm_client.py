@@ -1,5 +1,4 @@
-"""
-Consolidated LLM system for vibelint.
+"""Consolidated LLM system for vibelint.
 
 Manages dual LLMs, tracing, and dynamic validator generation:
 - Fast: High-speed inference for quick tasks
@@ -10,7 +9,6 @@ vibelint/src/vibelint/llm.py
 """
 
 import logging
-import os
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -172,8 +170,9 @@ class LLMManager:
 
         Args:
             config: Optional typed LLMConfig - if None, loads from config files
+
         """
-        from vibelint.config import get_llm_config, LLMConfig
+        from vibelint.config import get_llm_config
 
         # Load typed configuration
         self.llm_config = config if config is not None else get_llm_config()
@@ -209,14 +208,22 @@ class LLMManager:
                     timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
                     llm_used=llm_used,
                     request_content_length=len(request.content),
-                    request_content_preview=request.content[:500] + "..." if len(request.content) > 500 else request.content,
+                    request_content_preview=(
+                        request.content[:500] + "..."
+                        if len(request.content) > 500
+                        else request.content
+                    ),
                     request_max_tokens=request.max_tokens,
                     request_temperature=request.temperature,
                     response_success=response.success,
                     response_content_length=len(response.content),
-                    response_content_preview=response.content[:500] + "..." if len(response.content) > 500 else response.content,
+                    response_content_preview=(
+                        response.content[:500] + "..."
+                        if len(response.content) > 500
+                        else response.content
+                    ),
                     response_duration_seconds=response.duration_seconds,
-                    response_error=response.error
+                    response_error=response.error,
                 )
                 self.log_callback(log_entry)
             except Exception as e:
@@ -259,7 +266,9 @@ class LLMManager:
 
         # Get LLM hard limits from typed config
         fast_max_tokens = self.llm_config.fast_max_tokens
-        fast_max_context = self.llm_config.fast_max_context_tokens or 1000  # Default if not specified
+        fast_max_context = (
+            self.llm_config.fast_max_context_tokens or 1000
+        )  # Default if not specified
 
         orchestrator_max_tokens = self.llm_config.orchestrator_max_tokens
         # Orchestrator typically has much larger context window
@@ -273,30 +282,42 @@ class LLMManager:
         # Hard constraint: If request exceeds fast LLM's output token limit
         if max_tokens > fast_max_tokens:
             if orchestrator_available:
-                logger.debug(f"Routing to orchestrator: output tokens ({max_tokens}) > fast limit ({fast_max_tokens})")
+                logger.debug(
+                    f"Routing to orchestrator: output tokens ({max_tokens}) > fast limit ({fast_max_tokens})"
+                )
                 return LLMRole.ORCHESTRATOR
             else:
-                logger.warning(f"Request needs {max_tokens} tokens but orchestrator unavailable, truncating to fast LLM limit")
+                logger.warning(
+                    f"Request needs {max_tokens} tokens but orchestrator unavailable, truncating to fast LLM limit"
+                )
                 return LLMRole.FAST
 
         # Hard constraint: If input exceeds fast LLM's context window
         if estimated_input_tokens > fast_max_context:
             if orchestrator_available:
-                logger.debug(f"Routing to orchestrator: input tokens (~{estimated_input_tokens}) > fast context ({fast_max_context})")
+                logger.debug(
+                    f"Routing to orchestrator: input tokens (~{estimated_input_tokens}) > fast context ({fast_max_context})"
+                )
                 return LLMRole.ORCHESTRATOR
             else:
-                logger.warning(f"Large input (~{estimated_input_tokens} tokens) but orchestrator unavailable, truncating to fast LLM")
+                logger.warning(
+                    f"Large input (~{estimated_input_tokens} tokens) but orchestrator unavailable, truncating to fast LLM"
+                )
                 return LLMRole.FAST
 
         # No hard constraints violated - use fast LLM (cheaper/faster)
         if fast_available:
-            logger.debug(f"Routing to fast: within limits (input~{estimated_input_tokens}, output={max_tokens})")
+            logger.debug(
+                f"Routing to fast: within limits (input~{estimated_input_tokens}, output={max_tokens})"
+            )
             return LLMRole.FAST
         elif orchestrator_available:
-            logger.debug(f"Routing to orchestrator: fast LLM unavailable")
+            logger.debug("Routing to orchestrator: fast LLM unavailable")
             return LLMRole.ORCHESTRATOR
         else:
-            raise ValueError("No LLMs configured - need either fast_api_url or orchestrator_api_url in config")
+            raise ValueError(
+                "No LLMs configured - need either fast_api_url or orchestrator_api_url in config"
+            )
 
     async def process_request(self, request: LLMRequest) -> LLMResponse:
         """Process request using intelligent routing with fallback."""
@@ -305,11 +326,15 @@ class LLMManager:
         orchestrator_available = bool(self.llm_config.orchestrator_api_url)
 
         if not fast_available and not orchestrator_available:
-            raise ValueError("No LLM configured. Add fast_api_url or orchestrator_api_url to pyproject.toml")
+            raise ValueError(
+                "No LLM configured. Add fast_api_url or orchestrator_api_url to pyproject.toml"
+            )
 
         # Handle oversized content with truncation warning
         if len(request.content) > 50000:  # ~50k chars for huge log files
-            logger.warning(f"Content too large ({len(request.content)} chars), truncating to 50k chars")
+            logger.warning(
+                f"Content too large ({len(request.content)} chars), truncating to 50k chars"
+            )
             request.content = request.content[:50000] + "\n[...content truncated...]"
 
         # Use intelligent routing to select appropriate LLM
@@ -339,7 +364,7 @@ class LLMManager:
                     max_tokens=max(request.max_tokens or 0, 1000),
                     temperature=request.temperature,
                     system_prompt=request.system_prompt,
-                    structured_output=request.structured_output
+                    structured_output=request.structured_output,
                 )
                 result = await self._call_orchestrator_llm(orchestrator_request)
                 if result.content and result.content.strip():
@@ -362,7 +387,7 @@ class LLMManager:
                         max_tokens=max(request.max_tokens or 0, 1000),
                         temperature=request.temperature,
                         system_prompt=request.system_prompt,
-                        structured_output=request.structured_output
+                        structured_output=request.structured_output,
                     )
                     result = await self._call_orchestrator_llm(orchestrator_request)
                     if result.content and result.content.strip():
@@ -387,7 +412,7 @@ class LLMManager:
             duration_seconds=0,
             input_tokens=0,
             success=False,
-            error="All LLM attempts failed or returned empty content"
+            error="All LLM attempts failed or returned empty content",
         )
 
     async def _call_fast_llm(self, request: LLMRequest) -> LLMResponse:
@@ -436,7 +461,7 @@ class LLMManager:
                 if "json_schema" in request.structured_output:
                     payload.response_format = {
                         "type": "json_schema",
-                        "json_schema": request.structured_output["json_schema"]
+                        "json_schema": request.structured_output["json_schema"],
                     }
                 else:
                     payload.response_format = {"type": "json_object"}
@@ -449,7 +474,7 @@ class LLMManager:
                 if "json_schema" in request.structured_output:
                     payload.response_format = {
                         "type": "json_schema",
-                        "json_schema": request.structured_output["json_schema"]
+                        "json_schema": request.structured_output["json_schema"],
                     }
                 else:
                     payload.response_format = {"type": "json_object"}
@@ -478,7 +503,9 @@ class LLMManager:
         )
 
         logger.debug(f"Making HTTP request to {url} with timeout {timeout_seconds}s")
-        response = self.session.post(url, json=payload_dict, headers=headers, timeout=timeout_seconds)
+        response = self.session.post(
+            url, json=payload_dict, headers=headers, timeout=timeout_seconds
+        )
         logger.debug(f"HTTP response status: {response.status_code}")
         logger.debug(f"HTTP response headers: {dict(response.headers)}")
 
@@ -522,11 +549,11 @@ class LLMManager:
     def _get_backend_type_for_role(self, role: LLMRole) -> str:
         """Get backend type for the specified LLM role."""
         if role == LLMRole.FAST:
-            return getattr(self.llm_config, 'fast_backend', 'vllm')
+            return getattr(self.llm_config, "fast_backend", "vllm")
         elif role == LLMRole.ORCHESTRATOR:
-            return getattr(self.llm_config, 'orchestrator_backend', 'llamacpp')
+            return getattr(self.llm_config, "orchestrator_backend", "llamacpp")
         else:
-            return 'openai'  # Default fallback
+            return "openai"  # Default fallback
 
     def _create_json_grammar(self, json_schema: Dict[str, Any]) -> str:
         """Create a GBNF JSON grammar for llama.cpp from JSON schema."""
@@ -550,17 +577,17 @@ class LLMManager:
                             if ref_def.get("type") == "string" and "enum" in ref_def:
                                 enum_values = ref_def["enum"]
                                 enum_choices = " | ".join(f'"{value}"' for value in enum_values)
-                                return f'root ::= "{{" ws "\"{prop_name}\"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
+                                return f'root ::= "{{" ws ""{prop_name}"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
 
                 # Handle direct string enums (like "yes"/"no")
                 elif prop_schema.get("type") == "string" and "enum" in prop_schema:
                     enum_values = prop_schema["enum"]
                     enum_choices = " | ".join(f'"{value}"' for value in enum_values)
-                    return f'root ::= "{{" ws "\"{prop_name}\"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
+                    return f'root ::= "{{" ws ""{prop_name}"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
 
                 # Handle boolean fields
                 elif prop_schema.get("type") == "boolean":
-                    return f'root ::= "{{" ws "\"{prop_name}\"" ws ":" ws ("true" | "false") ws "}}" ws ::= [ \\t\\n\\r]*'
+                    return f'root ::= "{{" ws ""{prop_name}"" ws ":" ws ("true" | "false") ws "}}" ws ::= [ \\t\\n\\r]*'
 
         # Fallback to basic JSON object grammar
         return '''root ::= "{" ws "}" | "{" ws object-item (ws "," ws object-item)* ws "}"
@@ -607,6 +634,7 @@ value ::= "true" | "false" | "\\"" [^"]* "\\""'''
     def process_request_sync(self, request: LLMRequest) -> LLMResponse:
         """Synchronous wrapper for process_request to support legacy code."""
         import asyncio
+
         try:
             # Always create a new event loop for sync calls
             new_loop = asyncio.new_event_loop()
@@ -624,7 +652,7 @@ value ::= "true" | "false" | "\\"" [^"]* "\\""'''
                 duration_seconds=0,
                 input_tokens=0,
                 success=False,
-                error=str(e)
+                error=str(e),
             )
 
 
@@ -636,5 +664,6 @@ def create_llm_manager(config: Optional["LLMConfig"] = None) -> Optional[LLMMana
 
     Args:
         config: Optional typed LLMConfig - if None, loads from config files
+
     """
     return LLMManager(config)

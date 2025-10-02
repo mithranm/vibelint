@@ -1,5 +1,4 @@
-"""
-Console and UI utility functions for vibelint.
+"""Console and UI utility functions for vibelint.
 
 vibelint/src/vibelint/ui.py
 """
@@ -25,8 +24,7 @@ console = Console()
 
 
 def _get_terminal_size():
-    """
-    Returns the terminal size as a tuple (width, height) of characters.
+    """Returns the terminal size as a tuple (width, height) of characters.
     Falls back to (80, 24) if the dimensions cannot be determined.
 
     vibelint/src/vibelint/ui.py
@@ -41,8 +39,7 @@ def _get_terminal_size():
 
 
 def scale_ascii_art_by_height(ascii_art: str, target_height: int) -> str:
-    """
-    Scales the ASCII art to have a specified target height (in characters)
+    """Scales the ASCII art to have a specified target height (in characters)
     while preserving the original aspect ratio. The target width is
     automatically computed based on the scaling factor.
 
@@ -54,6 +51,7 @@ def scale_ascii_art_by_height(ascii_art: str, target_height: int) -> str:
         Scaled ASCII art string
 
     vibelint/src/vibelint/ui.py
+
     """
     # Split into lines and remove any fully blank lines.
     lines = [line for line in ascii_art.splitlines() if line.strip()]
@@ -87,8 +85,7 @@ def scale_ascii_art_by_height(ascii_art: str, target_height: int) -> str:
 
 
 def scale_to_terminal_by_height(ascii_art: str) -> str:
-    """
-    Scales the provided ASCII art to fit based on the terminal's available height.
+    """Scales the provided ASCII art to fit based on the terminal's available height.
     The width is computed automatically to maintain the art's original aspect ratio.
 
     Args:
@@ -98,6 +95,7 @@ def scale_to_terminal_by_height(ascii_art: str) -> str:
         Scaled ASCII art string
 
     vibelint/src/vibelint/ui.py
+
     """
     _, term_height = _get_terminal_size()
     # Optionally, leave a margin (here, using 90% of available height)

@@ -1,6 +1,5 @@
 # vibelint/src/vibelint/snapshot.py
-"""
-Codebase snapshot generation in markdown format.
+"""Codebase snapshot generation in markdown format.
 
 vibelint/src/vibelint/snapshot.py
 """
@@ -26,8 +25,7 @@ def create_snapshot(
     target_paths: list[Path],
     config: Config,
 ) -> None:
-    """
-    Creates a Markdown snapshot file containing the project structure and file contents,
+    """Creates a Markdown snapshot file containing the project structure and file contents,
     respecting the include/exclude rules defined in pyproject.toml.
 
     Args:
@@ -36,8 +34,8 @@ def create_snapshot(
     config: The vibelint configuration object.
 
     vibelint/src/vibelint/snapshot.py
-    """
 
+    """
     assert config.project_root is not None, "Project root must be set before creating snapshot."
     project_root = config.project_root.resolve()
 
@@ -220,8 +218,7 @@ def create_snapshot(
 
 
 def _write_tree(outfile, node: dict, prefix=""):
-    """
-    Helper function to recursively write the directory tree structure
+    """Helper function to recursively write the directory tree structure
     from the prepared dictionary.
 
     Args:
@@ -230,6 +227,7 @@ def _write_tree(outfile, node: dict, prefix=""):
         prefix: The string prefix for drawing tree lines.
 
     vibelint/src/vibelint/snapshot.py
+
     """
     # Separate directories (keys other than FILES_KEY) from files (items in FILES_KEY)
     dirs = sorted([k for k in node if k != FILES_KEY])
@@ -262,8 +260,7 @@ def _write_tree(outfile, node: dict, prefix=""):
 
 
 def _get_language(file_path: Path) -> str:
-    """
-    Guess language for syntax highlighting based on extension.
+    """Guess language for syntax highlighting based on extension.
     Returns an empty string if no specific language is known.
 
     Args:
@@ -274,6 +271,7 @@ def _get_language(file_path: Path) -> str:
         or an empty string.
 
     vibelint/src/vibelint/snapshot.py
+
     """
     ext = file_path.suffix.lower()
     # Mapping from file extension to markdown language identifier

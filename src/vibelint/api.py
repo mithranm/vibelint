@@ -1,5 +1,4 @@
-"""
-Public API for vibelint that returns results instead of calling sys.exit().
+"""Public API for vibelint that returns results instead of calling sys.exit().
 
 This module provides a clean library interface for programmatic usage of vibelint,
 allowing integration with other tools without subprocess overhead.
@@ -13,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
-from vibelint.config import Config, load_config
+from vibelint.config import load_config
 from vibelint.filesystem import walk_up_for_config
 from vibelint.validation_engine import PluginValidationRunner
 
@@ -21,6 +20,7 @@ from vibelint.validation_engine import PluginValidationRunner
 @dataclass
 class FindingDict:
     """Serializable representation of a Finding for API responses."""
+
     rule: str
     level: str
     path: str
@@ -34,6 +34,7 @@ class FindingDict:
 @dataclass
 class FindingSummary:
     """Summary of findings by severity level."""
+
     INFO: int = 0
     WARN: int = 0
     BLOCK: int = 0
@@ -42,6 +43,7 @@ class FindingSummary:
 @dataclass
 class CheckResults:
     """Results from a check operation."""
+
     findings: List[FindingDict]
     summary: FindingSummary
     total_files_checked: int
@@ -50,6 +52,7 @@ class CheckResults:
 @dataclass
 class VibelintResult:
     """Container for vibelint operation results."""
+
     success: bool
     data: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
@@ -66,13 +69,17 @@ class VibelintResult:
 class VibelintAPI:
     """Main API interface for vibelint operations."""
 
-    def __init__(self, config_path: Optional[Union[str, Path]] = None, working_dir: Optional[Union[str, Path]] = None):
-        """
-        Initialize the vibelint API.
+    def __init__(
+        self,
+        config_path: Optional[Union[str, Path]] = None,
+        working_dir: Optional[Union[str, Path]] = None,
+    ):
+        """Initialize the vibelint API.
 
         Args:
             config_path: Path to vibelint config file (optional)
             working_dir: Working directory for operations (optional, defaults to current dir)
+
         """
         self.working_dir = Path(working_dir) if working_dir else Path.cwd()
 
@@ -83,10 +90,13 @@ class VibelintAPI:
         # Set up logging to capture errors without outputting to console
         self.logger = logging.getLogger(__name__)
 
-    def check(self, targets: Optional[List[str]] = None, exclude_ai: bool = False,
-              rules: Optional[List[str]] = None) -> VibelintResult:
-        """
-        Run vibelint validation checks.
+    def check(
+        self,
+        targets: Optional[List[str]] = None,
+        exclude_ai: bool = False,
+        rules: Optional[List[str]] = None,
+    ) -> VibelintResult:
+        """Run vibelint validation checks.
 
         Args:
             targets: List of files/directories to check (defaults to current directory)
@@ -95,12 +105,14 @@ class VibelintAPI:
 
         Returns:
             VibelintResult with validation results
+
         """
         try:
             targets = targets or ["."]
 
             # Convert string targets to Path objects and discover files
             from vibelint.discovery import discover_files_from_paths
+
             target_paths = [Path(t) for t in targets]
             file_paths = discover_files_from_paths(target_paths)
 
@@ -123,7 +135,7 @@ class VibelintAPI:
                     column=finding.column_number,
                     msg=finding.message,
                     context=finding.context or "",
-                    suggestion=finding.suggestion or ""
+                    suggestion=finding.suggestion or "",
                 )
                 all_findings.append(finding_dict)
 
@@ -137,9 +149,7 @@ class VibelintAPI:
                     summary.BLOCK += 1
 
             check_results = CheckResults(
-                findings=all_findings,
-                summary=summary,
-                total_files_checked=len(file_paths)
+                findings=all_findings, summary=summary, total_files_checked=len(file_paths)
             )
             return VibelintResult(True, asdict(check_results))
 
@@ -148,14 +158,14 @@ class VibelintAPI:
             return VibelintResult(False, errors=[str(e)])
 
     def validate_file(self, file_path: Union[str, Path]) -> VibelintResult:
-        """
-        Validate a single file.
+        """Validate a single file.
 
         Args:
             file_path: Path to file to validate
 
         Returns:
             VibelintResult with validation results for the file
+
         """
         try:
             path = Path(file_path)
@@ -184,7 +194,7 @@ class VibelintAPI:
                     "column": finding.column_number,
                     "msg": finding.message,
                     "context": finding.context or "",
-                    "suggestion": finding.suggestion or ""
+                    "suggestion": finding.suggestion or "",
                 }
                 all_findings.append(finding_dict)
 
@@ -192,37 +202,40 @@ class VibelintAPI:
                 level = finding.severity.name
                 summary[level] = summary.get(level, 0) + 1
 
-            return VibelintResult(True, {
-                "file": str(path),
-                "findings": all_findings,
-                "summary": summary
-            })
+            return VibelintResult(
+                True, {"file": str(path), "findings": all_findings, "summary": summary}
+            )
 
         except Exception as e:
             return VibelintResult(False, errors=[str(e)])
 
     def run_justification(self, target_dir: Optional[str] = None) -> VibelintResult:
-        """
-        Run justification workflow for architectural analysis.
+        """Run justification workflow for architectural analysis.
 
         Args:
             target_dir: Directory to analyze (defaults to current directory)
 
         Returns:
             VibelintResult with justification analysis
+
         """
         try:
             target_path = Path(target_dir) if target_dir else self.working_dir
 
             if not target_path.exists():
-                return VibelintResult(False, errors=[f"Target directory does not exist: {target_path}"])
+                return VibelintResult(
+                    False, errors=[f"Target directory does not exist: {target_path}"]
+                )
 
             # For now, return a simplified justification result
             # The full justification engine requires more complex setup
-            return VibelintResult(True, {
-                "analysis": {"message": "Justification analysis not yet implemented in API"},
-                "target_directory": str(target_path)
-            })
+            return VibelintResult(
+                True,
+                {
+                    "analysis": {"message": "Justification analysis not yet implemented in API"},
+                    "target_directory": str(target_path),
+                },
+            )
 
         except Exception as e:
             self.logger.error(f"Justification workflow failed: {e}")
@@ -230,10 +243,13 @@ class VibelintAPI:
 
 
 # Convenience functions for common operations
-def check_files(targets: Optional[List[str]] = None, config_path: Optional[str] = None,
-                exclude_ai: bool = False, rules: Optional[List[str]] = None) -> VibelintResult:
-    """
-    Convenience function to check files/directories.
+def check_files(
+    targets: Optional[List[str]] = None,
+    config_path: Optional[str] = None,
+    exclude_ai: bool = False,
+    rules: Optional[List[str]] = None,
+) -> VibelintResult:
+    """Convenience function to check files/directories.
 
     Args:
         targets: Files/directories to check
@@ -243,14 +259,16 @@ def check_files(targets: Optional[List[str]] = None, config_path: Optional[str] 
 
     Returns:
         VibelintResult with validation results
+
     """
     api = VibelintAPI(config_path)
     return api.check(targets, exclude_ai, rules)
 
 
-def validate_single_file(file_path: Union[str, Path], config_path: Optional[str] = None) -> VibelintResult:
-    """
-    Convenience function to validate a single file.
+def validate_single_file(
+    file_path: Union[str, Path], config_path: Optional[str] = None
+) -> VibelintResult:
+    """Convenience function to validate a single file.
 
     Args:
         file_path: Path to file to validate
@@ -258,14 +276,16 @@ def validate_single_file(file_path: Union[str, Path], config_path: Optional[str]
 
     Returns:
         VibelintResult with validation results
+
     """
     api = VibelintAPI(config_path)
     return api.validate_file(file_path)
 
 
-def run_project_justification(target_dir: Optional[str] = None, config_path: Optional[str] = None) -> VibelintResult:
-    """
-    Convenience function to run justification analysis.
+def run_project_justification(
+    target_dir: Optional[str] = None, config_path: Optional[str] = None
+) -> VibelintResult:
+    """Convenience function to run justification analysis.
 
     Args:
         target_dir: Directory to analyze
@@ -273,6 +293,7 @@ def run_project_justification(target_dir: Optional[str] = None, config_path: Opt
 
     Returns:
         VibelintResult with justification analysis
+
     """
     api = VibelintAPI(config_path)
     return api.run_justification(target_dir)

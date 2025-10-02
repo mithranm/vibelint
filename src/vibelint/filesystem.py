@@ -1,5 +1,4 @@
-"""
-Filesystem and path utility functions for vibelint.
+"""Filesystem and path utility functions for vibelint.
 
 vibelint/src/vibelint/fs.py
 """
@@ -31,8 +30,7 @@ __all__ = [
 
 
 def walk_up_for_project_root(start_path: Path) -> Path | None:
-    """
-    Walk up directory tree to find project root markers.
+    """Walk up directory tree to find project root markers.
 
     Project root markers (in order of precedence):
     1. .git directory (definitive project boundary)
@@ -46,6 +44,7 @@ def walk_up_for_project_root(start_path: Path) -> Path | None:
         Path to project root, or None if not found
 
     vibelint/src/vibelint/fs.py
+
     """
     current_path = start_path.resolve()
     while True:
@@ -65,8 +64,7 @@ def walk_up_for_project_root(start_path: Path) -> Path | None:
 
 
 def walk_up_for_config(start_path: Path) -> Path | None:
-    """
-    Walk up directory tree to find vibelint configuration.
+    """Walk up directory tree to find vibelint configuration.
 
     Searches for configuration files in this order:
     1. pyproject.toml with [tool.vibelint] section
@@ -80,6 +78,7 @@ def walk_up_for_config(start_path: Path) -> Path | None:
         Path containing viable configuration, or None if not found
 
     vibelint/src/vibelint/fs.py
+
     """
     current_path = start_path.resolve()
     if current_path.is_file():
@@ -130,8 +129,7 @@ find_project_root = walk_up_for_project_root
 
 
 def find_package_root(start_path: Path) -> Path | None:
-    """
-    Find the root directory of a Python package containing the given path.
+    """Find the root directory of a Python package containing the given path.
 
     A package root is identified by containing either:
     1. A pyproject.toml file
@@ -145,6 +143,7 @@ def find_package_root(start_path: Path) -> Path | None:
         Path to package root, or None if not found
 
     vibelint/src/vibelint/fs.py
+
     """
     current_path = start_path.resolve()
     if current_path.is_file():
@@ -179,8 +178,7 @@ def find_package_root(start_path: Path) -> Path | None:
 
 
 def is_python_file(path: Path) -> bool:
-    """
-    Check if a path represents a Python file.
+    """Check if a path represents a Python file.
 
     Args:
         path: Path to check
@@ -189,13 +187,13 @@ def is_python_file(path: Path) -> bool:
         True if the path is a Python file, False otherwise
 
     vibelint/src/vibelint/fs.py
+
     """
     return path.is_file() and path.suffix == ".py"
 
 
 def get_relative_path(path: Path, base: Path) -> Path:
-    """
-    Safely compute a relative path, falling back to the original path.
+    """Safely compute a relative path, falling back to the original path.
 
     vibelint/src/vibelint/fs.py
     """
@@ -207,8 +205,7 @@ def get_relative_path(path: Path, base: Path) -> Path:
 
 
 def get_import_path(file_path: Path, package_root: Path | None = None) -> str:
-    """
-    Get the import path for a Python file.
+    """Get the import path for a Python file.
 
     Args:
         file_path: Path to the Python file
@@ -218,6 +215,7 @@ def get_import_path(file_path: Path, package_root: Path | None = None) -> str:
         Import path (e.g., "vibelint.utils")
 
     vibelint/src/vibelint/fs.py
+
     """
     if package_root is None:
         package_root = find_package_root(file_path)
@@ -237,8 +235,7 @@ def get_import_path(file_path: Path, package_root: Path | None = None) -> str:
 
 
 def get_module_name(file_path: Path) -> str:
-    """
-    Extract module name from a Python file path.
+    """Extract module name from a Python file path.
 
     Args:
         file_path: Path to a Python file
@@ -247,6 +244,7 @@ def get_module_name(file_path: Path) -> str:
         Module name
 
     vibelint/src/vibelint/fs.py
+
     """
     return file_path.stem
 
@@ -257,8 +255,7 @@ def find_files_by_extension(
     exclude_globs: list[str] = [],
     include_vcs_hooks: bool = False,
 ) -> list[Path]:
-    """
-    Find all files with a specific extension in a directory and its subdirectories.
+    """Find all files with a specific extension in a directory and its subdirectories.
 
     Args:
         root_path: Root path to search in
@@ -270,6 +267,7 @@ def find_files_by_extension(
         List of paths to files with the specified extension
 
     vibelint/src/vibelint/fs.py
+
     """
     if exclude_globs is None:
         exclude_globs = []
@@ -292,8 +290,7 @@ def find_files_by_extension(
 
 
 def ensure_directory(path: Path) -> Path:
-    """
-    Ensure a directory exists, creating it if necessary.
+    """Ensure a directory exists, creating it if necessary.
 
     Args:
         path: Path to directory
@@ -302,14 +299,14 @@ def ensure_directory(path: Path) -> Path:
         Path to the directory
 
     vibelint/src/vibelint/fs.py
+
     """
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def read_file_safe(file_path: Path, encoding: str = "utf-8") -> str | None:
-    """
-    Safely read a file, returning None if any errors occur.
+    """Safely read a file, returning None if any errors occur.
 
     Args:
         file_path: Path to file
@@ -319,6 +316,7 @@ def read_file_safe(file_path: Path, encoding: str = "utf-8") -> str | None:
         File contents or None if error
 
     vibelint/src/vibelint/fs.py
+
     """
     try:
         return file_path.read_text(encoding=encoding)
@@ -328,8 +326,7 @@ def read_file_safe(file_path: Path, encoding: str = "utf-8") -> str | None:
 
 
 def write_file_safe(file_path: Path, content: str, encoding: str = "utf-8") -> bool:
-    """
-    Safely write content to a file, returning success status.
+    """Safely write content to a file, returning success status.
 
     Args:
         file_path: Path to file
@@ -340,6 +337,7 @@ def write_file_safe(file_path: Path, content: str, encoding: str = "utf-8") -> b
         True if successful, False otherwise
 
     vibelint/src/vibelint/fs.py
+
     """
     try:
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -351,8 +349,7 @@ def write_file_safe(file_path: Path, content: str, encoding: str = "utf-8") -> b
 
 
 def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
-    """
-    Check if a file appears to be binary by looking for null bytes
+    """Check if a file appears to be binary by looking for null bytes
     or a high proportion of non-text bytes in the first chunk.
 
     Args:
@@ -363,6 +360,7 @@ def is_binary(file_path: Path, chunk_size: int = 1024) -> bool:
         True if the file seems binary, False otherwise.
 
     vibelint/src/vibelint/fs.py
+
     """
     try:
         with open(file_path, "rb") as f:

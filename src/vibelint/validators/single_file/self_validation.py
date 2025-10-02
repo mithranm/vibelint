@@ -1,5 +1,4 @@
-"""
-Self-validation hooks for vibelint.
+"""Self-validation hooks for vibelint.
 
 This module implements validation hooks that ensure vibelint follows
 its own coding standards and architectural principles.
@@ -25,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class SelfValidationHook:
-    """
-    Hook that validates vibelint's own code against its standards.
+    """Hook that validates vibelint's own code against its standards.
 
     This runs automatically when vibelint analyzes its own codebase
     to ensure we follow our own rules.
@@ -241,8 +239,7 @@ class SelfValidationHook:
 
 
 class VibelintSelfValidator(BaseValidator):
-    """
-    Validator that applies vibelint's self-validation hooks.
+    """Validator that applies vibelint's self-validation hooks.
 
     This ensures vibelint follows its own standards when analyzing
     its own codebase.

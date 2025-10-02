@@ -1,5 +1,4 @@
-"""
-Configuration loading for vibelint.
+"""Configuration loading for vibelint.
 
 Reads settings *only* from pyproject.toml under the [tool.vibelint] section.
 No default values are assumed by this module. Callers must handle missing
@@ -103,8 +102,7 @@ else:
 
 
 class Config:
-    """
-    Holds the vibelint configuration loaded *exclusively* from pyproject.toml.
+    """Holds the vibelint configuration loaded *exclusively* from pyproject.toml.
 
     Provides access to the project root and the raw configuration dictionary.
     It does *not* provide default values for missing keys. Callers must
@@ -118,11 +116,11 @@ class Config:
     file or section is missing or invalid.
 
     vibelint/src/vibelint/config.py
+
     """
 
     def __init__(self, project_root: Path | None, config_dict: dict[str, Any]):
-        """
-        Initializes Config.
+        """Initializes Config.
 
         vibelint/src/vibelint/config.py
         """
@@ -131,8 +129,7 @@ class Config:
 
     @property
     def project_root(self) -> Path | None:
-        """
-        The detected project root directory, or None if not found.
+        """The detected project root directory, or None if not found.
 
         vibelint/src/vibelint/config.py
         """
@@ -140,8 +137,7 @@ class Config:
 
     @property
     def settings(self) -> Mapping[str, Union[str, bool, int, list, dict]]:
-        """
-        Read-only view of the settings loaded from [tool.vibelint].
+        """Read-only view of the settings loaded from [tool.vibelint].
 
         vibelint/src/vibelint/config.py
         """
@@ -149,8 +145,7 @@ class Config:
 
     @property
     def ignore_codes(self) -> list[str]:
-        """
-        Returns the list of error codes to ignore, from config or empty list.
+        """Returns the list of error codes to ignore, from config or empty list.
 
         vibelint/src/vibelint/config.py
         """
@@ -169,16 +164,14 @@ class Config:
     def get(
         self, key: str, default: Union[str, bool, int, list, dict, None] = None
     ) -> Union[str, bool, int, list, dict, None]:
-        """
-        Gets a value from the loaded settings, returning default if not found.
+        """Gets a value from the loaded settings, returning default if not found.
 
         vibelint/src/vibelint/config.py
         """
         return self._config_dict.get(key, default)
 
     def __getitem__(self, key: str) -> Union[str, bool, int, list, dict]:
-        """
-        Gets a value, raising KeyError if the key is not found.
+        """Gets a value, raising KeyError if the key is not found.
 
         vibelint/src/vibelint/config.py
         """
@@ -190,16 +183,14 @@ class Config:
         return self._config_dict[key]
 
     def __contains__(self, key: str) -> bool:
-        """
-        Checks if a key exists in the loaded settings.
+        """Checks if a key exists in the loaded settings.
 
         vibelint/src/vibelint/config.py
         """
         return key in self._config_dict
 
     def is_present(self) -> bool:
-        """
-        Checks if a project root was found and some settings were loaded.
+        """Checks if a project root was found and some settings were loaded.
 
         vibelint/src/vibelint/config.py
         """
@@ -207,8 +198,7 @@ class Config:
 
 
 def load_hierarchical_config(start_path: Path) -> Config:
-    """
-    Loads vibelint configuration with hierarchical merging.
+    """Loads vibelint configuration with hierarchical merging.
 
     1. Loads local config (file patterns, local settings)
     2. Walks up to find parent config (LLM settings, shared config)
@@ -220,6 +210,7 @@ def load_hierarchical_config(start_path: Path) -> Config:
 
     Returns:
     A Config object with merged local and parent settings.
+
     """
     # Find local config first
     local_root = find_package_root(start_path)
@@ -243,7 +234,9 @@ def load_hierarchical_config(start_path: Path) -> Config:
 
     while current_path.parent != current_path:
         parent_pyproject = current_path / "pyproject.toml"
-        if parent_pyproject.exists() and parent_pyproject != (local_root / "pyproject.toml" if local_root else None):
+        if parent_pyproject.exists() and parent_pyproject != (
+            local_root / "pyproject.toml" if local_root else None
+        ):
             try:
                 with open(parent_pyproject, "rb") as f:
                     data = tomllib.load(f)
@@ -274,8 +267,7 @@ def load_hierarchical_config(start_path: Path) -> Config:
 
 
 def load_config(start_path: Path) -> Config:
-    """
-    Loads vibelint configuration with auto-discovery fallback.
+    """Loads vibelint configuration with auto-discovery fallback.
 
     First tries manual config from pyproject.toml, then falls back to
     zero-config auto-discovery for seamless single->multi-project scaling.
@@ -287,6 +279,7 @@ def load_config(start_path: Path) -> Config:
     A Config object with either manual or auto-discovered settings.
 
     vibelint/src/vibelint/config.py
+
     """
     project_root = walk_up_for_config(start_path)
     loaded_settings: dict[str, Any] = {}
@@ -564,14 +557,14 @@ def _get_env_int(key: str) -> Optional[int]:
 
 
 def get_llm_config(config: Optional[Config] = None) -> LLMConfig:
-    """
-    Get typed LLM configuration for vibelint.
+    """Get typed LLM configuration for vibelint.
 
     Args:
         config: Optional Config object. If None, loads from current directory.
 
     Returns:
         Validated LLMConfig object with environment variable overrides
+
     """
     if config is None:
         config = load_config(Path.cwd())
@@ -660,14 +653,14 @@ def get_llm_config(config: Optional[Config] = None) -> LLMConfig:
 
 
 def get_embedding_config(config: Optional[Config] = None) -> EmbeddingConfig:
-    """
-    Get typed embedding configuration for vibelint.
+    """Get typed embedding configuration for vibelint.
 
     Args:
         config: Optional Config object. If None, loads from current directory.
 
     Returns:
         Validated EmbeddingConfig object
+
     """
     if config is None:
         config = load_config(Path.cwd())
@@ -687,4 +680,11 @@ def get_embedding_config(config: Optional[Config] = None) -> EmbeddingConfig:
     return EmbeddingConfig(**kwargs)
 
 
-__all__ = ["Config", "load_config", "LLMConfig", "EmbeddingConfig", "get_llm_config", "get_embedding_config"]
+__all__ = [
+    "Config",
+    "load_config",
+    "LLMConfig",
+    "EmbeddingConfig",
+    "get_llm_config",
+    "get_embedding_config",
+]

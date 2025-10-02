@@ -1,5 +1,4 @@
-"""
-Base workflow system for extensible analysis tasks.
+"""Base workflow system for extensible analysis tasks.
 
 Provides framework for creating modular, composable workflows with
 built-in evaluation, metrics collection, and plugin integration.
@@ -164,6 +163,7 @@ class BaseWorkflow(ABC):
 
         Returns:
             WorkflowResult with findings and artifacts
+
         """
         pass
 

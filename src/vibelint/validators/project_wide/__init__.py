@@ -1,5 +1,4 @@
-"""
-Project-wide validators for vibelint.
+"""Project-wide validators for vibelint.
 
 These validators analyze entire projects and require knowledge
 of multiple files to identify issues like:
@@ -21,8 +20,7 @@ class ProjectWideValidator(BaseValidator):
     """Base class for validators that analyze entire projects."""
 
     def validate_project(self, project_files: Dict[Path, str], config=None) -> Iterator[Finding]:
-        """
-        Validate entire project with knowledge of all files.
+        """Validate entire project with knowledge of all files.
 
         Args:
             project_files: Dictionary mapping file paths to their content
@@ -30,13 +28,13 @@ class ProjectWideValidator(BaseValidator):
 
         Yields:
             Finding objects for any issues found
+
         """
         # Default implementation - subclasses should override
         raise NotImplementedError("Project-wide validators must implement validate_project")
 
     def validate(self, file_path: Path, content: str, config=None) -> Iterator[Finding]:
-        """
-        Single-file validate method for project-wide validators.
+        """Single-file validate method for project-wide validators.
 
         Project-wide validators should not be called on individual files.
         This method raises an error to prevent misuse.

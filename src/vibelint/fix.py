@@ -1,5 +1,4 @@
-"""
-Automatic fix functionality for vibelint using deterministic fixes and LLM for docstring generation only.
+"""Automatic fix functionality for vibelint using deterministic fixes and LLM for docstring generation only.
 
 vibelint/src/vibelint/fix.py
 """
@@ -136,7 +135,6 @@ class FixEngine:
         file_path: Path,
     ) -> None:
         """Add missing docstrings using LLM for content generation only."""
-
         # Find functions and classes that need docstrings
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):

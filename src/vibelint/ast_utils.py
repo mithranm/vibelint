@@ -1,5 +1,4 @@
-"""
-AST parsing utilities for vibelint validators.
+"""AST parsing utilities for vibelint validators.
 
 Provides common AST parsing functionality with consistent error handling,
 reducing code duplication across validators.
@@ -23,8 +22,7 @@ __all__ = [
 
 
 def safe_parse(content: str, filename: str | Path = "<unknown>") -> ast.AST:
-    """
-    Parse Python source code into an AST.
+    """Parse Python source code into an AST.
 
     Args:
         content: Python source code as string
@@ -35,13 +33,13 @@ def safe_parse(content: str, filename: str | Path = "<unknown>") -> ast.AST:
 
     Raises:
         SyntaxError: If the code has syntax errors
+
     """
     return ast.parse(content, filename=str(filename))
 
 
 def parse_or_none(content: str, filename: str | Path = "<unknown>") -> Optional[ast.AST]:
-    """
-    Parse Python source code into an AST, returning None on syntax errors.
+    """Parse Python source code into an AST, returning None on syntax errors.
 
     This is the recommended function for validators to use - it handles
     syntax errors gracefully and logs them appropriately.
@@ -57,6 +55,7 @@ def parse_or_none(content: str, filename: str | Path = "<unknown>") -> Optional[
         >>> tree = parse_or_none(file_content, file_path)
         >>> if tree is None:
         >>>     return  # Skip validation for files with syntax errors
+
     """
     try:
         return ast.parse(content, filename=str(filename))
@@ -69,14 +68,14 @@ def parse_or_none(content: str, filename: str | Path = "<unknown>") -> Optional[
 
 
 def get_docstring(node: ast.AST) -> Optional[str]:
-    """
-    Extract docstring from an AST node (module, function, or class).
+    """Extract docstring from an AST node (module, function, or class).
 
     Args:
         node: AST node (Module, FunctionDef, ClassDef, or AsyncFunctionDef)
 
     Returns:
         Docstring text or None if no docstring found
+
     """
     if not isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
         return None
@@ -95,14 +94,14 @@ def get_docstring(node: ast.AST) -> Optional[str]:
 
 
 def get_function_args(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
-    """
-    Get argument names from a function definition.
+    """Get argument names from a function definition.
 
     Args:
         node: Function definition node
 
     Returns:
         List of argument names
+
     """
     args = []
 
@@ -122,26 +121,26 @@ def get_function_args(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]
 
 
 def is_private_name(name: str) -> bool:
-    """
-    Check if a name is private (starts with underscore).
+    """Check if a name is private (starts with underscore).
 
     Args:
         name: Name to check
 
     Returns:
         True if name is private (starts with _ but not __)
+
     """
     return name.startswith("_") and not name.startswith("__")
 
 
 def is_dunder_name(name: str) -> bool:
-    """
-    Check if a name is a dunder/magic method (starts and ends with __).
+    """Check if a name is a dunder/magic method (starts and ends with __).
 
     Args:
         name: Name to check
 
     Returns:
         True if name is a dunder method
+
     """
     return name.startswith("__") and name.endswith("__") and len(name) > 4

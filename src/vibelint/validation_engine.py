@@ -1,5 +1,4 @@
-"""
-Plugin-aware validation runner for vibelint.
+"""Plugin-aware validation runner for vibelint.
 
 This module provides the PluginValidationRunner that uses the new plugin system
 to run validators and format output according to user configuration.
@@ -118,8 +117,7 @@ def run_plugin_validation(
     project_root: Path,
     include_globs_override: List[Path] | None = None,
 ) -> PluginValidationRunner:
-    """
-    Run validation using the plugin system.
+    """Run validation using the plugin system.
 
     Args:
         config: Configuration object from pyproject.toml
@@ -130,6 +128,7 @@ def run_plugin_validation(
 
     Returns:
         PluginValidationRunner with results
+
     """
     runner = PluginValidationRunner(config, project_root)
 
@@ -141,9 +140,7 @@ def run_plugin_validation(
         )
     else:
         # Use original discovery method with configured include_globs
-        files = discover_files(
-            paths=[project_root], config=config, explicit_exclude_paths=set()
-        )
+        files = discover_files(paths=[project_root], config=config, explicit_exclude_paths=set())
 
     # Run validation
     runner.run_validation(files)

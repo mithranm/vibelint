@@ -1,5 +1,4 @@
-"""
-Discovers files using pathlib glob/rglob based on include patterns from
+"""Discovers files using pathlib glob/rglob based on include patterns from
 pyproject.toml, respecting the pattern's implied scope, then filters
 using exclude patterns.
 
@@ -60,8 +59,7 @@ def _is_excluded(
     explicit_exclude_paths: set[Path],
     is_checking_directory_for_prune: bool = False,
 ) -> bool:
-    """
-    Checks if a discovered path (file or directory) should be excluded.
+    """Checks if a discovered path (file or directory) should be excluded.
 
     For files: checks explicit paths first, then exclude globs.
     For directories (for pruning): checks if the directory itself matches an exclude glob.
@@ -77,8 +75,8 @@ def _is_excluded(
     True if the path should be excluded/pruned, False otherwise.
 
     vibelint/src/vibelint/discovery.py
-    """
 
+    """
     if not is_checking_directory_for_prune and path_abs in explicit_exclude_paths:
         logger.debug(f"Excluding explicitly provided path: {path_abs}")
         return True
@@ -165,8 +163,7 @@ def _recursive_glob_with_pruning(
     config_exclude_globs: list[str],
     explicit_exclude_paths: set[Path],
 ) -> Iterator[Path]:
-    """
-    Recursively walks a directory, prunes excluded subdirectories, and yields files
+    """Recursively walks a directory, prunes excluded subdirectories, and yields files
     matching the glob_suffix_pattern that are not otherwise excluded.
 
     Args:
@@ -178,6 +175,7 @@ def _recursive_glob_with_pruning(
 
     Yields:
         Absolute Path objects for matching files.
+
     """
     logger.debug(
         f"Recursive walk starting at '{search_root_abs}' for pattern '.../{glob_suffix_pattern}'"
@@ -238,8 +236,7 @@ def discover_files(
     default_includes_if_missing: list[str] | None = None,
     explicit_exclude_paths: set[Path] | None = None,
 ) -> list[Path]:
-    """
-    Discovers files based on include/exclude patterns from configuration.
+    """Discovers files based on include/exclude patterns from configuration.
     Uses a custom walker for recursive globs (**) to enable directory pruning.
 
     Args:
@@ -253,8 +250,8 @@ def discover_files(
 
     Raises:
     ValueError: If config.project_root is None.
-    """
 
+    """
     if config.project_root is None:
         raise ValueError("Cannot discover files without a project root defined in Config.")
 
@@ -433,8 +430,7 @@ def discover_files_from_paths(
     config: Config,
     explicit_exclude_paths: set[Path] | None = None,
 ) -> list[Path]:
-    """
-    Discover files from explicitly provided paths (include_globs override).
+    """Discover files from explicitly provided paths (include_globs override).
 
     This function handles user-provided paths as an override to the configured
     include_globs, while still respecting exclude_globs and sensible defaults
@@ -447,6 +443,7 @@ def discover_files_from_paths(
 
     Returns:
         A sorted list of unique absolute Path objects for Python files
+
     """
     if config.project_root is None:
         raise ValueError("Cannot discover files without a project root defined in Config.")

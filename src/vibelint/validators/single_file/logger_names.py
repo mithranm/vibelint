@@ -1,5 +1,4 @@
-"""
-Logger name validator using BaseValidator plugin system.
+"""Logger name validator using BaseValidator plugin system.
 
 Detects hardcoded logger names that should use __name__ instead
 for proper module hierarchy and maintainability.

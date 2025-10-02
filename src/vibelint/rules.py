@@ -1,5 +1,4 @@
-"""
-Rule management system for vibelint.
+"""Rule management system for vibelint.
 
 Handles rule configuration, severity overrides, and policy management.
 
@@ -31,11 +30,11 @@ class RuleEngine:
     """Manages rule configuration and policy decisions."""
 
     def __init__(self, config: Config):
-        """
-        Initialize rule engine with configuration.
+        """Initialize rule engine with configuration.
 
         Args:
             config: Configuration object from pyproject.toml
+
         """
         self.config = config
         self._rule_overrides: dict[str, Severity] = {}
@@ -53,7 +52,9 @@ class RuleEngine:
                     try:
                         self._rule_overrides[rule_id] = Severity(setting.upper())
                     except ValueError as e:
-                        logger.debug(f"Invalid severity setting for rule {rule_id}: {setting} - {e}")
+                        logger.debug(
+                            f"Invalid severity setting for rule {rule_id}: {setting} - {e}"
+                        )
                         pass
                 elif isinstance(setting, bool):
                     # Boolean: True=default severity, False=OFF
@@ -93,14 +94,14 @@ class RuleEngine:
     def create_validator_instance(
         self, validator_class: type[BaseValidator]
     ) -> Optional[BaseValidator]:
-        """
-        Create validator instance with configured severity.
+        """Create validator instance with configured severity.
 
         Args:
             validator_class: Validator class to instantiate
 
         Returns:
             Validator instance or None if rule is disabled
+
         """
         if not self.is_rule_enabled(validator_class.rule_id):
             return None

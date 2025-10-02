@@ -1,5 +1,4 @@
-"""
-Vibelint: Code Quality and Style Validator
+"""Vibelint: Code Quality and Style Validator
 
 A focused code analysis tool for Python projects.
 """

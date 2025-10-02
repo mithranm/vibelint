@@ -47,7 +47,10 @@ def test_check_command_no_config(cli_runner):
 
         # Should fail without config or project root
         assert result.exit_code == 1
-        assert ("No vibelint configuration found" in result.output or "No project root found" in result.output)
+        assert (
+            "No vibelint configuration found" in result.output
+            or "No project root found" in result.output
+        )
 
 
 def test_check_command_with_config(cli_runner, temp_dir, pyproject_toml):
@@ -58,6 +61,7 @@ def test_check_command_with_config(cli_runner, temp_dir, pyproject_toml):
 
     # Change to temp_dir for test
     import os
+
     original_dir = os.getcwd()
     try:
         os.chdir(temp_dir)
@@ -75,6 +79,7 @@ def test_check_command_json_format(cli_runner, temp_dir, pyproject_toml):
     py_file.write_text('"""Test module."""\n\ndef foo():\n    pass\n')
 
     import os
+
     original_dir = os.getcwd()
     try:
         os.chdir(temp_dir)
@@ -104,12 +109,11 @@ def test_snapshot_command(cli_runner, temp_dir, pyproject_toml):
     output_file = temp_dir / "snapshot.md"
 
     import os
+
     original_dir = os.getcwd()
     try:
         os.chdir(temp_dir)
-        result = cli_runner.invoke(
-            cli, ["snapshot", str(temp_dir), "--output", str(output_file)]
-        )
+        result = cli_runner.invoke(cli, ["snapshot", str(temp_dir), "--output", str(output_file)])
 
         # Should succeed
         assert result.exit_code in (0, 1)
@@ -123,6 +127,7 @@ def test_check_command_no_python_files(cli_runner, temp_dir, pyproject_toml):
     (temp_dir / "test.txt").write_text("Not Python")
 
     import os
+
     original_dir = os.getcwd()
     try:
         os.chdir(temp_dir)

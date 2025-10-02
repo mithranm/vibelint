@@ -1,5 +1,4 @@
-"""
-Core validation types for vibelint.
+"""Core validation types for vibelint.
 
 Defines fundamental types used throughout the validation system:
 - Severity: Severity levels for findings (INFO, WARN, BLOCK)
@@ -166,19 +165,18 @@ def get_all_formatters() -> Dict[str, Type[Formatter]]:
 
 
 def _load_builtin_validators() -> None:
-    """
-    Load built-in validators via filesystem auto-discovery.
+    """Load built-in validators via filesystem auto-discovery.
 
     Scans vibelint.validators.* packages and auto-discovers BaseValidator subclasses.
     Third-party validators can still use entry points.
     """
     import importlib
     import importlib.util
-    import pkgutil
 
     # Auto-discover built-in validators from filesystem
     try:
         import vibelint.validators
+
         validators_path = Path(vibelint.validators.__file__).parent
 
         # Scan all subdirectories: single_file, project_wide, architecture
@@ -207,7 +205,9 @@ def _load_builtin_validators() -> None:
                             and attr.rule_id  # Must have non-empty rule_id
                         ):
                             _VALIDATORS[attr.rule_id] = attr
-                            logger.debug(f"Auto-discovered validator: {attr.rule_id} from {module_name}")
+                            logger.debug(
+                                f"Auto-discovered validator: {attr.rule_id} from {module_name}"
+                            )
 
                 except (ImportError, AttributeError) as e:
                     logger.debug(f"Failed to load validator module {module_name}: {e}")
@@ -218,12 +218,15 @@ def _load_builtin_validators() -> None:
     # Also load third-party validators from entry points
     try:
         import importlib.metadata
+
         for entry_point in importlib.metadata.entry_points(group="vibelint.validators"):
             try:
                 validator_class = entry_point.load()
                 if hasattr(validator_class, "rule_id") and validator_class.rule_id:
                     _VALIDATORS[validator_class.rule_id] = validator_class
-                    logger.debug(f"Loaded third-party validator from entry point: {validator_class.rule_id}")
+                    logger.debug(
+                        f"Loaded third-party validator from entry point: {validator_class.rule_id}"
+                    )
             except (ImportError, AttributeError, TypeError) as e:
                 logger.debug(f"Failed to load validator from entry point {entry_point.name}: {e}")
     except Exception as e:

@@ -1,5 +1,4 @@
-"""
-Main entry point for vibelint when run as a module.
+"""Main entry point for vibelint when run as a module.
 
 Allows execution via: python -m vibelint
 

@@ -1,5 +1,4 @@
-"""
-Emoji usage validator using BaseValidator plugin system.
+"""Emoji usage validator using BaseValidator plugin system.
 
 Detects emoji usage that can cause encoding issues, reduce readability,
 and create compatibility problems across different terminals and systems.
@@ -110,22 +109,22 @@ class EmojiUsageValidator(BaseValidator):
             leading_whitespace = ""
             content_start = 0
             for char in fixed_line:
-                if char in [' ', '\t']:
+                if char in [" ", "\t"]:
                     leading_whitespace += char
                     content_start += 1
                 else:
                     break
 
             # Split into content and line ending
-            if fixed_line.endswith('\n'):
+            if fixed_line.endswith("\n"):
                 content = fixed_line[content_start:-1]  # Remove leading whitespace and newline
-                line_ending = '\n'
-            elif fixed_line.endswith('\r\n'):
+                line_ending = "\n"
+            elif fixed_line.endswith("\r\n"):
                 content = fixed_line[content_start:-2]  # Remove leading whitespace and CRLF
-                line_ending = '\r\n'
+                line_ending = "\r\n"
             else:
                 content = fixed_line[content_start:]  # Remove leading whitespace
-                line_ending = ''
+                line_ending = ""
 
             # Clean up only multiple consecutive spaces in content
             content = re.sub(r" {2,}", " ", content)  # Multiple spaces to single space
@@ -139,8 +138,7 @@ class EmojiUsageValidator(BaseValidator):
         return "".join(lines)
 
     def _is_emoji_in_code_context(self, line: str) -> bool:
-        """
-        Check if emoji appears to be in code rather than in strings or comments.
+        """Check if emoji appears to be in code rather than in strings or comments.
 
         This is a heuristic - emojis in strings/comments are less problematic
         than emojis used as identifiers or in code structure.

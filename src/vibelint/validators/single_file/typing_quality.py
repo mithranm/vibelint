@@ -1,5 +1,4 @@
-"""
-Type quality validator using BaseValidator plugin system.
+"""Type quality validator using BaseValidator plugin system.
 
 Detects poor typing practices that reduce code clarity and type safety:
 - Raw tuples instead of dataclasses/NamedTuples
@@ -164,7 +163,11 @@ class TypingQualityValidator(BaseValidator):
                         suggestion=self._suggest_dataclass_for_dict(string_keys),
                     )
 
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "dict":
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "dict"
+            ):
                 # Analyze dict() constructor call
                 keys = [kw.arg for kw in node.keywords if kw.arg]
                 if len(keys) >= 3:
@@ -181,10 +184,23 @@ class TypingQualityValidator(BaseValidator):
         for key in keys:
             if len(key) > 3:  # Not single letters
                 structured_indicators += 1
-            if '_' in key:  # Snake case
+            if "_" in key:  # Snake case
                 structured_indicators += 1
-            if key in ['id', 'name', 'type', 'value', 'data', 'config', 'status',
-                      'created', 'updated', 'url', 'path', 'file', 'directory']:
+            if key in [
+                "id",
+                "name",
+                "type",
+                "value",
+                "data",
+                "config",
+                "status",
+                "created",
+                "updated",
+                "url",
+                "path",
+                "file",
+                "directory",
+            ]:
                 structured_indicators += 1
         return structured_indicators >= len(keys)
 
@@ -192,16 +208,16 @@ class TypingQualityValidator(BaseValidator):
         """Generate a dataclass suggestion for dictionary keys."""
         fields = []
         for key in keys:
-            if key in ['id', 'count', 'size', 'length']:
+            if key in ["id", "count", "size", "length"]:
                 fields.append(f"{key}: int")
-            elif key in ['name', 'path', 'url', 'type', 'status']:
+            elif key in ["name", "path", "url", "type", "status"]:
                 fields.append(f"{key}: str")
-            elif key in ['active', 'enabled', 'valid', 'success']:
+            elif key in ["active", "enabled", "valid", "success"]:
                 fields.append(f"{key}: bool")
             else:
                 fields.append(f"{key}: Any  # TODO: specify type")
 
-        return f"Consider dataclass:\n@dataclass\nclass Data:\n    " + "\n    ".join(fields)
+        return "Consider dataclass:\n@dataclass\nclass Data:\n    " + "\n    ".join(fields)
 
 
 class _TypingVisitor(ast.NodeVisitor):

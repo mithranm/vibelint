@@ -1,5 +1,4 @@
-"""
-vibelint validators sub-package.
+"""vibelint validators sub-package.
 
 Modular validator system with centralized registry and discovery.
 
@@ -23,8 +22,7 @@ from .types import (
 )
 
 # Import registry system (also before subdirectories)
-from .registry import (get_all_validators, get_validator, register_validator,
-                       validator_registry)
+from .registry import get_all_validators, get_validator, register_validator, validator_registry
 
 # Import validator categories for direct access (LAST to avoid circular imports)
 from . import project_wide, single_file

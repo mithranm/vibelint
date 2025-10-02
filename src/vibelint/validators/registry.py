@@ -1,5 +1,4 @@
-"""
-Validator registry and discovery system.
+"""Validator registry and discovery system.
 
 Provides centralized registration and discovery of validators with
 automatic loading from entry points and modular organization.

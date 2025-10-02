@@ -1,5 +1,4 @@
-"""
-Workflow registry for managing available workflows.
+"""Workflow registry for managing available workflows.
 
 Simple registration system for BaseWorkflow subclasses.
 Workflows must properly inherit from BaseWorkflow and implement required methods.
@@ -102,9 +101,7 @@ class WorkflowRegistry:
                                 try:
                                     self.register(attr)
                                 except (TypeError, ValueError) as e:
-                                    logger.debug(
-                                        f"Skipping {attr_name} from {module_name}: {e}"
-                                    )
+                                    logger.debug(f"Skipping {attr_name} from {module_name}: {e}")
 
                     except ImportError as e:
                         logger.debug(f"Could not import {module_name}: {e}")
