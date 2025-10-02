@@ -549,11 +549,17 @@ class LLMClient:
     def _get_backend_type_for_role(self, role: LLMRole) -> str:
         """Get backend type for the specified LLM role."""
         if role == LLMRole.FAST:
-            return getattr(self.llm_config, "fast_backend", "vllm")
+            backend = getattr(self.llm_config, "fast_backend", None)
+            if not backend:
+                raise ValueError("fast_backend not configured in pyproject.toml [tool.vibelint.llm]")
+            return backend
         elif role == LLMRole.ORCHESTRATOR:
-            return getattr(self.llm_config, "orchestrator_backend", "llamacpp")
+            backend = getattr(self.llm_config, "orchestrator_backend", None)
+            if not backend:
+                raise ValueError("orchestrator_backend not configured in pyproject.toml [tool.vibelint.llm]")
+            return backend
         else:
-            return "openai"  # Default fallback
+            raise ValueError(f"Unknown LLM role: {role}")
 
     def _create_json_grammar(self, json_schema: Dict[str, Any]) -> str:
         """Create a GBNF JSON grammar for llama.cpp from JSON schema."""
