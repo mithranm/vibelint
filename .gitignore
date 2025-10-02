@@ -20,3 +20,5 @@ debug.txt
 
 .vibelint-cache/
 .claude/
+coverage.xml
+.coverage
