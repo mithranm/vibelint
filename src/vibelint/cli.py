@@ -61,9 +61,10 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 )
 @click.option("--exclude-ai", is_flag=True, help="Skip AI validators (faster)")
 @click.option("--rules", help="Comma-separated rules to run")
+@click.option("--fix", is_flag=True, help="Automatically fix issues where possible")
 @click.pass_context
 def check(
-    ctx: click.Context, targets: tuple[Path, ...], format: str, exclude_ai: bool, rules: str | None
+    ctx: click.Context, targets: tuple[Path, ...], format: str, exclude_ai: bool, rules: str | None, fix: bool
 ) -> None:
     """Run vibelint validation."""
     vibelint_ctx: VibelintContext = ctx.obj
@@ -102,6 +103,46 @@ def check(
     # Run validation
     runner = PluginValidationRunner(config, project_root)
     findings = runner.run_validation(files)
+
+    # Apply fixes if requested
+    if fix:
+        from vibelint.validators.registry import validator_registry
+
+        fixed_count = 0
+        for file_path in files:
+            file_findings = [f for f in findings if f.file_path == file_path]
+            if not file_findings:
+                continue
+
+            # Read the file content
+            try:
+                content = file_path.read_text(encoding="utf-8")
+                original_content = content
+
+                # Apply fixes from validators
+                for finding in file_findings:
+                    validator_class = validator_registry.get_validator(finding.rule_id)
+                    if validator_class:
+                        # Instantiate the validator
+                        validator_instance = validator_class()
+                        if hasattr(validator_instance, "can_fix") and validator_instance.can_fix(finding):
+                            content = validator_instance.apply_fix(content, finding)
+
+                # Write back if changed
+                if content != original_content:
+                    file_path.write_text(content, encoding="utf-8")
+                    fixed_count += 1
+                    console.print(f"[green]✓[/green] Fixed {file_path}")
+            except Exception as e:
+                console.print(f"[red]✗[/red] Failed to fix {file_path}: {e}")
+
+        if fixed_count > 0:
+            console.print(f"\n[green]Fixed {fixed_count} file(s)[/green]")
+        else:
+            console.print("[yellow]No fixable issues found[/yellow]")
+
+        # Exit early after fixing
+        ctx.exit(0)
 
     # Output results
     output = runner.format_output(format)
@@ -159,9 +200,57 @@ def snapshot(ctx: click.Context, targets: tuple[Path, ...], output: Path) -> Non
         ctx.exit(1)
 
 
+def _register_workflow_commands() -> None:
+    """Dynamically register CLI commands for all workflows in the registry."""
+    from vibelint.workflows.registry import workflow_registry
+
+    # Force load all workflows
+    workflow_registry._ensure_loaded()
+
+    for workflow_id, workflow_class in workflow_registry.get_all_workflows().items():
+        # Get workflow metadata
+        temp_instance = workflow_class()
+        description = f"{temp_instance.name}: {temp_instance.description}"
+
+        # Create a command for each workflow
+        @cli.command(workflow_id, help=description)
+        @click.argument("target", required=False, type=click.Path(exists=True, path_type=Path))
+        @click.pass_context
+        def workflow_cmd(ctx: click.Context, target: Path | None, workflow_id=workflow_id, workflow_class=workflow_class):
+            """Run a vibelint workflow."""
+            vibelint_ctx: VibelintContext = ctx.obj
+            project_root = target or vibelint_ctx.project_root or Path.cwd()
+
+            try:
+                # Instantiate workflow
+                workflow_instance = workflow_class()
+                console.print(f"[blue]Running workflow: {workflow_id}[/blue]")
+                console.print(f"[dim]Target: {project_root}[/dim]")
+
+                # Run execute method (sync)
+                result = workflow_instance.execute(project_root, {})
+
+                # Display results
+                if result.status.value == "completed":
+                    console.print(f"[green]✅ Workflow completed successfully[/green]")
+                    if result.artifacts.get("report"):
+                        console.print("\n" + result.artifacts["report"])
+                else:
+                    console.print(f"[red]❌ Workflow failed: {result.error_message}[/red]")
+                    ctx.exit(1)
+
+            except Exception as e:
+                console.print(f"[red]❌ Workflow {workflow_id} failed: {e}[/red]")
+                logger.error(f"Workflow error: {e}", exc_info=True)
+                ctx.exit(1)
+
+
 def main() -> None:
     """Entry point for vibelint CLI."""
     import sys
+
+    # Register workflow commands before running CLI
+    _register_workflow_commands()
 
     try:
         cli(obj=VibelintContext(), prog_name="vibelint")

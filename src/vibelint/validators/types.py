@@ -287,6 +287,21 @@ class BaseValidator:
             suggestion=suggestion,
         )
 
+    def can_fix(self, finding: Finding) -> bool:
+        """Check if this validator can automatically fix the finding.
+
+        Override this method in subclasses that support auto-fixing.
+        """
+        return False
+
+    def apply_fix(self, content: str, finding: Finding) -> str:
+        """Apply automatic fix to the content for the given finding.
+
+        Override this method in subclasses that support auto-fixing.
+        Returns the fixed content.
+        """
+        return content
+
 
 class BaseFormatter(ABC):
     """Base class for formatters."""

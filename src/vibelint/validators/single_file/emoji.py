@@ -101,8 +101,8 @@ class EmojiUsageValidator(BaseValidator):
                 r"]+"
             )
 
-            # Remove emojis from the line
-            fixed_line = emoji_pattern.sub("", line)
+            # Replace emojis with a single space to preserve structure
+            fixed_line = emoji_pattern.sub(" ", line)
 
             # Clean up any double spaces that might result, but preserve indentation and newlines
             # Extract leading whitespace (indentation)
