@@ -324,7 +324,7 @@ class LLMClient:
                 "No LLMs configured - need either fast_api_url or orchestrator_api_url in config"
             )
 
-    async def process_request(self, request: LLMRequest) -> LLMResponse:
+    def process_request(self, request: LLMRequest) -> LLMResponse:
         """Process request using intelligent routing with fallback."""
         # Check if at least one LLM is configured
         fast_available = bool(self.llm_config.fast_api_url)
@@ -350,7 +350,7 @@ class LLMClient:
         if selected_llm == LLMRole.FAST and fast_available:
             try:
                 logger.debug("Attempting fast LLM (selected by routing)")
-                result = await self._call_fast_llm(request)
+                result = self._call_fast_llm(request)
                 if result.content and result.content.strip():
                     # Check if response was truncated due to max_tokens
                     if result.finish_reason == "length":
@@ -378,7 +378,7 @@ class LLMClient:
                     system_prompt=request.system_prompt,
                     structured_output=request.structured_output,
                 )
-                result = await self._call_orchestrator_llm(orchestrator_request)
+                result = self._call_orchestrator_llm(orchestrator_request)
                 if result.content and result.content.strip():
                     self._log_request_response(request, result, "orchestrator")
                     return result
@@ -401,7 +401,7 @@ class LLMClient:
                         system_prompt=request.system_prompt,
                         structured_output=request.structured_output,
                     )
-                    result = await self._call_orchestrator_llm(orchestrator_request)
+                    result = self._call_orchestrator_llm(orchestrator_request)
                     if result.content and result.content.strip():
                         self._log_request_response(request, result, "orchestrator_fallback")
                         return result
@@ -410,7 +410,7 @@ class LLMClient:
             elif selected_llm == LLMRole.ORCHESTRATOR and fast_available:
                 try:
                     logger.info("Falling back to fast LLM")
-                    result = await self._call_fast_llm(request)
+                    result = self._call_fast_llm(request)
                     if result.content and result.content.strip():
                         self._log_request_response(request, result, "fast_fallback")
                         return result
@@ -427,15 +427,15 @@ class LLMClient:
             error="All LLM attempts failed or returned empty content",
         )
 
-    async def _call_fast_llm(self, request: LLMRequest) -> LLMResponse:
+    def _call_fast_llm(self, request: LLMRequest) -> LLMResponse:
         """Call the fast LLM."""
-        return await self._make_api_call(self.fast_config, request, LLMRole.FAST)
+        return self._make_api_call(self.fast_config, request, LLMRole.FAST)
 
-    async def _call_orchestrator_llm(self, request: LLMRequest) -> LLMResponse:
+    def _call_orchestrator_llm(self, request: LLMRequest) -> LLMResponse:
         """Call the orchestrator (large context) LLM."""
-        return await self._make_api_call(self.orchestrator_config, request, LLMRole.ORCHESTRATOR)
+        return self._make_api_call(self.orchestrator_config, request, LLMRole.ORCHESTRATOR)
 
-    async def _make_api_call(
+    def _make_api_call(
         self, llm_config: LLMBackendConfig, request: LLMRequest, role: LLMRole
     ) -> LLMResponse:
         """Make API call to specified LLM."""
@@ -464,32 +464,22 @@ class LLMClient:
             stream=False,
         )
 
+        # Get backend type for debug logging
+        backend_type = self._get_backend_type_for_role(role)
+
         # Add structured output if requested
         if request.structured_output:
-            backend_type = self._get_backend_type_for_role(role)
-
-            if backend_type == "vllm":
-                # vLLM now uses OpenAI-compatible response_format (updated API)
-                if "json_schema" in request.structured_output:
-                    payload.response_format = {
-                        "type": "json_schema",
-                        "json_schema": request.structured_output["json_schema"],
+            # All backends (vLLM, llama.cpp, OpenAI) use OpenAI-compatible response_format
+            if "json_schema" in request.structured_output:
+                payload.response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        **request.structured_output["json_schema"],
+                        "strict": True  # Enable strict schema enforcement
                     }
-                else:
-                    payload.response_format = {"type": "json_object"}
-            elif backend_type == "llamacpp":
-                # llama.cpp uses grammar constraints (simplified JSON grammar)
-                json_grammar = self._create_json_grammar(request.structured_output)
-                payload.grammar = json_grammar
+                }
             else:
-                # OpenAI and other backends use response_format
-                if "json_schema" in request.structured_output:
-                    payload.response_format = {
-                        "type": "json_schema",
-                        "json_schema": request.structured_output["json_schema"],
-                    }
-                else:
-                    payload.response_format = {"type": "json_object"}
+                payload.response_format = {"type": "json_object"}
 
         # Convert payload to dict for requests library
         payload_dict = {
@@ -501,13 +491,17 @@ class LLMClient:
         }
         if payload.response_format:
             payload_dict["response_format"] = payload.response_format
-        if payload.grammar:
-            payload_dict["grammar"] = payload.grammar
 
         # Debug: Log the request details
         logger.info(f"LLM Request: {role.value} to {url}")
         logger.info(f"Model: {payload.model}, Max tokens: {payload.max_tokens}")
         logger.debug(f"Request payload: {payload_dict}")
+
+        # EXPLICIT DEBUG: Log structured output handling
+        if "response_format" in payload_dict:
+            logger.warning(f"[STRUCTURED_OUTPUT] Backend: {backend_type}, response_format: {payload_dict['response_format']}")
+        else:
+            logger.warning(f"[NO_STRUCTURED_OUTPUT] Backend: {backend_type}")
 
         # Set timeout based on LLM role - orchestrator needs more time for large prompts
         timeout_seconds = (
@@ -543,8 +537,8 @@ class LLMClient:
         logger.debug(f"Finish reason: {finish_reason}")
 
         # Extract content and reasoning content separately (vLLM/llama.cpp format)
-        content = message.get("content", "")
-        reasoning_content = message.get("reasoning_content", "")
+        content = message.get("content") or ""
+        reasoning_content = message.get("reasoning_content") or ""
 
         logger.debug(f"Extracted content length: {len(content)} chars")
         logger.debug(f"Content preview: {content[:200]}...")
@@ -605,17 +599,17 @@ class LLMClient:
                             if ref_def.get("type") == "string" and "enum" in ref_def:
                                 enum_values = ref_def["enum"]
                                 enum_choices = " | ".join(f'"{value}"' for value in enum_values)
-                                return f'root ::= "{{" ws ""{prop_name}"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
+                                return f'root ::= "{{" ws "\\"{prop_name}\\"" ws ":" ws ({enum_choices}) ws "}}"\nws ::= [ \\t\\n\\r]*'
 
                 # Handle direct string enums (like "yes"/"no")
                 elif prop_schema.get("type") == "string" and "enum" in prop_schema:
                     enum_values = prop_schema["enum"]
                     enum_choices = " | ".join(f'"{value}"' for value in enum_values)
-                    return f'root ::= "{{" ws ""{prop_name}"" ws ":" ws ({enum_choices}) ws "}}" ws ::= [ \\t\\n\\r]*'
+                    return f'root ::= "{{" ws "\\"{prop_name}\\"" ws ":" ws ({enum_choices}) ws "}}"\nws ::= [ \\t\\n\\r]*'
 
                 # Handle boolean fields
                 elif prop_schema.get("type") == "boolean":
-                    return f'root ::= "{{" ws ""{prop_name}"" ws ":" ws ("true" | "false") ws "}}" ws ::= [ \\t\\n\\r]*'
+                    return f'root ::= "{{" ws "\\"{prop_name}\\"" ws ":" ws ("true" | "false") ws "}}"\nws ::= [ \\t\\n\\r]*'
 
         # Fallback to basic JSON object grammar
         return '''root ::= "{" ws "}" | "{" ws object-item (ws "," ws object-item)* ws "}"
@@ -660,28 +654,8 @@ value ::= "true" | "false" | "\\"" [^"]* "\\""'''
         )
 
     def process_request_sync(self, request: LLMRequest) -> LLMResponse:
-        """Synchronous wrapper for process_request to support legacy code."""
-        import asyncio
-
-        try:
-            # Always create a new event loop for sync calls
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            try:
-                return new_loop.run_until_complete(self.process_request(request))
-            finally:
-                new_loop.close()
-                asyncio.set_event_loop(None)
-        except Exception as e:
-            logger.error(f"Sync LLM request failed: {e}")
-            return LLMResponse(
-                content=f"LLM sync call failed: {e}",
-                llm_used="error",
-                duration_seconds=0,
-                input_tokens=0,
-                success=False,
-                error=str(e),
-            )
+        """Alias for process_request (now synchronous)."""
+        return self.process_request(request)
 
 
 def create_llm_manager(config: Optional["LLMConfig"] = None) -> Optional[LLMClient]:
