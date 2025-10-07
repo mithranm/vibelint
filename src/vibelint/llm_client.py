@@ -475,8 +475,8 @@ class LLMClient:
                     "type": "json_schema",
                     "json_schema": {
                         **request.structured_output["json_schema"],
-                        "strict": True  # Enable strict schema enforcement
-                    }
+                        "strict": True,  # Enable strict schema enforcement
+                    },
                 }
             else:
                 payload.response_format = {"type": "json_object"}
@@ -499,7 +499,9 @@ class LLMClient:
 
         # EXPLICIT DEBUG: Log structured output handling
         if "response_format" in payload_dict:
-            logger.warning(f"[STRUCTURED_OUTPUT] Backend: {backend_type}, response_format: {payload_dict['response_format']}")
+            logger.warning(
+                f"[STRUCTURED_OUTPUT] Backend: {backend_type}, response_format: {payload_dict['response_format']}"
+            )
         else:
             logger.warning(f"[NO_STRUCTURED_OUTPUT] Backend: {backend_type}")
 

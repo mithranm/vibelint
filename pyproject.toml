@@ -171,6 +171,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--showlocals",
+    "--ignore=tests/live/",  # Skip live integration tests by default (run explicitly with: pytest tests/live/)
 ]
 filterwarnings = [
     "error",
